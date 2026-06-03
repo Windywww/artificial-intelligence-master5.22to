@@ -8,7 +8,7 @@ void pid_init(PID_TypeDef *pid, float p, float i, float d)
     pid->error_last = 0.0f;
     pid->error_prev = 0.0f;
     pid->duty_out = 0;
-    pid->duty_max = 20; // 假设最大占空比为20
+    pid->duty_max = 30; // 假设最大占空比为20
 }
 
 /**

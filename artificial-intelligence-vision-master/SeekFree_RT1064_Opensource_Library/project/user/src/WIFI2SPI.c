@@ -73,7 +73,7 @@ void wifi_task()
     // seekfree_assistant_oscilloscope_data.data[2] = seekfree_assistant_parameter[2];
     // seekfree_assistant_oscilloscope_data.data[3] = seekfree_assistant_parameter[3];
 
-    vision_weight= seekfree_assistant_parameter[0];
+    target_step= (int16_t)seekfree_assistant_parameter[0];
     // k_x = seekfree_assistant_parameter[1];
     // k_y = (uint8_t)seekfree_assistant_parameter[2];
     
@@ -191,13 +191,13 @@ void wifi_task()
 
     seekfree_assistant_oscilloscope_data.data[0] = global_x;
     seekfree_assistant_oscilloscope_data.data[1] = global_y;
-    seekfree_assistant_oscilloscope_data.data[2] = actual_yaw;
-    seekfree_assistant_oscilloscope_data.data[3] = final_target_yaw;
-    seekfree_assistant_oscilloscope_data.data[4]=vision_y;
-    // seekfree_assistant_oscilloscope_data.data[3] = kp_position_x;
-    // seekfree_assistant_oscilloscope_data.data[4] = k_x;
-    // seekfree_assistant_oscilloscope_data.data[5] = k_y;
+    seekfree_assistant_oscilloscope_data.data[2] = current_step;
+    seekfree_assistant_oscilloscope_data.data[3] = car_angel;
+    seekfree_assistant_oscilloscope_data.data[4] = global_infor_type;
+    seekfree_assistant_oscilloscope_data.data[5] = actual_yaw;
+    seekfree_assistant_oscilloscope_data.data[6] = wait_for_loc;
+    seekfree_assistant_oscilloscope_data.data[7] = loac_test;
 
-    SendDataToAssistant(&seekfree_assistant_oscilloscope_data, 5);
+    SendDataToAssistant(&seekfree_assistant_oscilloscope_data, 8);
     // system_delay_ms(13);
 }

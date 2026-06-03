@@ -44,6 +44,7 @@
 #include <math.h>
 #include "sokoban_engine.h"
 
+float time_line = 0.0f;
 SokobanContext engine_ctx;
 int main(void)
 {
@@ -70,28 +71,39 @@ int main(void)
 
     interrupt_global_enable(0);
 
-    // 车坐标初始化
-        want_global_infor(0);
-        while (global_infor_type != 5)
-        {
-                wifi_task();
-        }
+    system_delay_ms(600);
+    // // 车坐标初始化
+    // want_global_infor(0);
+    // while (global_infor_type != 5)
+    // {
+    //     wifi_task();
+    // }
 
-    global_x = 3.2f * car_location[0];
-    global_y = 2.4f - 2.4f * car_location[1];
-    target_x = global_x;
-    target_y = global_y;
-
+    // global_x = 3.2f * car_location[0];
+    // global_y = 2.4f - 2.4f * car_location[1];
+    // target_x = global_x;
+    // target_y = global_y;
     // 走出发车区
     WaypointPath path_move_out;
     path_move_out.length = 1;
     path_move_out.points[0] = 3 + 6 * 16;
     car_move(&path_move_out, angel, 0);
+
     while (navigate_flag)
     {
-            wifi_task();
-
+        wifi_task();
     }
+
+    while (current_step >= target_step)
+    {
+        wifi_task();
+    }
+    current_step++;
+
+    while (global_infor_type != 5)
+    {
+    }
+
     want_global_infor(1);
     while (global_infor_type != 5)
     {
@@ -105,8 +117,7 @@ int main(void)
             uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
             break;
         }
-            wifi_task();
-
+        wifi_task();
     }
 
     system_delay_ms(1200);
@@ -116,19 +127,48 @@ int main(void)
     if (solve(&engine_ctx))
     {
         generate_path(&engine_ctx, &path);
-    }else{
+    }
+    else
+    {
+        WaypointPath path_move_in;
+        path_move_in.length = 1;
+        path_move_in.points[0] = 0 + 6 * 16;
+        car_move(&path_move_in, angel, 0);
+        while (navigate_flag)
+        {
+            wifi_task();
+        }
         while (1)
         {
-        }        
+        }
     }
 
-    car_move(&path,angel,0);
+    WaypointPath straight_path;
+    straight_path.length = 0;
+    for (int i = 0; i < path.length - 1; i++)
+    {
+        straight_path.length++;
+        uint8_t current_point = path.points[i];
+        uint8_t next_point = path.points[i + 1];
+        uint8_t current_x = current_point % 16;
+        uint8_t current_y = current_point / 16;
+        uint8_t next_x = next_point % 16;
+        uint8_t next_y = next_point / 16;
+        straight_path.points[straight_path.length - 1] = current_point;
+        if (current_x != next_x && current_y != next_y)
+        {
+            straight_path.length++;
+            straight_path.points[straight_path.length - 1] = next_x + current_y * 16;
+        }
+    }
+    straight_path.length++;
+    straight_path.points[straight_path.length - 1] = path.points[path.length - 1];
+    car_move(&straight_path, angel, 0);
     while (navigate_flag)
     {
-            wifi_task();
-
+        wifi_task();
     }
-    
+
     // WaypointPath straight_path;
     // straight_path.length = 0;
     // for (int i = 0; i < path.length - 1; i++)
@@ -150,23 +190,19 @@ int main(void)
     // straight_path.length++;
     // straight_path.points[straight_path.length - 1] = path.points[path.length - 1];
 
-     
-
     WaypointPath path_move_in;
     path_move_in.length = 1;
     path_move_in.points[0] = 0 + 6 * 16;
     car_move(&path_move_in, angel, 0);
     while (navigate_flag)
     {
-            wifi_task();
-
+        wifi_task();
     }
     system_delay_ms(1500);
     // NVIC_SystemReset(); // 复位
 }
 
-
-/** 
+/**
 int main()
 {
     clock_init(SYSTEM_CLOCK_600M); // 不可删除
@@ -203,20 +239,27 @@ int main()
     }
 }
 **/
-
+int time = 0;
 void pit_ch1_handler(void)
 {
     imu660rb_get_gyro(); // 获取陀螺仪测量数值
     imu660rb_get_acc();
 
-    
     imu660rb_gyro_z = (int)((imu660rb_gyro_z - 4) / 10) * 10;
 
-    actual_yaw -= (float)imu660rb_gyro_z / imu660rb_transition_factor[1] * 0.005f;
+    if (time <= 50)
+    {
+        time++;
+        actual_yaw = 0;
+    }
+    else
+    {
+        actual_yaw -= (float)imu660rb_gyro_z / imu660rb_transition_factor[1] * 0.005f;
+    }
 }
 
 void pit_ch0_handler(void)
 {
-    // wifi_task();
+    time_line += 0.02f; // 每20ms增加0.02s
     move_control_task();
 }

@@ -115,17 +115,9 @@ void Unpack_Received_CarLoc()
 
     memset(test_rx_buffer_global, 0, sizeof(test_rx_buffer_global));
     test_rx_index_global = 0;
-    
-    vision_x = 3.2f * car_location[0];
-    vision_y = 2.4 - 2.4 * car_location[1]; 
-    float odom_weight = 1.0f - vision_weight; // 里程计权重 40%
 
-    global_x = global_x * odom_weight + vision_x * vision_weight;
-    global_y = global_y * odom_weight + vision_y * vision_weight;
-
-    planner_x.p = planner_x.p * odom_weight + vision_x * vision_weight;
-    planner_y.p = planner_y.p * odom_weight + vision_y * vision_weight;
-
+    // global_x = 3.2f * car_location[0];
+    // global_y = 2.4f - 2.4f * car_location[1];
 }
 
 void Unpack_Received_CarAngel()
@@ -260,10 +252,10 @@ void uart1_rx_interrupt_handler(void)
 }
 
 // ---------------- UART4 相关逻辑 (原封不动) ----------------
-void check_image(char obj,char is_firsttime)
+void check_image(char obj, char is_firsttime)
 {
     image_id = obj;
-    
+
     uart_write_byte(UART_LOCAL_INDEX, 0xA5);
     system_delay_us(10);
     uart_write_byte(UART_LOCAL_INDEX, 0x5A);
@@ -275,7 +267,8 @@ void check_image(char obj,char is_firsttime)
         system_delay_us(10);
         uart_write_byte(UART_LOCAL_INDEX, 0xBB);
         system_delay_us(10);
-        if(is_firsttime){
+        if (is_firsttime)
+        {
             image_rx_state = 1;
         }
         break;
@@ -285,8 +278,9 @@ void check_image(char obj,char is_firsttime)
         system_delay_us(10);
         uart_write_byte(UART_LOCAL_INDEX, 0xFE);
         system_delay_us(10);
-        if(is_firsttime){
-            image_rx_state = 1;            
+        if (is_firsttime)
+        {
+            image_rx_state = 1;
         }
         break;
     }

@@ -24,7 +24,7 @@ float Kp_yaw = 0.06f; // 航向角 P 参数
 float Kd_yaw = 0.3f;  // 航向角 D 参数
 
 float global_x = 0.3f; // 车模全局 x 坐标 单位 m
-float global_y = 0.3f; // 车模全局 y 坐标 单位 m
+float global_y = 1.2f; // 车模全局 y 坐标 单位 m
 
 // 积分系数
 float k_x = 1.0f;
@@ -59,6 +59,8 @@ PID_TypeDef pid[4];
 SecondOrder_Set_Follow_t planner_x; // x 轴 s 曲线跟随规划器
 SecondOrder_Set_Follow_t planner_y; // y 轴 s 曲线跟随规划器
 
+uint16_t target_step = 0;
+uint16_t current_step = 0;
 void move_control_init()
 {
     for (int i = 0; i < 4; i++)
@@ -163,12 +165,6 @@ void wheel_speed_calculate(float vx, float vy, float vz)
     }
 }
 
-void lhn_odometry_update()
-{
-    global_x = car_location[0];
-    global_y = car_location[1];
-}
-
 float local_encoder_vx = 0.0f;
 float local_encoder_vy = 0.0f;
 float local_imu_vx = 0.0f;
@@ -224,6 +220,9 @@ void odometry_update()
     float global_actual_vx = -local_encoder_vy * sinf(yaw_rad) + local_encoder_vx * cosf(yaw_rad);
     float global_actual_vy = local_encoder_vy * cosf(yaw_rad) + local_encoder_vx * sinf(yaw_rad);
 
+    // if(final_target_yaw-actual_yaw>=9||final_target_yaw-actual_yaw<=-9){
+    //     return;
+    // }
     // 速度积分得到位置
     global_x += global_actual_vx * 0.02f * k_x;
     global_y += global_actual_vy * 0.02f * k_y;
@@ -279,7 +278,14 @@ void vision_yaw_update_task(void)
 /**
  * @brief 全局导航
  *
+ *
+ *
  */
+
+// 记录视觉传来的信息连续相同的次数
+  uint8_t loac_test = 0;
+// 标志位，表示此刻串口是否正在使用
+  uint8_t wait_for_loc = 0;
 void navigation_update(void)
 {
     if (move_flag == 1) // 车在上班
@@ -324,11 +330,11 @@ void navigation_update(void)
             if (is_last_point)
             {
 
-                if (stop_flag == 0 && distance <= 0.04f)
+                if (stop_flag == 0 && distance <= 0.015f)
                 {
                     stop_flag = 1; // 开启手刹
                 }
-                else if (stop_flag == 1 && distance > 0.05f)
+                else if (stop_flag == 1 && distance > 0.014f)
                 {
                     stop_flag = 0; // 关闭手刹
                 }
@@ -341,24 +347,95 @@ void navigation_update(void)
                     last_error_x = planner_x.p - global_x;
                     last_error_y = planner_y.p - global_y;
 
-                    static uint8_t count = 0;
+                    // static uint8_t count = 0;
+                    // if (count <= 9)
+                    // {
+                    //     count++;
+                    //     return;
+                    // }
+                    // count = 0;
 
-                    if (count <= 9)
+                    static float vision_x = 0;
+                    static float vision_y = 0;
+
+                    //只要坐标的
+                    if (wait_for_loc == 0)
                     {
-                        count++;
+                        want_global_infor(0);
+                        wait_for_loc = 1;
+                    }
+
+                    if (global_infor_type != 5)
+                    {
                         return;
                     }
-                    count = 0;
-
-                    // want_global_infor(0);
-                    // while (global_infor_type != 5)
+                    else
+                    {
+                        if(wait_for_loc == 1){
+                            wait_for_loc = 0;
+                        }
+                    }
+                    // //既要坐标也要角度
+                    // if (wait_for_loc == 0)
                     // {
+                    //     want_global_infor(0);
+                    //     wait_for_loc = 1;
                     // }
 
-                    // global_x = 3.2f * car_location[0];
-                    // global_y = 2.4f - 2.4f * car_location[1];
-                    // target_x = global_x;
-                    // target_y = global_y;
+                    // if (global_infor_type != 5)
+                    // {
+                    //     if (wait_for_loc == 2)
+                    //     {
+                    //         uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
+                    //     }
+                    //     return;
+                    // }
+                    // else
+                    // {
+                    //     // 此刻说明车的坐标收到了
+                    //     if (wait_for_loc == 1)
+                    //     {
+                    //         want_global_infor(2);
+                    //         wait_for_loc = 2;
+                    //         return;
+                    //     }
+                    //     else if (wait_for_loc == 2)
+                    //     {
+                    //         wait_for_loc = 0;
+                    //     }
+                    // }
+
+                    vision_x = car_location[0];
+                    vision_y = car_location[1];
+                    if (car_location[0] - vision_x >= -0.001f && car_location[0] - vision_x <= 0.001f &&
+                        car_location[1] - vision_y >= -0.001f &&
+                        car_location[1] - vision_y <= 0.001f)
+                    {
+                        loac_test++;
+                    }
+                    else
+                    {
+                        loac_test = 0;
+                        vision_x = 3.2f * car_location[0];
+                        vision_y = 2.4f - 2.4f * car_location[1];
+                    }
+                    if (loac_test >= 3)
+                    {
+                        global_x = 3.2f * car_location[0];
+                        global_y = 2.4f - 2.4f * car_location[1];
+                        loac_test = 0;
+                    }
+                    else
+                    {
+                        return;
+                    }
+
+                    static uint8_t first_time_fix = 1;
+                    if (first_time_fix)
+                    {
+                        first_time_fix = 0;
+                        return;
+                    }
                     navigate_flag = 0;
                     for (int k = 0; k < 4; k++)
                     {
@@ -372,30 +449,110 @@ void navigation_update(void)
             }
             else
             {
-                if (distance <= 0.04f)
+                if (distance <= 0.01f)
                 {
                     target_vx = 0.0f;
                     target_vy = 0.0f;
 
-                    static uint8_t count = 0;
+                    // static uint8_t count = 0;
+                    // if (count <= 9)
+                    // {
+                    //     count++;
+                    //     return;
+                    // }
+                    // count = 0;
 
-                    if (count <= 9)
+                    static float vision_x = 0;
+                    static float vision_y = 0;
+
+
+                    //只要坐标的
+                    if (wait_for_loc == 0)
                     {
-                        count++;
+                        want_global_infor(0);
+                        wait_for_loc = 1;
+                    }
+
+                    if (global_infor_type != 5)
+                    {
                         return;
                     }
-                    count = 0;
-
-                    want_global_infor(0);
-                    while (global_infor_type != 5)
+                    else
                     {
+                        if(wait_for_loc == 1){
+                            wait_for_loc = 0;
+                        }
                     }
 
-                    global_x = vision_x;
-                    global_y = vision_y;
-                    target_x = global_x;
-                    target_y = global_y;
+                    // //既要坐标也要角度
+                    // if (wait_for_loc == 0)
+                    // {
+                    //     want_global_infor(0);
+                    //     wait_for_loc = 1;
+                    // }
 
+                    // if (global_infor_type != 5)
+                    // {
+                    //     if (wait_for_loc == 2)
+                    //     {
+                    //         uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
+                    //     }
+                    //     return;
+                    // }
+                    // else
+                    // {
+                    //     // 此刻说明车的坐标收到了
+                    //     if (wait_for_loc == 1)
+                    //     {
+                    //         want_global_infor(2);
+                    //         wait_for_loc = 2;
+                    //         return;
+                    //     }
+                    //     else if (wait_for_loc == 2)
+                    //     {
+                    //         wait_for_loc = 0;
+                    //     }
+                    // }
+
+                    vision_x = car_location[0];
+                    vision_y = car_location[1];
+                    if (car_location[0] - vision_x >= -0.001f && car_location[0] - vision_x <= 0.001f &&
+                        car_location[1] - vision_y >= -0.001f &&
+                        car_location[1] - vision_y <= 0.001f)
+                    {
+                        loac_test++;
+                    }
+                    else
+                    {
+                        loac_test = 0;
+                        vision_x = 3.2f * car_location[0];
+                        vision_y = 2.4f - 2.4f * car_location[1];
+                    }
+                    if (loac_test >= 3)
+                    {
+                        global_x = 3.2f * car_location[0];
+                        global_y = 2.4f - 2.4f * car_location[1];
+                        loac_test = 0;
+                    }
+                    else
+                    {
+                        return;
+                    }
+                    static uint8_t first_time_fix = 1;
+                    if (first_time_fix)
+                    {
+                        first_time_fix = 0;
+                        return;
+                    }
+
+                    if (current_step >= target_step)
+                    {
+                        return;
+                    }
+                    else
+                    {
+                        current_step++;
+                    }
                     current_path++;
                     target_x = path_queue_x[current_path];
                     target_y = path_queue_y[current_path];
@@ -410,21 +567,6 @@ void navigation_update(void)
 
         target_vx = global_target_vx * cosf(yaw_rad) + global_target_vy * sinf(yaw_rad);
         target_vy = -global_target_vx * sinf(yaw_rad) + global_target_vy * cosf(yaw_rad);
-
-        if (mode == 0)
-        {
-            // target_yaw = 0;
-        }
-        else if (mode == 1)
-        {
-            target_yaw = -atan2f(dx, dy) * 180.0f / 3.1415926f;
-
-            while (target_yaw > 180.0f)
-                target_yaw -= 360.0f;
-            while (target_yaw < -180.0f)
-                target_yaw += 360.0f;
-        }
-        //}
     }
     else // 车在下班
     {
@@ -461,7 +603,7 @@ void move_control_task(void)
         final_target_yaw -= 360.0f;
     while (final_target_yaw < -180.0f)
         final_target_yaw += 360.0f;
-        
+
     float vz = yaw_pid_calculate();                  // 计算航向角控制输出
     wheel_speed_calculate(target_vx, target_vy, vz); // 计算轮子速度并输出
 }
@@ -496,74 +638,74 @@ void car_move(WaypointPath *path, float yaw, uint8_t m)
     if (path->length == 0 || path->length > 100)
         return;
 
-    // for (int i = 0; i < path->length; i++)
-    // {
-    //     path_queue_x[i] = (path->points[i] % 16) * 0.2f + 0.1f;
-    //     path_queue_y[i] = 2.4 - (path->points[i] / 16) * 0.2f - 0.1f;
-    // }
-
     for (int i = 0; i < path->length; i++)
     {
-        uint8_t curr_pos = path->points[i];
-
-        // 1. 计算出原始的网格正中心物理坐标
-        float px = (curr_pos % 16) * 0.2f + 0.1f;
-        float py = (curr_pos / 16) * 0.2f + 0.1f;
-
-        // 2. 判断小车当前的行驶方向 (dx, dy)
-        int dx = 0, dy = 0;
-        if (i < path->length - 1)
-        { // 还没到终点，看下一个点确定方向
-            dx = (path->points[i + 1] % 16) - (curr_pos % 16);
-            dy = (path->points[i + 1] / 16) - (curr_pos / 16);
-        }
-        else if (i > 0)
-        { // 到了终点，看上一个点确定方向
-            dx = (curr_pos % 16) - (path->points[i - 1] % 16);
-            dy = (curr_pos / 16) - (path->points[i - 1] / 16);
-        }
-
-        // ==========================================
-        // 🌟 魔法 1：侧向防刮蹭偏移 (左右/上下躲避 5cm)
-        // ==========================================
-        // 注意这里调用了队友写好的 check_obstacle 函数！
-        if (dx != 0 && dy == 0) // 小车正在X轴(左右)移动，检查上下两边有没有东西
-        {
-            if (curr_pos >= 16 && check_obstacle(&engine_ctx, curr_pos - 16))
-                py += 0.05f; // 上方有危险，向下躲
-            if (curr_pos < MAP_SIZE - 16 && check_obstacle(&engine_ctx, curr_pos + 16))
-                py -= 0.05f; // 下方有危险，向上躲
-        }
-        else if (dy != 0 && dx == 0) // 小车正在Y轴(上下)移动，检查左右两边有没有东西
-        {
-            if (curr_pos % 16 != 0 && check_obstacle(&engine_ctx, curr_pos - 1))
-                px += 0.05f; // 左方有危险，向右躲
-            if (curr_pos % 16 != 15 && check_obstacle(&engine_ctx, curr_pos + 1))
-                px -= 0.05f; // 右方有危险，向左躲
-        }
-
-        // ==========================================
-        // 🌟 魔法 2：推箱子“过推补偿” (前后延伸 5cm)
-        // ==========================================
-        // 只有在 m == 2 (推箱子模式)，且走到最后一个网格时，才发动延伸！
-        if (m == 2 && i == path->length - 1 && path->length > 1)
-        {
-            if (dx > 0)
-                px += 0.05f; // 正在往右推，终点往右多怼 5cm
-            else if (dx < 0)
-                px -= 0.05f; // 正在往左推，终点往左多怼 5cm
-
-            if (dy > 0)
-                py += 0.05f; // 正在往下推，终点往下多怼 5cm
-            else if (dy < 0)
-                py -= 0.05f; // 正在往上推，终点往上多怼 5cm
-        }
-
-        // 3. 将最终计算好的、绝对安全的物理坐标存入你的底层队列
-        py = 2.4f - py;
-        path_queue_x[i] = px;
-        path_queue_y[i] = py;
+        path_queue_x[i] = (path->points[i] % 16) * 0.2f + 0.1f;
+        path_queue_y[i] = 2.4 - (path->points[i] / 16) * 0.2f - 0.1f;
     }
+
+    // for (int i = 0; i < path->length; i++)
+    // {
+    //     uint8_t curr_pos = path->points[i];
+
+    //     // 1. 计算出原始的网格正中心物理坐标
+    //     float px = (curr_pos % 16) * 0.2f + 0.1f;
+    //     float py = (curr_pos / 16) * 0.2f + 0.1f;
+
+    //     // 2. 判断小车当前的行驶方向 (dx, dy)
+    //     int dx = 0, dy = 0;
+    //     if (i < path->length - 1)
+    //     { // 还没到终点，看下一个点确定方向
+    //         dx = (path->points[i + 1] % 16) - (curr_pos % 16);
+    //         dy = (path->points[i + 1] / 16) - (curr_pos / 16);
+    //     }
+    //     else if (i > 0)
+    //     { // 到了终点，看上一个点确定方向
+    //         dx = (curr_pos % 16) - (path->points[i - 1] % 16);
+    //         dy = (curr_pos / 16) - (path->points[i - 1] / 16);
+    //     }
+
+    //     // ==========================================
+    //     // 🌟 魔法 1：侧向防刮蹭偏移 (左右/上下躲避 5cm)
+    //     // ==========================================
+    //     // 注意这里调用了队友写好的 check_obstacle 函数！
+    //     if (dx != 0 && dy == 0) // 小车正在X轴(左右)移动，检查上下两边有没有东西
+    //     {
+    //         if (curr_pos >= 16 && check_obstacle(&engine_ctx, curr_pos - 16))
+    //             py += 0.05f; // 上方有危险，向下躲
+    //         if (curr_pos < MAP_SIZE - 16 && check_obstacle(&engine_ctx, curr_pos + 16))
+    //             py -= 0.05f; // 下方有危险，向上躲
+    //     }
+    //     else if (dy != 0 && dx == 0) // 小车正在Y轴(上下)移动，检查左右两边有没有东西
+    //     {
+    //         if (curr_pos % 16 != 0 && check_obstacle(&engine_ctx, curr_pos - 1))
+    //             px += 0.05f; // 左方有危险，向右躲
+    //         if (curr_pos % 16 != 15 && check_obstacle(&engine_ctx, curr_pos + 1))
+    //             px -= 0.05f; // 右方有危险，向左躲
+    //     }
+
+    //     // ==========================================
+    //     // 🌟 魔法 2：推箱子“过推补偿” (前后延伸 5cm)
+    //     // ==========================================
+    //     // 只有在 m == 2 (推箱子模式)，且走到最后一个网格时，才发动延伸！
+    //     if (m == 2 && i == path->length - 1 && path->length > 1)
+    //     {
+    //         if (dx > 0)
+    //             px += 0.05f; // 正在往右推，终点往右多怼 5cm
+    //         else if (dx < 0)
+    //             px -= 0.05f; // 正在往左推，终点往左多怼 5cm
+
+    //         if (dy > 0)
+    //             py += 0.05f; // 正在往下推，终点往下多怼 5cm
+    //         else if (dy < 0)
+    //             py -= 0.05f; // 正在往上推，终点往上多怼 5cm
+    //     }
+
+    //     // 3. 将最终计算好的、绝对安全的物理坐标存入你的底层队列
+    //     py = 2.4f - py;
+    //     path_queue_x[i] = px;
+    //     path_queue_y[i] = py;
+    // }
 
     path_length = path->length;
     current_path = 0;
@@ -578,6 +720,12 @@ void car_move(WaypointPath *path, float yaw, uint8_t m)
     move_flag = 1;
     navigate_flag = 1;
     stop_flag = 0;
+}
+
+void car_turn(float yaw)
+{
+    final_target_yaw = yaw;
+    yaw_arrived_flag = 0;
 }
 
 /**

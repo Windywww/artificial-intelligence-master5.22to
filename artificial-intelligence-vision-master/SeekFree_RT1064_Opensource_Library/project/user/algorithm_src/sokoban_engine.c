@@ -1614,12 +1614,32 @@ void build_map_info(SokobanContext *ctx, uint8_t *raw_map)
             else if (dd == -1)
                 dd = 3; // 左
 
+            WaypointPath straight_path;
+            straight_path.length = 0;
+            for (int i = 0; i < smooth_path.length - 1; i++)
+            {
+                straight_path.length++;
+                uint8_t current_point = smooth_path.points[i];
+                uint8_t next_point = smooth_path.points[i + 1];
+                uint8_t current_x = current_point % 16;
+                uint8_t current_y = current_point / 16;
+                uint8_t next_x = next_point % 16;
+                uint8_t next_y = next_point / 16;
+                straight_path.points[straight_path.length - 1] = current_point;
+                if (current_x != next_x && current_y != next_y)
+                {
+                    straight_path.length++;
+                    straight_path.points[straight_path.length - 1] = next_x + current_y * 16;
+                }
+            }
+            straight_path.length++;
+            straight_path.points[straight_path.length - 1] = smooth_path.points[smooth_path.length - 1];
+
             // 🌟 硬件接口预留：将 smooth_path 发送给电机，等待小车走到 final_pos，并转向 entity_pos
-            car_move(&smooth_path, angel, 0);
+            car_move(&straight_path, angel, 0);
             while (navigate_flag)
             {
-                    wifi_task();
-
+                wifi_task();
             }
 
             uint8_t final_pos_X = final_pos % 16;
@@ -1636,25 +1656,47 @@ void build_map_info(SokobanContext *ctx, uint8_t *raw_map)
             // x,y分别取1,0；-1,0；0，1；0，-1时对应的函数值分别为-90,90,180,0
 
             system_delay_ms(2000);
-
+            while (current_step >= target_step)
+            {
+                wifi_task();
+            }
+            current_step++;
             angel = 90 * dy * dy - 90 * dx + 90 * dy;
-            car_move(&turn_path, (float)angel, 0);
+            car_turn(angel);
+            // car_move(&turn_path, (float)angel, 0);
             while (!yaw_arrived_flag)
             {
-                    wifi_task();
-
+                wifi_task();
             }
 
             system_delay_ms(700);
 
             // 🌟 硬件接口预留：开启摄像头识别
-            check_image(3 - is_box,1);
-            while (image_rx_state == 1)
+            do
             {
+                check_image(3 - is_box, 1);
+                while (image_rx_state == 1)
+                {
                     wifi_task();
+                    check_image(3 - is_box, 0);
+                }
+                car_move(&turn_path, angel, 0); 
+            }while(final_image_index == NO_CLS); // 等待识别结果，直到收到有效 ID
 
-                check_image(3 - is_box,0);
+            system_delay_ms(700);
+
+            angel = 0;
+            // car_move(&turn_path, angel, 0);
+            car_turn(angel);
+            while (!yaw_arrived_flag)
+            {
+                wifi_task();
             }
+            while (current_step >= target_step)
+            {
+                wifi_task();
+            }
+            current_step++;
             uint8_t recognized_id = NO_CLS; // 假设摄像头传回的 ID
             recognized_id = final_image_index;
             if (recognized_id == NO_CLS)
@@ -2147,27 +2189,33 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
 uint8_t check_obstacle(SokobanContext *ctx, uint8_t grid_index)
 {
     // 0. 越界保护
-    if (grid_index >= MAP_SIZE) {
+    if (grid_index >= MAP_SIZE)
+    {
         return 1;
     }
 
     // 1. 检查所有的墙体（边界死墙=1，普通内墙=1，优先轰炸墙=2）
     // 说明：engine_init 和 generate_path 都会实时更新 initial_walls，
     // 墙被炸掉后值为 0，所以这里只要 >= 1 就是墙。
-    if (ctx->initial_walls[grid_index] >= 1) {
+    if (ctx->initial_walls[grid_index] >= 1)
+    {
         return 1;
     }
 
     // 2. 检查现存的动态箱子
-    for (int i = 0; i < ctx->initial_state.box_count; i++) {
-        if (ctx->initial_state.boxes[i].pos == grid_index) {
+    for (int i = 0; i < ctx->initial_state.box_count; i++)
+    {
+        if (ctx->initial_state.boxes[i].pos == grid_index)
+        {
             return 1;
         }
     }
 
     // 3. 检查现存的动态炸弹
-    for (int i = 0; i < ctx->initial_state.bomb_count; i++) {
-        if (ctx->initial_state.bombs[i] == grid_index) {
+    for (int i = 0; i < ctx->initial_state.bomb_count; i++)
+    {
+        if (ctx->initial_state.bombs[i] == grid_index)
+        {
             return 1;
         }
     }

@@ -115,6 +115,8 @@ void LPUART3_IRQHandler(void)
 }
 
 void LPUART4_IRQHandler(void)
+
+
 {
     if(kLPUART_RxDataRegFullFlag & LPUART_GetStatusFlags(LPUART4))
     {

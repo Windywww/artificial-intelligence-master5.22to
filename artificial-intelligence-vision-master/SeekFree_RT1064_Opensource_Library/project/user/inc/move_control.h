@@ -56,6 +56,7 @@ void move_control_task(void);
 
 void car_move(WaypointPath *path, float yaw, uint8_t m);
 void car_stop();
+void car_turn(float yaw);
 
 extern uint8_t check_obstacle(SokobanContext *ctx, uint8_t grid_index);
 
@@ -78,4 +79,9 @@ extern float local_imu_vy;
 
 extern float a_x;
 extern float a_y;
+
+extern uint16_t target_step;
+extern uint16_t current_step ;
+extern uint8_t loac_test;
+extern uint8_t wait_for_loc;
 #endif
