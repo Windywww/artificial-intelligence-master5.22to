@@ -126,9 +126,6 @@ void Unpack_Received_CarAngel()
 
     memset(test_rx_buffer_global, 0, sizeof(test_rx_buffer_global));
     test_rx_index_global = 0;
-    vision_yaw_update_flag = 1; // 设置视觉航向角更新标志位，通知主循环有新航向角数据可以处理了
-
-    vision_yaw = car_angel - 90;
 }
 
 // ---------------- 核心升级：具备 Checksum 和边界帧校验的状态机 ----------------

@@ -283,9 +283,9 @@ void vision_yaw_update_task(void)
  */
 
 // 记录视觉传来的信息连续相同的次数
-  uint8_t loac_test = 0;
+uint8_t loac_test = 0;
 // 标志位，表示此刻串口是否正在使用
-  uint8_t wait_for_loc = 0;
+uint8_t wait_for_loc = 0;
 void navigation_update(void)
 {
     if (move_flag == 1) // 车在上班
@@ -347,18 +347,18 @@ void navigation_update(void)
                     last_error_x = planner_x.p - global_x;
                     last_error_y = planner_y.p - global_y;
 
-                    // static uint8_t count = 0;
-                    // if (count <= 9)
-                    // {
-                    //     count++;
-                    //     return;
-                    // }
-                    // count = 0;
+                    static uint8_t count = 0;
+                    if (count <= 3)
+                    {
+                        count++;
+                        return;
+                    }
+                    count = 0;
 
                     static float vision_x = 0;
                     static float vision_y = 0;
 
-                    //只要坐标的
+                    // 只要坐标的
                     if (wait_for_loc == 0)
                     {
                         want_global_infor(0);
@@ -371,10 +371,12 @@ void navigation_update(void)
                     }
                     else
                     {
-                        if(wait_for_loc == 1){
+                        if (wait_for_loc == 1)
+                        {
                             wait_for_loc = 0;
                         }
                     }
+
                     // //既要坐标也要角度
                     // if (wait_for_loc == 0)
                     // {
@@ -421,6 +423,13 @@ void navigation_update(void)
                     }
                     if (loac_test >= 3)
                     {
+                        float dx = global_x - 3.2f * car_location[0];
+                        float dy = global_y - (2.4f - 2.4f * car_location[1]);
+                        if (sqrtf(dx * dx + dy * dy) >= 25.0f)
+                        {
+                            // 如果视觉坐标和里程计坐标差距超过 25cm 就不修正了
+                            return;
+                        }
                         global_x = 3.2f * car_location[0];
                         global_y = 2.4f - 2.4f * car_location[1];
                         loac_test = 0;
@@ -454,19 +463,18 @@ void navigation_update(void)
                     target_vx = 0.0f;
                     target_vy = 0.0f;
 
-                    // static uint8_t count = 0;
-                    // if (count <= 9)
-                    // {
-                    //     count++;
-                    //     return;
-                    // }
-                    // count = 0;
+                    static uint8_t count = 0;
+                    if (count <= 3)
+                    {
+                        count++;
+                        return;
+                    }
+                    count = 0;
 
                     static float vision_x = 0;
                     static float vision_y = 0;
-
-
-                    //只要坐标的
+                    // static float vision_angel = 0;
+                    // 只要车坐标的
                     if (wait_for_loc == 0)
                     {
                         want_global_infor(0);
@@ -479,17 +487,18 @@ void navigation_update(void)
                     }
                     else
                     {
-                        if(wait_for_loc == 1){
+                        if (wait_for_loc == 1)
+                        {
                             wait_for_loc = 0;
                         }
                     }
 
-                    // //既要坐标也要角度
-                    // if (wait_for_loc == 0)
-                    // {
-                    //     want_global_infor(0);
-                    //     wait_for_loc = 1;
-                    // }
+                    // 既要坐标也要角度
+                    //  if (wait_for_loc == 0)
+                    //  {
+                    //      want_global_infor(0);
+                    //      wait_for_loc = 1;
+                    //  }
 
                     // if (global_infor_type != 5)
                     // {
@@ -527,11 +536,20 @@ void navigation_update(void)
                         loac_test = 0;
                         vision_x = 3.2f * car_location[0];
                         vision_y = 2.4f - 2.4f * car_location[1];
+                        // vision_angel = car_angel;
                     }
                     if (loac_test >= 3)
                     {
+                        float dx = global_x - 3.2f * car_location[0];
+                        float dy = global_y - (2.4f - 2.4f * car_location[1]);
+                        if (sqrtf(dx * dx + dy * dy) >= 25.0f)
+                        {
+                            // 如果视觉坐标和里程计坐标差距超过 25cm 就不修正了
+                            return;
+                        }
                         global_x = 3.2f * car_location[0];
                         global_y = 2.4f - 2.4f * car_location[1];
+                        // actual_yaw = car_angel - 90;
                         loac_test = 0;
                     }
                     else

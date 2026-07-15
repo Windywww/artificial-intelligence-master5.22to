@@ -192,11 +192,11 @@ void wifi_task()
     seekfree_assistant_oscilloscope_data.data[0] = global_x;
     seekfree_assistant_oscilloscope_data.data[1] = global_y;
     seekfree_assistant_oscilloscope_data.data[2] = current_step;
-    seekfree_assistant_oscilloscope_data.data[3] = car_angel;
-    seekfree_assistant_oscilloscope_data.data[4] = global_infor_type;
+    seekfree_assistant_oscilloscope_data.data[3] = target_x;
+    seekfree_assistant_oscilloscope_data.data[4] = target_y;
     seekfree_assistant_oscilloscope_data.data[5] = actual_yaw;
     seekfree_assistant_oscilloscope_data.data[6] = wait_for_loc;
-    seekfree_assistant_oscilloscope_data.data[7] = loac_test;
+    seekfree_assistant_oscilloscope_data.data[7] = final_image_index;
 
     SendDataToAssistant(&seekfree_assistant_oscilloscope_data, 8);
     // system_delay_ms(13);

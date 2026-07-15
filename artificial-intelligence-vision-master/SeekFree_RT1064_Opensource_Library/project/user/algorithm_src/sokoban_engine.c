@@ -1655,7 +1655,7 @@ void build_map_info(SokobanContext *ctx, uint8_t *raw_map)
             turn_path.points[0] = final_pos;
             // x,y分别取1,0；-1,0；0，1；0，-1时对应的函数值分别为-90,90,180,0
 
-            system_delay_ms(2000);
+            // system_delay_ms(2000);
             while (current_step >= target_step)
             {
                 wifi_task();
@@ -1669,7 +1669,7 @@ void build_map_info(SokobanContext *ctx, uint8_t *raw_map)
                 wifi_task();
             }
 
-            system_delay_ms(700);
+            // system_delay_ms(700);
 
             // 🌟 硬件接口预留：开启摄像头识别
             do
@@ -1681,9 +1681,9 @@ void build_map_info(SokobanContext *ctx, uint8_t *raw_map)
                     check_image(3 - is_box, 0);
                 }
                 car_move(&turn_path, angel, 0); 
-            }while(final_image_index == NO_CLS); // 等待识别结果，直到收到有效 ID
+            }while(final_image_index == 13); // 等待识别结果，直到收到有效 ID
 
-            system_delay_ms(700);
+            // system_delay_ms(700);
 
             angel = 0;
             // car_move(&turn_path, angel, 0);
