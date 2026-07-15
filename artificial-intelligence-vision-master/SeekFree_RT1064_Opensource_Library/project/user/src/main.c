@@ -44,8 +44,11 @@
 #include <math.h>
 #include "sokoban_engine.h"
 
+void imu_calibrate(void);
+
 float time_line = 0.0f;
 SokobanContext engine_ctx;
+
 int main(void)
 {
     clock_init(SYSTEM_CLOCK_600M); // 不可删除
@@ -53,7 +56,6 @@ int main(void)
     // 此处编写用户代码 例如外设初始化代码等
     system_delay_ms(600); // 等待主板其他外设上电完成
     myWIFI2SPI_Init();
-    motor_init();
     encoder_init();
     // key_init(5);
     // uart1_init();
@@ -62,44 +64,40 @@ int main(void)
     // ips_init();
     // map_init();
     myuart_init();
+    system_delay_ms(50);
+    imu_calibrate();
+    motor_init();
 
     move_control_init();
 
-    pit_ms_init(PIT_CH0, 20);            // 速度闭环和姿态闭环
+    pit_ms_init(PIT_CH0, 10);            // 速度闭环和姿态闭环
     pit_ms_init(PIT_CH1, 5);             // 陀螺仪积分
     interrupt_set_priority(PIT_IRQn, 1); // 设置 PIT 中断优先级为 1
 
     interrupt_global_enable(0);
 
     system_delay_ms(600);
-    // // 车坐标初始化
-    // want_global_infor(0);
-    // while (global_infor_type != 5)
-    // {
-    //     wifi_task();
-    // }
+    // 车坐标初始化
+    want_global_infor(0);
+    while (global_infor_type != 5)
+    {
+        wifi_task();
+    }
 
-    // global_x = 3.2f * car_location[0];
-    // global_y = 2.4f - 2.4f * car_location[1];
-    // target_x = global_x;
-    // target_y = global_y;
+    global_x = 3.2f * car_location[0];
+    global_y = 2.4f - 2.4f * car_location[1];
+    target_x = global_x;
+    target_y = global_y;
     // 走出发车区
-    WaypointPath path_move_out;
-    path_move_out.length = 1;
-    path_move_out.points[0] = 3 + 6 * 16;
-    car_move(&path_move_out, angel, 0);
+
+    vision_angle_switch = 0;
+    car_move_point(global_x + 0.3f, global_y, angle, 0);
 
     while (navigate_flag)
     {
         wifi_task();
     }
-
-    while (current_step >= target_step)
-    {
-        wifi_task();
-    }
-    current_step++;
-
+    vision_angle_switch = 1;
     while (global_infor_type != 5)
     {
     }
@@ -121,19 +119,18 @@ int main(void)
     }
 
     system_delay_ms(1200);
-    build_map_info(&engine_ctx, final_map_data);
+    build_map_info(&engine_ctx, final_map_data, 0);
     WaypointPath path;
     path.length = 0;
+
+    lost = 1;
     if (solve(&engine_ctx))
     {
         generate_path(&engine_ctx, &path);
     }
     else
     {
-        WaypointPath path_move_in;
-        path_move_in.length = 1;
-        path_move_in.points[0] = 0 + 6 * 16;
-        car_move(&path_move_in, angel, 0);
+        car_move_point(0.3f, 1.2f, angle, 1);
         while (navigate_flag)
         {
             wifi_task();
@@ -143,57 +140,17 @@ int main(void)
         }
     }
 
-    WaypointPath straight_path;
-    straight_path.length = 0;
-    for (int i = 0; i < path.length - 1; i++)
-    {
-        straight_path.length++;
-        uint8_t current_point = path.points[i];
-        uint8_t next_point = path.points[i + 1];
-        uint8_t current_x = current_point % 16;
-        uint8_t current_y = current_point / 16;
-        uint8_t next_x = next_point % 16;
-        uint8_t next_y = next_point / 16;
-        straight_path.points[straight_path.length - 1] = current_point;
-        if (current_x != next_x && current_y != next_y)
-        {
-            straight_path.length++;
-            straight_path.points[straight_path.length - 1] = next_x + current_y * 16;
-        }
-    }
-    straight_path.length++;
-    straight_path.points[straight_path.length - 1] = path.points[path.length - 1];
-    car_move(&straight_path, angel, 0);
+    lost = 2;
+    car_move(&path, angle, 0);
     while (navigate_flag)
     {
         wifi_task();
     }
 
-    // WaypointPath straight_path;
-    // straight_path.length = 0;
-    // for (int i = 0; i < path.length - 1; i++)
-    // {
-    //     straight_path.length++;
-    //     uint8_t current_point = path.points[i];
-    //     uint8_t next_point = path.points[i + 1];
-    //     uint8_t current_x = current_point % 16;
-    //     uint8_t current_y = current_point / 16;
-    //     uint8_t next_x = next_point % 16;
-    //     uint8_t next_y = next_point / 16;
-    //     straight_path.points[straight_path.length - 1] = current_point;
-    //     if (current_x != next_x && current_y != next_y)
-    //     {
-    //         straight_path.length++;
-    //         straight_path.points[straight_path.length - 1] = next_x + current_y * 16;
-    //     }
-    // }
-    // straight_path.length++;
-    // straight_path.points[straight_path.length - 1] = path.points[path.length - 1];
-
     WaypointPath path_move_in;
     path_move_in.length = 1;
     path_move_in.points[0] = 0 + 6 * 16;
-    car_move(&path_move_in, angel, 0);
+    car_move(&path_move_in, angle, 0);
     while (navigate_flag)
     {
         wifi_task();
@@ -202,64 +159,55 @@ int main(void)
     // NVIC_SystemReset(); // 复位
 }
 
-/**
-int main()
+static int16 bias = 0;
+static int calibrated = 0;
+
+void imu_calibrate()
 {
-    clock_init(SYSTEM_CLOCK_600M); // 不可删除
-    // debug_init();                  // 调试端口初始化
-    // 此处编写用户代码 例如外设初始化代码等
-    system_delay_ms(600); // 等待主板其他外设上电完成
-    myWIFI2SPI_Init();
-    motor_init();
-    encoder_init();
-    imu660rb_init();
-    myuart_init();
-
-    move_control_init();
-
-    pit_ms_init(PIT_CH0, 20);            // 速度闭环和姿态闭环
-    pit_ms_init(PIT_CH1, 5);             // 陀螺仪积分
-    interrupt_set_priority(PIT_IRQn, 1); // 设置 PIT 中断优先级为 1
-
-    interrupt_global_enable(0);
-    while (1)
+    int16 sum = 0;
+    for (int i = 0; i < 500; i++)
     {
-        ReceiveData();
-        target_x = seekfree_assistant_parameter[0] * 0.2 + 0.1;
-        target_y = seekfree_assistant_parameter[1] * 0.2 + 0.1;
-        final_target_yaw = seekfree_assistant_parameter[2];
-        move_flag = seekfree_assistant_parameter[3];
-
-        seekfree_assistant_oscilloscope_data.data[0] = global_x;
-        seekfree_assistant_oscilloscope_data.data[1] = global_y;
-        seekfree_assistant_oscilloscope_data.data[2] = actual_yaw;
-        seekfree_assistant_oscilloscope_data.data[3] = target_x;
-        seekfree_assistant_oscilloscope_data.data[4] = target_y;
-        SendDataToAssistant(&seekfree_assistant_oscilloscope_data,5);
+        imu660rb_get_gyro();
+        sum += imu660rb_gyro_z;
+        system_delay_ms(2);
     }
+    bias = sum / 500;
+    calibrated = 1;
 }
-**/
+
 int time = 0;
+float ax_Zero = 0;
+float ay_Zero = 0;
+float imu_vx = 0;
+float imu_vy = 0;
 void pit_ch1_handler(void)
 {
+
     imu660rb_get_gyro(); // 获取陀螺仪测量数值
-    imu660rb_get_acc();
-
-    imu660rb_gyro_z = (int)((imu660rb_gyro_z - 4) / 10) * 10;
-
-    if (time <= 50)
+    if (!calibrated)
     {
-        time++;
-        actual_yaw = 0;
+        return;
     }
-    else
-    {
-        actual_yaw -= (float)imu660rb_gyro_z / imu660rb_transition_factor[1] * 0.005f;
-    }
+    imu660rb_gyro_z = (int)((imu660rb_gyro_z - bias) / 10) * 10;
+
+    // if(time<100){
+    // }else{
+    actual_yaw -= (float)imu660rb_gyro_z / imu660rb_transition_factor[1] * 0.005f;
+    // }
+    time++;
+
+    while (actual_yaw > 180.0f)
+        actual_yaw -= 360.0f;
+    while (actual_yaw < -180.0f)
+        actual_yaw += 360.0f;
 }
 
+float time_for_vision_angel = 0;
+float vision_angel_ask = 0;
+float vision_angel = 0;
 void pit_ch0_handler(void)
 {
+    // 不要删，统计时间点用
     time_line += 0.02f; // 每20ms增加0.02s
     move_control_task();
 }

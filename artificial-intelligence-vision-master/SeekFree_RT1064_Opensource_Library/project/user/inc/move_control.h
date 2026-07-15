@@ -8,7 +8,8 @@
 #include "sokoban_engine.h"
 
 // 系数 = (1/1024) * (1/0.02秒) * (3/7减速比) * (2 * PI * 0.0315米)
-#define SPEED_COEFFICIENT ((1.0f / 1024.0f) * (1.0f / 0.02f) * (3.0f / 7.0f) * (2.0f * 3.1415926f * 0.0315f))
+#define SPEED_COEFFICIENT ((1.0f / 1024.0f) * (1.0f / 0.01f) * (3.0f / 7.0f) * (2.0f * 3.1415926f * 0.0315f))
+#define VISION_CORRECT_T 1
 typedef enum
 {
     RF = 0,
@@ -43,8 +44,6 @@ extern float vision_x;
 extern float vision_y;
 
 extern PID_TypeDef pid[4];
-extern SecondOrder_Set_Follow_t planner_x;
-extern SecondOrder_Set_Follow_t planner_y;
 
 void move_control_init();
 float yaw_pid_calculate(void);
@@ -57,6 +56,7 @@ void move_control_task(void);
 void car_move(WaypointPath *path, float yaw, uint8_t m);
 void car_stop();
 void car_turn(float yaw);
+void car_move_point(float x, float y, float yaw, uint8_t m);
 
 extern uint8_t check_obstacle(SokobanContext *ctx, uint8_t grid_index);
 
@@ -80,8 +80,22 @@ extern float local_imu_vy;
 extern float a_x;
 extern float a_y;
 
-extern uint16_t target_step;
-extern uint16_t current_step ;
 extern uint8_t loac_test;
 extern uint8_t wait_for_loc;
+
+extern float ax;
+extern float ay;
+extern float az;
+
+extern float imu_x;
+extern float imu_y;
+
+extern float speed_angle;        //(弧度制)
+extern uint8_t vision_angle_switch;
+
+extern uint8_t count_A;
+extern volatile uint8_t count;
+
+extern uint8_t wait_for_loc;
+extern uint8_t got_angle;
 #endif

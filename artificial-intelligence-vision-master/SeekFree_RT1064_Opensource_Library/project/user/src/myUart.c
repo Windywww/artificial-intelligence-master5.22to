@@ -11,7 +11,7 @@ uint8_t test_rx_index_global = 0;
 
 // 【按需接收核心标志位】
 // 0: 索要小车位置  1: 索要地图  2: 索要角度  5: 挂机态(不处理任何数据)
-uint8_t global_infor_type = 5;
+volatile uint8_t global_infor_type = 5;
 
 // 定长解析状态机专用的控制变量
 uint8_t rx_state_global = 0;     // 0: 等待指定的包头, 1: 接收定长数据, 2: 校验包尾与Checksum
@@ -20,6 +20,7 @@ uint8_t expected_len_global = 0; // 当前包预期要接收的数据长度
 
 // ---------------- 定义全局存储变量 ----------------
 uint8_t final_map_data[MAP_LENS]; // 解压后的 192 个地图数据
+uint8_t got_map_flag = 0;         // 标志位，表示是否已经成功接收并解压了地图数据
 float car_location[2];
 float car_angel = 0;
 
@@ -106,6 +107,7 @@ void Unpack_Received_Map(uint8_t *thismap)
     // 清零缓存区
     memset(test_rx_buffer_global, 0, sizeof(test_rx_buffer_global));
     test_rx_index_global = 0;
+    got_map_flag = 1; // 设置标志位，表示地图数据已成功接收并解压
 }
 
 void Unpack_Received_CarLoc()

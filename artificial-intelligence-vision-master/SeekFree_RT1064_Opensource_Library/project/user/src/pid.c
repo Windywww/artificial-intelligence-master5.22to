@@ -8,7 +8,7 @@ void pid_init(PID_TypeDef *pid, float p, float i, float d)
     pid->error_last = 0.0f;
     pid->error_prev = 0.0f;
     pid->duty_out = 0;
-    pid->duty_max = 30; // 假设最大占空比为20
+    pid->duty_max = 25; // 假设最大占空比为20
 }
 
 /**
@@ -37,6 +37,11 @@ float pid_calculate(PID_TypeDef *pid, float target_speed, float actual_speed)
         pid->duty_out = pid->duty_max;
     if (pid->duty_out < -pid->duty_max)
         pid->duty_out = -pid->duty_max;
+
+
+
+
+        
 
     // 记住历史误差，留给下一次 20ms 后使用
     pid->error_prev = pid->error_last;

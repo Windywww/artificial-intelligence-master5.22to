@@ -8,5 +8,5 @@ void SendDataToAssistant(seekfree_assistant_oscilloscope_struct* sendDataStructu
 void ReceiveData();
 void wifi_task();
 
-
+extern uint8_t lost;
 #endif
