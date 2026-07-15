@@ -420,6 +420,7 @@ void navigation_update(void)
                         return;
                     }
                     first_time_fix = 0;
+                    stop_flag = 0;
                     return;
                 }
 
@@ -555,6 +556,7 @@ void navigation_update(void)
                         }
                     }
                     first_time_fix = 0;
+                    stop_flag = 0;
                     return;
                 }
 
