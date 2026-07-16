@@ -57,6 +57,8 @@ uint8_t vision_angle_switch = 1;
 // SecondOrder_Set_Follow_t planner_x; // x 轴 s 曲线跟随规划器
 // SecondOrder_Set_Follow_t planner_y; // y 轴 s 曲线跟随规划器
 
+//小车在横着走竖着走还是斜着走,0是横，1是竖；2是斜3是不走
+uint8_t walk_mode = 3;
 void move_control_init()
 {
     for (int i = 0; i < 4; i++)
@@ -245,14 +247,16 @@ float amax = 1.0f;                  // 最大加速度 m/s^2
 // 分别在最后一个点与其它节点起到延时作用
 uint8_t count_A = 0;
 volatile uint8_t count = 0;
-uint8_t got_angle = 0;
 
+uint8_t got_angle = 0;
+uint8_t angle_test = 0;
 // 是为了小车到节点根据视觉传来的坐标再矫正一次
 uint8_t first_time_fix = 1;
 
-// 视觉传来的坐标
+// 视觉传来的坐标,角度
 float vision_x = -1;
 float vision_y = -1;
+float vision_angle = 999;
 void navigation_update(void)
 {
     // 参数：&对象, 目标坐标, 到达目标时的末速度
@@ -321,9 +325,10 @@ void navigation_update(void)
             // {
             //     stop_flag = 0; // 关闭手刹
             // }
-            if (distance <= 0.015f&&stop_flag == 0)
+            if (distance <= 0.015f && stop_flag == 0)
             {
                 stop_flag = 1; // 开启手刹
+                walk_mode = 3;
             }
             if (stop_flag == 1)
             {
@@ -354,16 +359,39 @@ void navigation_update(void)
                     {
                         if (global_infor_type == 5)
                         {
+                            got_angle = 0;
+                        }
+                        else
+                        {
+                            uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
+                            return;
+                        }
+                    }
+                    if (got_angle != 2)
+                    {
+                        if (car_angel - vision_angle <= 2 && car_angel - vision_angle >= -2)
+                        {
+                            angle_test++;
+                        }
+                        else
+                        {
+                            angle_test = 0;
+                            vision_angle = car_angel;
+                        }
+
+                        if (angle_test >= 3)
+                        {
                             actual_yaw = car_angel - 90;
                             while (actual_yaw > 180.0f)
                                 actual_yaw -= 360.0f;
                             while (actual_yaw < -180.0f)
                                 actual_yaw += 360.0f;
+                            vision_angle = 999;
+                            angle_test = 0;
                             got_angle = 2;
                         }
                         else
                         {
-                            uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
                             return;
                         }
                     }
@@ -424,8 +452,8 @@ void navigation_update(void)
                     return;
                 }
 
-
                 navigate_flag = 0;
+                walk_mode = 3;
                 stop_flag = 0;
                 count_A = 0;
                 got_angle = 0;
@@ -450,8 +478,9 @@ void navigation_update(void)
         }
         else
         {
-            if (distance <= 0.015f&&stop_flag == 0)
+            if (distance <= 0.015f && stop_flag == 0)
             {
+                walk_mode = 3;
                 stop_flag = 1; // 开启手刹
             }
             if (stop_flag == 1)
@@ -482,16 +511,39 @@ void navigation_update(void)
                     {
                         if (global_infor_type == 5)
                         {
+                            got_angle = 0;
+                        }
+                        else
+                        {
+                            uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
+                            return;
+                        }
+                    }
+                    if (got_angle != 2)
+                    {
+                        if (car_angel - vision_angle <= 2 && car_angel - vision_angle >= -2)
+                        {
+                            angle_test++;
+                        }
+                        else
+                        {
+                            angle_test = 0;
+                            vision_angle = car_angel;
+                        }
+
+                        if (angle_test >= 3)
+                        {
                             actual_yaw = car_angel - 90;
                             while (actual_yaw > 180.0f)
                                 actual_yaw -= 360.0f;
                             while (actual_yaw < -180.0f)
                                 actual_yaw += 360.0f;
+                            vision_angle = 999;
+                            angle_test = 0;
                             got_angle = 2;
                         }
                         else
                         {
-                            uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
                             return;
                         }
                     }
@@ -570,6 +622,19 @@ void navigation_update(void)
                 // 下面是更改小车从一个节点走到另一个节点走的状态(横向，纵向，斜向)以及角度信息
                 float d_point_x = target_x - path_queue_x[current_path - 1];
                 float d_point_y = target_y - path_queue_y[current_path - 1];
+                if(d_point_x!=0&&d_point_y!=0){
+                    walk_mode = 2;
+                }else if (d_point_x!=0&&d_point_y == 0)
+                {
+                    walk_mode = 0;
+                }else if (d_point_x==0&&d_point_y!=0)
+                {
+                    walk_mode = 1;
+                }else{
+                    walk_mode = 3;
+                }
+                
+                
                 speed_angle = atan2f(d_point_y, d_point_x); // 计算角度
                 last_global_target_vx = 0;
                 last_global_target_vy = 0;

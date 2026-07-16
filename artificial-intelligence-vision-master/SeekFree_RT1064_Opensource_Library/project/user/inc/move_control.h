@@ -81,6 +81,7 @@ extern float a_x;
 extern float a_y;
 
 extern uint8_t loac_test;
+extern uint8_t angle_test;
 extern uint8_t wait_for_loc;
 
 extern float ax;
@@ -98,4 +99,7 @@ extern volatile uint8_t count;
 
 extern uint8_t wait_for_loc;
 extern uint8_t got_angle;
+
+extern uint8_t walk_mode;
+
 #endif

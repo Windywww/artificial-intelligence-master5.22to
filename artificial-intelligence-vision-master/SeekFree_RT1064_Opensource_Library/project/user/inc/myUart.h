@@ -25,6 +25,8 @@ extern uint8_t final_map_data[MAP_LENS]; // 解压后的 192 个地图数据
 extern float car_location[2];
 extern float car_angel;
 extern uint8_t got_map_flag;
+extern float car_angel ;
+
 void myuart_init(void);
 void want_global_infor(char infor_type);
 void check_image(char obj,char is_firsttime);

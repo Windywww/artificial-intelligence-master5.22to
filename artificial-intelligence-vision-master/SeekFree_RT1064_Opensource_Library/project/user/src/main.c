@@ -157,6 +157,7 @@ int main(void)
     }
     system_delay_ms(1500);
     // NVIC_SystemReset(); // 复位
+    return 0;
 }
 
 static int16 bias = 0;
@@ -202,12 +203,47 @@ void pit_ch1_handler(void)
         actual_yaw += 360.0f;
 }
 
-float time_for_vision_angel = 0;
-float vision_angel_ask = 0;
-float vision_angel = 0;
+uint8_t time_for_vision_loac = 0;
+uint8_t vision_correct_flag = 0;
 void pit_ch0_handler(void)
 {
     // 不要删，统计时间点用
     time_line += 0.02f; // 每20ms增加0.02s
     move_control_task();
+    if (time_for_vision_loac > 0.5f)
+    {
+        time_for_vision_loac = 0;
+        vision_correct_flag = 1;
+    }
+
+    if (vision_correct_flag == 0)
+    {
+        time_for_vision_loac += 0.02f;
+    }
+    else if (vision_correct_flag == 1)
+    {
+        if (walk_mode != 3)
+        {
+            if (global_infor_type == 5)
+            {
+                want_global_infor(0);
+                vision_correct_flag = 2;
+            }
+        }
+    }
+    if (vision_correct_flag == 2)
+    {
+        if (global_infor_type == 5)
+        {
+            if (walk_mode == 0)
+            {
+                global_y = 2.4f - 2.4f * car_location[1];
+            }
+            else if (walk_mode == 1)
+            {
+                global_y = 3.2f * car_location[0];
+            }
+            vision_correct_flag = 0;
+        }
+    }
 }
