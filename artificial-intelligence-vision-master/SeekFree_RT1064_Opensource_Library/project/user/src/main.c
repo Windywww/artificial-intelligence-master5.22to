@@ -207,6 +207,7 @@ uint8_t time_for_vision_loac = 0;
 uint8_t vision_correct_flag = 0;
 void pit_ch0_handler(void)
 {
+    myuart_timeout_tick_10ms();
     // 不要删，统计时间点用
     time_line += 0.02f; // 每20ms增加0.02s
     move_control_task();

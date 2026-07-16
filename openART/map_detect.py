@@ -597,6 +597,22 @@ def get_and_update_car_info(img, maps, L, inv_coeffs):
     img.draw_line(int(green_x), int(green_y), int(blue_x), int(blue_y), color=(0, 0, 0))
     return car_info
 
+def crc16_ccitt(data):
+    crc = 0xFFFF
+    for value in data:
+        crc ^= value << 8
+        for _ in range(8):
+            if crc & 0x8000:
+                crc = ((crc << 1) ^ 0x1021) & 0xFFFF
+            else:
+                crc = (crc << 1) & 0xFFFF
+    return crc
+
+def append_crc16(packet):
+    crc = crc16_ccitt(packet)
+    packet.append((crc >> 8) & 0xFF)
+    packet.append(crc & 0xFF)
+
 def send_map_packet(maps):
     # 检查数据长度
     if len(maps) != LENS:
@@ -613,24 +629,21 @@ def send_map_packet(maps):
     # 组装数据包
     packet = bytearray([0xA5, n])
     packet.extend(compressed_bytes)
-    checksum = (n + sum(compressed_bytes)) & 0xFF
-    packet.append(checksum)
+    append_crc16(packet)
     uart.write(packet)
 
 def send_2f_packet(car_loc):
     packet = bytearray([0xAA])
     float_bytes = struct.pack('<2f', *car_loc)
     packet.extend(float_bytes)
-    # = sum(float_bytes) & 0xFF    #取低八位 0xFF=255
-    #packet.append(checksum)
+    append_crc16(packet)
     uart.write(packet)
 
 def send_float_packet(deg):
     packet = bytearray([0x5A])
     float_bytes = struct.pack('<f', deg)
     packet.extend(float_bytes)
-    #checksum = sum(float_bytes) & 0xFF    #取低八位 0xFF=255
-    #packet.append(checksum)
+    append_crc16(packet)
     print(packet)
     uart.write(packet)
 

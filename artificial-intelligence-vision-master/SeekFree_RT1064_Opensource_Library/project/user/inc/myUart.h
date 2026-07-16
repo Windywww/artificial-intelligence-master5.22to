@@ -28,6 +28,7 @@ extern uint8_t got_map_flag;
 extern float car_angel ;
 
 void myuart_init(void);
+void myuart_timeout_tick_10ms(void);
 void want_global_infor(char infor_type);
 void check_image(char obj,char is_firsttime);
 #endif

@@ -8,13 +8,14 @@
 // ---------------- 接收缓存与按需状态机控制 ----------------
 uint8_t test_rx_buffer_global[80];
 uint8_t test_rx_index_global = 0;
+volatile uint8_t rx_idle_ticks_global = 0;
 
 // 【按需接收核心标志位】
 // 0: 索要小车位置  1: 索要地图  2: 索要角度  5: 挂机态(不处理任何数据)
 volatile uint8_t global_infor_type = 5;
 
 // 定长解析状态机专用的控制变量
-uint8_t rx_state_global = 0;     // 0: 等待指定的包头, 1: 接收定长数据, 2: 校验包尾与Checksum
+uint8_t rx_state_global = 0;     // 0: 等待指定的包头, 1: 接收定长数据
 uint8_t current_cmd_global = 0;  // 当前正在接收的指令类型 (0xAA, 0xA5, 0x5A)
 uint8_t expected_len_global = 0; // 当前包预期要接收的数据长度
 
@@ -23,6 +24,52 @@ uint8_t final_map_data[MAP_LENS]; // 解压后的 192 个地图数据
 uint8_t got_map_flag = 0;         // 标志位，表示是否已经成功接收并解压了地图数据
 float car_location[2];
 float car_angel = 0;
+
+static uint16_t crc16_ccitt_update(uint16_t crc, uint8_t data)
+{
+    crc ^= (uint16_t)data << 8;
+    for (uint8_t i = 0; i < 8; i++)
+    {
+        crc = (crc & 0x8000U) ? (uint16_t)((crc << 1) ^ 0x1021U) : (uint16_t)(crc << 1);
+    }
+    return crc;
+}
+
+static void reset_global_receiver(void)
+{
+    rx_state_global = 0;
+    test_rx_index_global = 0;
+    rx_idle_ticks_global = 0;
+    memset(test_rx_buffer_global, 0, sizeof(test_rx_buffer_global));
+}
+
+static void retry_global_request(void)
+{
+    uint8_t infor_type = global_infor_type;
+    reset_global_receiver();
+    if (infor_type == 1)
+    {
+        uart_write_byte(UART_GLOBAL_INDEX, 0xBB);
+    }
+    else if (infor_type == 2)
+    {
+        uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
+    }
+}
+
+static uint8_t global_packet_crc_valid(void)
+{
+    uint8_t data_len = expected_len_global - 2;
+    uint16_t crc = crc16_ccitt_update(0xFFFFU, current_cmd_global);
+    for (uint8_t i = 0; i < data_len; i++)
+    {
+        crc = crc16_ccitt_update(crc, test_rx_buffer_global[i]);
+    }
+
+    uint16_t received_crc = ((uint16_t)test_rx_buffer_global[data_len] << 8) |
+                            test_rx_buffer_global[data_len + 1];
+    return crc == received_crc;
+}
 
 // ---------------- UART4 相关变量 (原封不动) ----------------
 // 视觉组会持续传来每一帧检测结果，只有连续五次数据一样才接取
@@ -43,6 +90,21 @@ void myuart_init(void)
     interrupt_set_priority(UART_LOCAL_PRIORITY, 0);
 }
 
+void myuart_timeout_tick_10ms(void)
+{
+    if (global_infor_type != 5 && rx_state_global == 1)
+    {
+        if (++rx_idle_ticks_global >= 3)
+        {
+            retry_global_request();
+        }
+    }
+    else
+    {
+        rx_idle_ticks_global = 0;
+    }
+}
+
 /**
  * @brief 索要全局摄像头的一些信息 (触发按需接收)
  * @param infor_type 0小车位置 1地图，2小车角度
@@ -59,9 +121,7 @@ void want_global_infor(char infor_type)
     global_infor_type = infor_type;
 
     // 2. 清理战场，确保状态机处于干干净净的找包头状态
-    rx_state_global = 0;
-    test_rx_index_global = 0;
-    memset(test_rx_buffer_global, 0, sizeof(test_rx_buffer_global));
+    reset_global_receiver();
 
     // 3. 按需发送握手信号给视觉模块
     switch (infor_type)
@@ -130,7 +190,7 @@ void Unpack_Received_CarAngel()
     test_rx_index_global = 0;
 }
 
-// ---------------- 核心升级：具备 Checksum 和边界帧校验的状态机 ----------------
+// ---------------- 具备 CRC16 校验的定长接收状态机 ----------------
 void uart1_rx_interrupt_handler(void)
 {
     uint8_t get_data;
@@ -139,115 +199,79 @@ void uart1_rx_interrupt_handler(void)
         return;
     }
 
-    // 【拦截】：如果是挂机态，直接丢弃数据
     if (global_infor_type == 5)
-        return;
-    switch (rx_state_global)
     {
-    case 0: // 【状态0：睁眼寻找被要求的包头】
+        return;
+    }
+
+    rx_idle_ticks_global = 0;
+
+    if (rx_state_global == 0)
+    {
         if (global_infor_type == 0 && get_data == 0xAA)
         {
             current_cmd_global = 0xAA;
-            expected_len_global = 8; // 2个 float
-            test_rx_index_global = 0;
-            rx_state_global = 1;
+            expected_len_global = 10;
         }
         else if (global_infor_type == 1 && get_data == 0xA5)
         {
             current_cmd_global = 0xA5;
-            expected_len_global = 66; // 长度(1) + 地图(64) + Checksum(1) = 66 字节
-            test_rx_index_global = 0;
-            rx_state_global = 1;
+            expected_len_global = 67;
         }
         else if (global_infor_type == 2 && get_data == 0x5A)
         {
             current_cmd_global = 0x5A;
-            expected_len_global = 4; // 1个 float
-            test_rx_index_global = 0;
-            rx_state_global = 1;
-        }
-        break;
-
-    case 1: // 【状态1：闷头接收定长数据】
-        if (test_rx_index_global < sizeof(test_rx_buffer_global))
-        {
-            test_rx_buffer_global[test_rx_index_global++] = get_data;
+            expected_len_global = 6;
         }
         else
         {
-            uint8_t type = global_infor_type;
-            global_infor_type = 5;
-            // 越界严重错位，重新索要数据！
-            want_global_infor(type);
-            break;
+            return;
         }
 
-        // 数据收集满足长度后，进入状态 2 等待自然校验尾缀
-        if (test_rx_index_global >= expected_len_global)
-        {
-            rx_state_global = 2;
-        }
-        break;
-
-    case 2: // 【状态2：严格校验尾缀与 Checksum】
-        // 1. 先验证下一帧的包头（天然边界尾缀）是否为 0xAA
-        if (get_data == 0xAA)
-        {
-
-            uint8_t is_packet_valid = 1; // 数据有效标志位
-
-            // 2. 如果是地图数据，进行加和校验 (Checksum)
-            if (current_cmd_global == 0xA5)
-            {
-                uint16_t checksum_sum = 0;
-                // 将前 65 个字节（[0] 到 [64]）加起来
-                for (int i = 0; i < 65; i++)
-                {
-                    checksum_sum += test_rx_buffer_global[i];
-                }
-
-                // 取低 8 位与第 66 个字节（[65]）对比
-                uint8_t calculated_checksum = (uint8_t)(checksum_sum & 0xFF);
-                if (calculated_checksum != test_rx_buffer_global[65])
-                {
-                    is_packet_valid = 0; // Checksum 错误！标记为无效数据
-                }
-            }
-
-            // 3. 终极宣判
-            if (is_packet_valid)
-            {
-                // 完美通过所有测试，开始解包！
-                if (current_cmd_global == 0xAA)
-                {
-                    Unpack_Received_CarLoc();
-                }
-                else if (current_cmd_global == 0xA5)
-                {
-                    Unpack_Received_Map(final_map_data);
-                }
-                else if (current_cmd_global == 0x5A)
-                {
-                    Unpack_Received_CarAngel();
-                }
-
-                // 任务结束，闭眼挂机
-                global_infor_type = 5;
-                rx_state_global = 0;
-            }
-            else
-            {
-                // 🚨 校验和不匹配，数据被污染，立刻重新索要！
-                want_global_infor(global_infor_type);
-            }
-        }
-        else
-        {
-            // 🚨 边界位不是 0xAA，说明发生错位丢包，立刻重新索要！
-            want_global_infor(global_infor_type);
-        }
-        break;
+        test_rx_index_global = 0;
+        rx_state_global = 1;
+        return;
     }
+
+    if (test_rx_index_global >= sizeof(test_rx_buffer_global))
+    {
+        retry_global_request();
+        return;
+    }
+
+    test_rx_buffer_global[test_rx_index_global++] = get_data;
+    if (test_rx_index_global < expected_len_global)
+    {
+        return;
+    }
+
+    uint8_t is_packet_valid = global_packet_crc_valid();
+    if (current_cmd_global == 0xA5 && test_rx_buffer_global[0] != 64)
+    {
+        is_packet_valid = 0;
+    }
+
+    if (!is_packet_valid)
+    {
+        retry_global_request();
+        return;
+    }
+
+    if (current_cmd_global == 0xAA)
+    {
+        Unpack_Received_CarLoc();
+    }
+    else if (current_cmd_global == 0xA5)
+    {
+        Unpack_Received_Map(final_map_data);
+    }
+    else
+    {
+        Unpack_Received_CarAngel();
+    }
+
+    global_infor_type = 5;
+    rx_state_global = 0;
 }
 
 // ---------------- UART4 相关逻辑 (原封不动) ----------------
