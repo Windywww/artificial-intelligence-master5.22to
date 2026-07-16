@@ -38,10 +38,10 @@ uint8_t mode = 0;           // 两种运动模式
 float target_x = 0.3f;      // 目标 x 坐标 单位 m
 float target_y = 1.2f;      // 目标 y 坐标 单位 m
 float min_distance = 0.01f; // 距离小于这个值就认为到达目标点了 单位 m
-float kp_position_x = 3.5f;
-float kp_position_y = 3.0f;
-float kd_position_x = 0.0f;
-float kd_position_y = 0.0f;
+float kp_position_x = 10.0f;
+float kp_position_y = 4.0f;
+float kd_position_x = 4.0f;
+float kd_position_y = 4.0f;
 
 float path_queue_x[100];
 float path_queue_y[100];
@@ -137,7 +137,7 @@ void wheel_speed_calculate(float vx, float vy, float vz)
         {
             raw_v = -raw_v;
         }
-        actual_v[i] = raw_v;
+        actual_v[i] = raw_v*0.3f+actual_v[i]*0.7f;
         // actual_v[i] = 0.3f*raw_v+0.7f*actual_v[i]; // 速度低通滤波
 
         out_duty[i] = pid_calculate(&pid[i], target_v[i], actual_v[i]);
@@ -242,14 +242,14 @@ uint8_t vision_point_num = 0;
 float speed_angle = 0.0f;           //(弧度制)
 float last_global_target_vx = 0.0f; // 全局坐标系下的目标速度
 float last_global_target_vy = 0.0f; // 全局坐标系下
-float amax = 1.0f;                  // 最大加速度 m/s^2
+float amax = 3.0f;                  // 最大加速度 m/s^2
 
 // 分别在最后一个点与其它节点起到延时作用
 uint8_t count_A = 0;
 volatile uint8_t count = 0;
 
 uint8_t got_angle = 0;
-uint8_t angle_test = 0;
+int angle_test = 0;
 // 是为了小车到节点根据视觉传来的坐标再矫正一次
 uint8_t first_time_fix = 1;
 
@@ -278,7 +278,7 @@ void navigation_update(void)
     // float global_target_vx = planner_x.v + kp_position_x * (planner_x.p - global_x);
     // float global_target_vy = planner_y.v + kp_position_y * (planner_y.p - global_y);
 
-    float max_speed = 0.5f;
+    float max_speed = 1.0f;
     if (global_target_vx > max_speed)
         global_target_vx = max_speed;
     if (global_target_vx < -max_speed)
@@ -289,22 +289,22 @@ void navigation_update(void)
         global_target_vy = -max_speed;
 
     // 加速度限制
-    if (global_target_vx - last_global_target_vx > amax * 0.02f)
-        global_target_vx = last_global_target_vx + amax * 0.02f;
-    if (global_target_vx - last_global_target_vx < -amax * 0.02f)
-        global_target_vx = last_global_target_vx - amax * 0.02f;
-    if (global_target_vy - last_global_target_vy > amax * 0.02f)
-        global_target_vy = last_global_target_vy + amax * 0.02f;
-    if (global_target_vy - last_global_target_vy < -amax * 0.02f)
-        global_target_vy = last_global_target_vy - amax * 0.02f;
+    if (global_target_vx - last_global_target_vx > amax * 0.01f)
+        global_target_vx = last_global_target_vx + amax * 0.01f;
+    if (global_target_vx - last_global_target_vx < -amax * 0.01f)
+        global_target_vx = last_global_target_vx - amax * 0.01f;
+    if (global_target_vy - last_global_target_vy > amax * 0.01f)
+        global_target_vy = last_global_target_vy + amax * 0.01f;
+    if (global_target_vy - last_global_target_vy < -amax * 0.01f)
+        global_target_vy = last_global_target_vy - amax * 0.01f;
 
     // 记忆目标速度赋值，为了求加速度
     last_global_target_vx = global_target_vx;
     last_global_target_vy = global_target_vy;
     float speed_mix = sqrtf(global_target_vx * global_target_vx + global_target_vy * global_target_vy);
     speed_angle = atan2f(target_y - global_y, target_x - global_x);
-    global_target_vx = speed_mix * cosf(speed_angle);
-    global_target_vy = speed_mix * sinf(speed_angle);
+    // global_target_vx = speed_mix * cosf(speed_angle);
+    // global_target_vy = speed_mix * sinf(speed_angle);
 
     float dx = target_x - global_x;
     float dy = target_y - global_y;
@@ -341,120 +341,119 @@ void navigation_update(void)
                     return;
                 }
 
-                if (vision_angle_switch)
-                {
-                    if (got_angle == 0)
-                    {
-                        if (global_infor_type == 5)
-                        {
-                            want_global_infor(2);
-                            got_angle = 1;
-                        }
-                        else
-                        {
-                            return;
-                        }
-                    }
-                    if (got_angle == 1)
-                    {
-                        if (global_infor_type == 5)
-                        {
-                            got_angle = 0;
-                        }
-                        else
-                        {
-                            uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
-                            return;
-                        }
-                    }
-                    if (got_angle != 2)
-                    {
-                        if (car_angel - vision_angle <= 2 && car_angel - vision_angle >= -2)
-                        {
-                            angle_test++;
-                        }
-                        else
-                        {
-                            angle_test = 0;
-                            vision_angle = car_angel;
-                        }
+                // if (vision_angle_switch)
+                // {
+                //     if (got_angle == 0)
+                //     { 
+                //         if (global_infor_type == 5)
+                //         {
+                //             want_global_infor(2);
+                //             got_angle = 1;
+                //         }
+                //         else
+                //         {
+                //             return;
+                //         }
+                //     }
+                //     if (got_angle == 1)
+                //     {
+                //         if (global_infor_type == 5)
+                //         {
+                //             got_angle = 0;
+                //         }
+                //         else
+                //         {
+                //             uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
+                //             return;
+                //         }
+                //     }
+                //     if (got_angle != 2)
+                //     {
+                //         if (car_angel - vision_angle <= 2 && car_angel - vision_angle >= -2)
+                //         {
+                //             angle_test++;
+                //         }
+                //         else
+                //         {
+                //             angle_test = 0;
+                //             vision_angle = car_angel;
+                //         }
 
-                        if (angle_test >= 3)
-                        {
-                            actual_yaw = car_angel - 90;
-                            while (actual_yaw > 180.0f)
-                                actual_yaw -= 360.0f;
-                            while (actual_yaw < -180.0f)
-                                actual_yaw += 360.0f;
-                            vision_angle = 999;
-                            angle_test = 0;
-                            got_angle = 2;
-                        }
-                        else
-                        {
-                            return;
-                        }
-                    }
-                }
+                //         if (angle_test >= 2)
+                //         {
+                //             actual_yaw = car_angel - 90;
+                //             while (actual_yaw > 180.0f)
+                //                 actual_yaw -= 360.0f;
+                //             while (actual_yaw < -180.0f)
+                //                 actual_yaw += 360.0f;
+                //             vision_angle = 999;
+                //             angle_test = 0;
+                //             got_angle = 2;
+                //         }
+                //         else
+                //         {
+                //             return;
+                //         }
+                //     }
+                // }
 
-                if (first_time_fix)
-                {
-                    if (wait_for_loc == 0)
-                    {
-                        if (global_infor_type != 5)
-                        {
-                            return;
-                        }
-                        want_global_infor(0);
-                        wait_for_loc = 1;
-                    }
-                    if (wait_for_loc == 1)
-                    {
-                        if (global_infor_type == 5)
-                        {
-                            wait_for_loc = 0;
-                        }
-                        else
-                        {
-                            return;
-                        }
-                    }
-                    if (car_location[0] - vision_x >= -0.005f && car_location[0] - vision_x <= 0.005f &&
-                        car_location[1] - vision_y >= -0.005f &&
-                        car_location[1] - vision_y <= 0.005f)
-                    {
-                        loac_test++;
-                    }
-                    else
-                    {
-                        loac_test = 0;
-                        vision_x = car_location[0];
-                        vision_y = car_location[1];
-                    }
+                // if (first_time_fix)
+                // {
+                //     if (wait_for_loc == 0)
+                //     {
+                //         if (global_infor_type != 5)
+                //         {
+                //             return;
+                //         }
+                //         want_global_infor(0);
+                //         wait_for_loc = 1;
+                //     }
+                //     if (wait_for_loc == 1)
+                //     {
+                //         if (global_infor_type == 5)
+                //         {
+                //             wait_for_loc = 0;
+                //         }
+                //         else
+                //         {
+                //             return;
+                //         }
+                //     }
+                //     if (car_location[0] - vision_x >= -0.005f && car_location[0] - vision_x <= 0.005f &&
+                //         car_location[1] - vision_y >= -0.005f &&
+                //         car_location[1] - vision_y <= 0.005f)
+                //     {
+                //         loac_test++;
+                //     }
+                //     else
+                //     {
+                //         loac_test = 0;
+                //         vision_x = car_location[0];
+                //         vision_y = car_location[1];
+                //     }
 
-                    if (loac_test >= 3)
-                    {
-                        float dx = global_x - 3.2f * car_location[0];
-                        float dy = global_y - (2.4f - 2.4f * car_location[1]);
+                //     if (loac_test >= 3)
+                //     {
+                //         float dx = global_x - 3.2f * car_location[0];
+                //         float dy = global_y - (2.4f - 2.4f * car_location[1]);
 
-                        global_x = 3.2f * (car_location[0] + vision_x) * 0.5f;
-                        global_y = 2.4f - 2.4f * (car_location[1] + vision_y) * 0.5f;
-                        vision_x = -1;
-                        vision_y = -1;
-                        loac_test = 0;
-                    }
-                    else
-                    {
-                        return;
-                    }
-                    first_time_fix = 0;
-                    stop_flag = 0;
-                    return;
-                }
+                //         global_x = 3.2f * (car_location[0] + vision_x) * 0.5f;
+                //         global_y = 2.4f - 2.4f * (car_location[1] + vision_y) * 0.5f;
+                //         vision_x = -1;
+                //         vision_y = -1;
+                //         loac_test = 0;
+                //     }
+                //     else
+                //     {
+                //         return;
+                //     }
+                //     first_time_fix = 0;
+                //     stop_flag = 0;
+                //     return;
+                // }
 
                 navigate_flag = 0;
                 walk_mode = 3;
-                stop_flag = 0;
                 count_A = 0;
                 got_angle = 0;
                 first_time_fix = 1;
@@ -493,124 +492,123 @@ void navigation_update(void)
                     count++;
                     return;
                 }
-                if (vision_angle_switch)
-                {
-                    if (got_angle == 0)
-                    {
-                        if (global_infor_type == 5)
-                        {
-                            want_global_infor(2);
-                            got_angle = 1;
-                        }
-                        else
-                        {
-                            return;
-                        }
-                    }
-                    if (got_angle == 1)
-                    {
-                        if (global_infor_type == 5)
-                        {
-                            got_angle = 0;
-                        }
-                        else
-                        {
-                            uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
-                            return;
-                        }
-                    }
-                    if (got_angle != 2)
-                    {
-                        if (car_angel - vision_angle <= 2 && car_angel - vision_angle >= -2)
-                        {
-                            angle_test++;
-                        }
-                        else
-                        {
-                            angle_test = 0;
-                            vision_angle = car_angel;
-                        }
+                // if (vision_angle_switch)
+                // {
+                //     if (got_angle == 0)
+                //     {
+                //         if (global_infor_type == 5)
+                //         {
+                //             want_global_infor(2);
+                //             got_angle = 1;
+                //         }
+                //         else
+                //         {
+                //             return;
+                //         }
+                //     }
+                //     if (got_angle == 1)
+                //     {
+                //         if (global_infor_type == 5)
+                //         {
+                //             got_angle = 0;
+                //         }
+                //         else
+                //         {
+                //             uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
+                //             return;
+                //         }
+                //     }
+                //     if (got_angle != 2)
+                //     {
+                //         if (car_angel - vision_angle <= 2 && car_angel - vision_angle >= -2)
+                //         {
+                //             angle_test++;
+                //         }
+                //         else
+                //         {
+                //             angle_test = 0;
+                //             vision_angle = car_angel;
+                //         }
 
-                        if (angle_test >= 3)
-                        {
-                            actual_yaw = car_angel - 90;
-                            while (actual_yaw > 180.0f)
-                                actual_yaw -= 360.0f;
-                            while (actual_yaw < -180.0f)
-                                actual_yaw += 360.0f;
-                            vision_angle = 999;
-                            angle_test = 0;
-                            got_angle = 2;
-                        }
-                        else
-                        {
-                            return;
-                        }
-                    }
-                }
-                if (first_time_fix)
-                {
-                    if (vision_point_num == 0)
-                    {
-                        if (wait_for_loc == 0)
-                        {
-                            if (global_infor_type != 5)
-                            {
-                                return;
-                            }
-                            want_global_infor(0);
-                            wait_for_loc = 1;
-                        }
-                        if (wait_for_loc == 1)
-                        {
-                            if (global_infor_type == 5)
-                            {
-                                wait_for_loc = 0;
-                            }
-                            else
-                            {
-                                return;
-                            }
-                        }
+                //         if (angle_test >= 2)
+                //         {
+                //             actual_yaw = car_angel - 90;
+                //             while (actual_yaw > 180.0f)
+                //                 actual_yaw -= 360.0f;
+                //             while (actual_yaw < -180.0f)
+                //                 actual_yaw += 360.0f;
+                //             vision_angle = 999;
+                //             angle_test = 0;
+                //             got_angle = 2;
+                //         }
+                //         else
+                //         {
+                //             return;
+                //         }
+                //     }
+                // }
+                // if (first_time_fix)
+                // {
+                //     if (vision_point_num == 0)
+                //     {
+                //         if (wait_for_loc == 0)
+                //         {
+                //             if (global_infor_type != 5)
+                //             {
+                //                 return;
+                //             }
+                //             want_global_infor(0);
+                //             wait_for_loc = 1;
+                //         }
+                //         if (wait_for_loc == 1)
+                //         {
+                //             if (global_infor_type == 5)
+                //             {
+                //                 wait_for_loc = 0;
+                //             }
+                //             else
+                //             {
+                //                 return;
+                //             }
+                //         }
 
-                        if (car_location[0] - vision_x >= -0.005f && car_location[0] - vision_x <= 0.005f &&
-                            car_location[1] - vision_y >= -0.005f && car_location[1] - vision_y <= 0.005f)
-                        {
-                            loac_test++;
-                        }
-                        else
-                        {
-                            loac_test = 0;
-                            vision_x = car_location[0];
-                            vision_y = car_location[1];
-                        }
-                        if (loac_test >= 3)
-                        {
-                            float dx = global_x - 3.2f * car_location[0];
-                            float dy = global_y - (2.4f - 2.4f * car_location[1]);
-                            // if (sqrtf(dx * dx + dy * dy) >= 0.25f)
-                            // {
-                            //     // 如果视觉坐标和里程计坐标差距超过 25cm 就不修正了
-                            // }
-                            // else
-                            // {
-                            global_x = 3.2f * (car_location[0] + vision_x) * 0.5f;
-                            global_y = 2.4f - 2.4f * (car_location[1] + vision_y) * 0.5f;
-                            // actual_yaw = car_angel - 90;
-                            // }
-                            loac_test = 0;
-                            vision_x = -1;
-                            vision_y = -1;
-                        }
-                        else
-                        {
-                            return;
-                        }
-                    }
-                    first_time_fix = 0;
-                    stop_flag = 0;
-                    return;
-                }
+                //         if (car_location[0] - vision_x >= -0.005f && car_location[0] - vision_x <= 0.005f &&
+                //             car_location[1] - vision_y >= -0.005f && car_location[1] - vision_y <= 0.005f)
+                //         {
+                //             loac_test++;
+                //         }
+                //         else
+                //         {
+                //             loac_test = 0;
+                //             vision_x = car_location[0];
+                //             vision_y = car_location[1];
+                //         }
+                //         if (loac_test >= 3)
+                //         {
+                //             float dx = global_x - 3.2f * car_location[0];
+                //             float dy = global_y - (2.4f - 2.4f * car_location[1]);
+                //             // if (sqrtf(dx * dx + dy * dy) >= 0.25f)
+                //             // {
+                //             //     // 如果视觉坐标和里程计坐标差距超过 25cm 就不修正了
+                //             // }
+                //             // else
+                //             // {
+                //             global_x = 3.2f * (car_location[0] + vision_x) * 0.5f;
+                //             global_y = 2.4f - 2.4f * (car_location[1] + vision_y) * 0.5f;
+                //             // actual_yaw = car_angel - 90;
+                //             // }
+                //             loac_test = 0;
+                //             vision_x = -1;
+                //             vision_y = -1;
+                //         }
+                //         else
+                //         {
+                //             return;
+                //         }
+                //     }
+                //     first_time_fix = 0;
+                //     return;
+                // }
 
                 count = 0;
                 stop_flag = 0;

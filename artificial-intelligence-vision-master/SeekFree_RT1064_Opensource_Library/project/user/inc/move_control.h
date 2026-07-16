@@ -81,7 +81,7 @@ extern float a_x;
 extern float a_y;
 
 extern uint8_t loac_test;
-extern uint8_t angle_test;
+extern int angle_test;
 extern uint8_t wait_for_loc;
 
 extern float ax;

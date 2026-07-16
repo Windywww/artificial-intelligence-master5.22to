@@ -11,7 +11,8 @@ extern float imu_vx;
 extern float imu_vy;
 // 示波器要使用时，发送以下结构体,默认最大容量为8个，如果需要更多数据，请查看seekfree_assistant_oscilloscope_struct的定义
 seekfree_assistant_oscilloscope_struct SendData;
-extern uint8_t time_for_vision_loac;
+extern float time_for_vision_loac;
+extern uint8_t vision_correct_flag;
 
 uint8_t lost = 0;
 /**
@@ -76,12 +77,12 @@ void wifi_task()
 
     seekfree_assistant_oscilloscope_data.data[0] = global_x;
     seekfree_assistant_oscilloscope_data.data[1] = global_y;
-    seekfree_assistant_oscilloscope_data.data[2] = target_x;
-    seekfree_assistant_oscilloscope_data.data[3] = target_y;
-    seekfree_assistant_oscilloscope_data.data[4] = actual_yaw;
-    seekfree_assistant_oscilloscope_data.data[5] = global_infor_type; // 0: 无效 1: 只要坐标 2: 只要角度 3: 坐标+角度 4: 坐标+角度+地图 5: 坐标+角度+地图+小车状态
-    seekfree_assistant_oscilloscope_data.data[6] = time_line; // 最终目标航向角 单位度
-    seekfree_assistant_oscilloscope_data.data[7] = angle_test; 
+    seekfree_assistant_oscilloscope_data.data[2] = (actual_v[LF] + actual_v[RB] - actual_v[LB] - actual_v[RF]) / 4.0f;
+    seekfree_assistant_oscilloscope_data.data[3] = (actual_v[LF] + actual_v[LB] + actual_v[RF] + actual_v[RB]) / 4.0f;
+    seekfree_assistant_oscilloscope_data.data[4] = target_vx;
+    seekfree_assistant_oscilloscope_data.data[5] = target_vy; // 0: 无效 1: 只要坐标 2: 只要角度 3: 坐标+角度 4: 坐标+角度+地图 5: 坐标+角度+地图+小车状态
+    seekfree_assistant_oscilloscope_data.data[6] = final_image_index; // 最终目标航向角 单位度
+    seekfree_assistant_oscilloscope_data.data[7] = global_infor_type; 
     SendDataToAssistant(&seekfree_assistant_oscilloscope_data, 8);
     // system_delay_ms(13);
 }
