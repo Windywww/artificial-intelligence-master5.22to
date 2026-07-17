@@ -25,7 +25,6 @@
 #ifndef MOVE_PENALTY
 #define MOVE_PENALTY 10
 #endif
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define UNKNOWN 11
 #define ERROR 0.05f
 
@@ -114,7 +113,6 @@ static void precalc_explosion_masks(SokobanContext *ctx)
         }
     }
 }
-
 static void hash_table_clear(void)
 {
     current_hash_version++;
@@ -1845,8 +1843,8 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                 car_move_point(final_actual_x, final_actual_y, angle, 0);
                 while (navigate_flag)
                     wifi_task();
-                }
-            } // ��ʶ������Ȼδ֪�����������ʶ�𣨿����ǵ�һ�ζ�׼����׼ȷ��
+            }
+            // ��ʶ������Ȼδ֪�����������ʶ�𣨿����ǵ�һ�ζ�׼����׼ȷ��
 
             // ʶ��ʱ����carmove�����Ӿ��Ƕ�У��
             vision_angle_switch = 0;
@@ -1992,12 +1990,12 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
     }
 }
 // 引擎主入口：执行 IDA* 搜索
-// 返回值：true 表示找到最优解，false 表示无解或超时/超节点限制 
+// 返回值：true 表示找到最优解，false 表示无解或超时/超节点限制
 bool solve(SokobanContext *ctx)
 {
     if (!ctx->map_valid || ctx->initial_state.box_count != ctx->goal_count)
     {
-        //printf("Invalid map: box/goal count mismatch or capacity exceeded.\n");
+        // printf("Invalid map: box/goal count mismatch or capacity exceeded.\n");
         return false;
     }
 
@@ -2033,12 +2031,12 @@ bool solve(SokobanContext *ctx)
         SearchRes res = dfs_ida(ctx, &ctx->initial_state, ctx->initial_walls, 0, initial_h, threshold, acts, 0);
         if (res.f == RES_SUCCESS)
         {
-            //printf("找到解，共搜索 %lu 个节点；g= %d，h=%d。\n", (unsigned long)ctx->total_explored_nodes, res.g, res.h);
+            // printf("找到解，共搜索 %lu 个节点；g= %d，h=%d。\n", (unsigned long)ctx->total_explored_nodes, res.g, res.h);
             return true;
         }
         if (res.f >= RES_INF)
         {
-            //printf("Unsolvable puzzle!\n");
+            // printf("Unsolvable puzzle!\n");
             return false;
         }
         float min_f = res.f;
@@ -2194,7 +2192,7 @@ static bool pass(uint8_t startpoint, uint8_t endpoint, float error, const uint8_
         Line_A_b = Line_B_b;
         Line_B_b = temp;
     }
-    // 加入误差 
+    // 加入误差
     Line_A_b += error;
     Line_B_b -= error;
 
@@ -2232,7 +2230,7 @@ static bool pass(uint8_t startpoint, uint8_t endpoint, float error, const uint8_
     }
     return 1;
 }
-// 节点平滑 
+// 节点平滑
 static void get_smooth_path(SokobanContext *ctx, const WaypointPath *grid_path, const uint8_t *obstacles, WaypointPath *out_smooth_path)
 {
     if (grid_path->length <= 2)
@@ -2445,17 +2443,16 @@ uint8_t check_obstacle(SokobanContext *ctx, uint8_t grid_index)
     // 0. 越界保护
     if (grid_index >= MAP_SIZE)
         return 1;
-    }
 
     // 1. 检查所有的墙体（边界死�?=1，普通内�?=1，优先轰炸墙=2�?
     // 说明：engine_init �? generate_path 都会实时更新 initial_walls�?
     // 墙被炸掉后值为 0，所以这里只�? >= 1 就是墙�?
     if (ctx->initial_walls[grid_index] >= 1)
-    {
+
         return 1;
 
     // 2. 检查现存的动态箱�?
-        for (uint8_t i = 0; i < ctx->initial_state.box_count; i++)
+    for (uint8_t i = 0; i < ctx->initial_state.box_count; i++)
     {
         if (ctx->initial_state.boxes[i].pos == grid_index)
             return 1;
