@@ -78,9 +78,21 @@ void PIT_IRQHandler(void)
 
 void LPUART1_IRQHandler(void)
 {
-    if(kLPUART_RxDataRegFullFlag & LPUART_GetStatusFlags(LPUART1))
+    uint32_t status_flags = LPUART_GetStatusFlags(LPUART1);
+
+    if(kLPUART_RxOverrunFlag & status_flags)
     {
-        extern void uart1_rx_interrupt_handler();
+        uint8_t discarded_data;
+        LPUART_ClearStatusFlags(LPUART1, kLPUART_RxOverrunFlag);    // 不允许删除
+        while(uart_query_byte(UART_GLOBAL_INDEX, &discarded_data))
+        {
+        }
+        myuart_rx_error_handler();
+        return;
+    }
+
+    if(kLPUART_RxDataRegFullFlag & status_flags)
+    {
         uart1_rx_interrupt_handler();
 
         // 接收中断
@@ -89,7 +101,6 @@ void LPUART1_IRQHandler(void)
     // #endif                                              // 如果修改了 DEBUG_UART_INDEX 那这段代码需要放到对应的串口中断去
     }
         
-    LPUART_ClearStatusFlags(LPUART1, kLPUART_RxOverrunFlag);    // 不允许删除
 }
 
 void LPUART2_IRQHandler(void)
