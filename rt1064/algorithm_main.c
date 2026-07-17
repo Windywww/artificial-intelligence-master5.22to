@@ -119,7 +119,7 @@ int main(void) {
     printf("Map Size: %d x %d (Total: %d cells)\n\n", WIDTH, HEIGHT, MAP_SIZE);
 
     clock_t start_time = clock();
-    build_map_info(&engine_ctx, m12, 0);
+    build_map_info(&engine_ctx, b1, 0);
     bool success = solve(&engine_ctx);
     clock_t end_time = clock();
 

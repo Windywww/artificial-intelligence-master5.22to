@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run rt1064 algorithm_main",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}\\rt1064\\algorithm_main.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}\\rt1064",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "C:\\msys64\\ucrt64\\bin\\gdb.exe",
+            "preLaunchTask": "build rt1064 algorithm_main"
+        }
+    ]
+}

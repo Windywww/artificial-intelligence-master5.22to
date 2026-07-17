@@ -8,10 +8,10 @@
 #define MAX_ID 12
 #define MAX_ALLOWABLE_NODES 700000 // 限制搜索节点总数
 #ifndef SOKOBAN_CURRENT_WEIGHT
-#define SOKOBAN_CURRENT_WEIGHT 2.0f
+#define SOKOBAN_CURRENT_WEIGHT 3.0f
 #endif
 #ifndef SOKOBAN_MIN_WEIGHT
-#define SOKOBAN_MIN_WEIGHT 2.0f
+#define SOKOBAN_MIN_WEIGHT 1.5f
 #endif
 #ifndef IDA_THRESHOLD_STEP
 #define IDA_THRESHOLD_STEP 16.0f
@@ -1986,7 +1986,7 @@ bool solve(SokobanContext *ctx)
         SearchRes res = dfs_ida(ctx, &ctx->initial_state, ctx->initial_walls, 0, initial_h, threshold, acts, 0);
         if (res.f == RES_SUCCESS)
         {
-            printf("找到解，共搜索 %lu 个节点；路径总代价: %d，h=%d。\n", (unsigned long)ctx->total_explored_nodes, res.g, res.h);
+            printf("找到解，共搜索 %lu 个节点；g= %d，h=%d。\n", (unsigned long)ctx->total_explored_nodes, res.g, res.h);
             return true;
         }
         if (res.f >= RES_INF)
