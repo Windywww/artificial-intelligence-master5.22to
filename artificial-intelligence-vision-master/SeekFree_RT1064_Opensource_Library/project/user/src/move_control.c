@@ -278,7 +278,7 @@ void navigation_update(void)
     // float global_target_vx = planner_x.v + kp_position_x * (planner_x.p - global_x);
     // float global_target_vy = planner_y.v + kp_position_y * (planner_y.p - global_y);
 
-    float max_speed = 0.5f;
+    float max_speed = 1.0f;
     if (global_target_vx > max_speed)
         global_target_vx = max_speed;
     if (global_target_vx < -max_speed)
@@ -287,24 +287,34 @@ void navigation_update(void)
         global_target_vy = max_speed;
     if (global_target_vy < -max_speed)
         global_target_vy = -max_speed;
+ // 加速度限制
+    if(last_global_target_vx>0){
+        if(global_target_vx>=last_global_target_vx+amax*0.01f){
+            global_target_vx = last_global_target_vx + amax * 0.01f;
+        }
+    }else{
+        if(global_target_vx<=last_global_target_vx-amax*0.01f){
+            global_target_vx = last_global_target_vx - amax * 0.01f;
+        }
+    }
 
-    // 加速度限制
-    if (global_target_vx - last_global_target_vx > amax * 0.02f)
-        global_target_vx = last_global_target_vx + amax * 0.02f;
-    if (global_target_vx - last_global_target_vx < -amax * 0.02f)
-        global_target_vx = last_global_target_vx - amax * 0.02f;
-    if (global_target_vy - last_global_target_vy > amax * 0.02f)
-        global_target_vy = last_global_target_vy + amax * 0.02f;
-    if (global_target_vy - last_global_target_vy < -amax * 0.02f)
-        global_target_vy = last_global_target_vy - amax * 0.02f;
+    if(last_global_target_vy>0){
+        if(global_target_vy>=last_global_target_vy+amax*0.01f){
+            global_target_vy = last_global_target_vy + amax * 0.01f;
+        }
+    }else{
+        if(global_target_vy<=last_global_target_vy-amax*0.01f){
+            global_target_vy = last_global_target_vy - amax * 0.01f;
+        }
+    }
 
     // 记忆目标速度赋值，为了求加速度
     last_global_target_vx = global_target_vx;
     last_global_target_vy = global_target_vy;
-    float speed_mix = sqrtf(global_target_vx * global_target_vx + global_target_vy * global_target_vy);
-    speed_angle = atan2f(target_y - global_y, target_x - global_x);
-    global_target_vx = speed_mix * cosf(speed_angle);
-    global_target_vy = speed_mix * sinf(speed_angle);
+    // float speed_mix = sqrtf(global_target_vx * global_target_vx + global_target_vy * global_target_vy);
+    // speed_angle = atan2f(target_y - global_y, target_x - global_x);
+    // global_target_vx = speed_mix * cosf(speed_angle);
+    // global_target_vy = speed_mix * sinf(speed_angle);
 
     float dx = target_x - global_x;
     float dy = target_y - global_y;
@@ -419,9 +429,9 @@ void navigation_update(void)
                             return;
                         }
                     }
-                    if (car_location[0] - vision_x >= -0.005f && car_location[0] - vision_x <= 0.005f &&
-                        car_location[1] - vision_y >= -0.005f &&
-                        car_location[1] - vision_y <= 0.005f)
+                    if (car_location[0] - vision_x >= -0.002f && car_location[0] - vision_x <= 0.002f &&
+                        car_location[1] - vision_y >= -0.002f &&
+                        car_location[1] - vision_y <= 0.002f)
                     {
                         loac_test++;
                     }
@@ -464,7 +474,7 @@ void navigation_update(void)
                 {
                     pid[k].duty_out = 0.0f;   // 清空已经累加的 PWM 输出
                     pid[k].error_last = 0.0f; // 清空历史误差
-                    pid[k].error_prev = 0.0f; // 清空更早的历史误差
+                    pid[k].error_acc = 0.0f; // 清空更早的历史误差
                 }
 
                 return; // 开启手刹了 就不继续往下算了 等下个周期再算新的目标点
@@ -573,8 +583,8 @@ void navigation_update(void)
                             }
                         }
 
-                        if (car_location[0] - vision_x >= -0.005f && car_location[0] - vision_x <= 0.005f &&
-                            car_location[1] - vision_y >= -0.005f && car_location[1] - vision_y <= 0.005f)
+                        if (car_location[0] - vision_x >= -0.002f && car_location[0] - vision_x <= 0.002f &&
+                            car_location[1] - vision_y >= -0.002f && car_location[1] - vision_y <= 0.002f)
                         {
                             loac_test++;
                         }
