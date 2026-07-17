@@ -1,0 +1,5 @@
+当前算法可通过调节以下参数平衡在不同复杂度的地图中解算的实时性与路径质量：
+ctx->current_weight
+ctx->min_weight
+MOVE_PENALTY
+IDA_THRESHOLD_STEP
