@@ -122,8 +122,13 @@ int main(void)
     build_map_info(&engine_ctx, final_map_data, 1);
     WaypointPath path;
     path.length = 0;
-
     lost = 1;
+
+    while (1)
+    {
+        wifi_task();
+    }
+    
     if (solve(&engine_ctx))
     {
         generate_path(&engine_ctx, &path);
