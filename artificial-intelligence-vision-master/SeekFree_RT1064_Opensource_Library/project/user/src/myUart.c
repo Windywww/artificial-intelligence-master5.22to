@@ -182,6 +182,8 @@ void Unpack_Received_Map(uint8_t *thismap)
     got_map_flag = 1; // 设置标志位，表示地图数据已成功接收并解压
 }
 
+
+
 static uint8_t Unpack_Received_CarLoc(void)
 {
     float received_location[2];
@@ -193,6 +195,21 @@ static uint8_t Unpack_Received_CarLoc(void)
     {
         return 0;
     }
+
+    //边界值处理，防止车出界
+    if(received_location[0]*3.2<=0.305){
+        received_location[0] = 0.295f/3.2f;
+    }else if (received_location[0]*3.2>=2.895)
+    {
+        received_location[0] = 2.905/3.2f;
+    }
+    if(received_location[1]*2.4<=0.305){
+        received_location[1] = 0.295f/2.4f;
+    }else if (received_location[1]*2.4>=2.095)
+    {
+        received_location[1] = 2.105f/2.4f;
+    }
+    
 
     car_location[0] = received_location[0];
     car_location[1] = received_location[1];

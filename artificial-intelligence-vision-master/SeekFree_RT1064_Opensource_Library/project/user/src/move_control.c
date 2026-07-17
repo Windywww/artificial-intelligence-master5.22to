@@ -242,7 +242,7 @@ uint8_t vision_point_num = 0;
 float speed_angle = 0.0f;           //(弧度制)
 float last_global_target_vx = 0.0f; // 全局坐标系下的目标速度
 float last_global_target_vy = 0.0f; // 全局坐标系下
-float amax = 1.0f;                  // 最大加速度 m/s^2
+float amax = 2.0f;                  // 最大加速度 m/s^2
 
 // 分别在最后一个点与其它节点起到延时作用
 uint8_t count_A = 0;

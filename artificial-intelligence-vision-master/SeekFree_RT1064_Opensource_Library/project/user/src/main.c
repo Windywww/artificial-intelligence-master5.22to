@@ -97,7 +97,7 @@ int main(void)
     {
         wifi_task();
     }
-    vision_angle_switch = 1;
+    vision_angle_switch = 0;
     while (global_infor_type != 5)
     {
     }
@@ -119,11 +119,13 @@ int main(void)
     }
 
     system_delay_ms(1200);
-    build_map_info(&engine_ctx, final_map_data, 0);
+    build_map_info(&engine_ctx, final_map_data, 1);
     WaypointPath path;
     path.length = 0;
 
     lost = 1;
+    wifi_task();
+
     if (solve(&engine_ctx))
     {
         generate_path(&engine_ctx, &path);
@@ -140,7 +142,7 @@ int main(void)
         }
     }
 
-    lost = 2;
+    lost = 66;
     car_move(&path, angle, 0);
     while (navigate_flag)
     {
@@ -209,7 +211,7 @@ void pit_ch0_handler(void)
 {
     myuart_timeout_tick_10ms();
     // 不要删，统计时间点用
-    time_line += 0.02f; // 每20ms增加0.02s
+    time_line += 0.01f; // 每20ms增加0.02s
     move_control_task();
     if (time_for_vision_loac > 0.5f)
     {
@@ -242,7 +244,7 @@ void pit_ch0_handler(void)
             }
             else if (walk_mode == 1)
             {
-                global_y = 3.2f * car_location[0];
+                global_x = 3.2f * car_location[0];
             }
             vision_correct_flag = 0;
         }

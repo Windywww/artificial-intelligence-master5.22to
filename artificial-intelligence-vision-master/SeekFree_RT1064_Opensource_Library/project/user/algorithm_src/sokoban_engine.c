@@ -1714,7 +1714,7 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             float final_actual_x = final_pos_X * 0.2 + 0.1;
             float final_actual_y = 2.4f - final_pos_Y * 0.2 - 0.1;
             // back_error��С������ʶ����ľ���
-            float back_error = 0.04;
+            float back_error = 0.025;
             // ȷ�����һ��λ������
             if (dx > 0)
             {
@@ -1854,23 +1854,6 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                 ctx->goal_type_map[entity_pos] = recognized_id;
                 unid_goals--;
             }
-            // ÿ�θ���id�����ƶ�ʣ��δ֪ʵ�������
-            // while (try_infer_identities(ctx, current_state))
-            // {
-            //     // ÿ�ƶϳ�һ��������δ֪����
-            //     unid_boxes = 0;
-            //     unid_goals = 0;
-            //     for (int k = 0; k < current_state->box_count; k++)
-            //     {
-            //         if (current_state->boxes[k].id == UNKNOWN)
-            //             unid_boxes++;
-            //     }
-            //     for (int k = 0; k < ctx->goal_count; k++)
-            //     {
-            //         if (ctx->goals[k].id == UNKNOWN)
-            //             unid_goals++;
-            //     }
-            // }
         }
         else
         {
@@ -1878,6 +1861,7 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             {
                 generate_path(ctx, &smooth_path);
                 current_state = &ctx->initial_state;
+                car_move(&smooth_path, angle, 0);
                 // ? Ӳ���ӿ�Ԥ������ smooth_path ���͸����
                 continue;
             }
