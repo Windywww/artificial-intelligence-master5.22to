@@ -7,7 +7,7 @@
 
 // ---------------- 接收缓存与按需状态机控制 ----------------
 uint8_t test_rx_buffer_global[80];
-uint8_t test_rx_index_global = 0;
+volatile uint8_t test_rx_index_global = 0;
 volatile uint8_t rx_idle_ticks_global = 0;
 
 // 【按需接收核心标志位】
@@ -15,7 +15,7 @@ volatile uint8_t rx_idle_ticks_global = 0;
 volatile uint8_t global_infor_type = 5;
 
 // 定长解析状态机专用的控制变量
-uint8_t rx_state_global = 0;     // 0: 等待指定的包头, 1: 接收定长数据
+volatile uint8_t rx_state_global = 0;     // 0: 等待指定的包头, 1: 接收定长数据
 uint8_t current_cmd_global = 0;  // 当前正在接收的指令类型 (0xAA, 0xA5, 0x5A)
 uint8_t expected_len_global = 0; // 当前包预期要接收的数据长度
 
@@ -105,6 +105,18 @@ void myuart_timeout_tick_10ms(void)
     }
 }
 
+void myuart_rx_error_handler(void)
+{
+    if (global_infor_type == 5)
+    {
+        reset_global_receiver();
+    }
+    else
+    {
+        retry_global_request();
+    }
+}
+
 /**
  * @brief 索要全局摄像头的一些信息 (触发按需接收)
  * @param infor_type 0小车位置 1地图，2小车角度
@@ -170,24 +182,44 @@ void Unpack_Received_Map(uint8_t *thismap)
     got_map_flag = 1; // 设置标志位，表示地图数据已成功接收并解压
 }
 
-void Unpack_Received_CarLoc()
+static uint8_t Unpack_Received_CarLoc(void)
 {
-    memcpy(&car_location[0], &test_rx_buffer_global[0], 4);
-    memcpy(&car_location[1], &test_rx_buffer_global[4], 4);
+    float received_location[2];
+    memcpy(&received_location[0], &test_rx_buffer_global[0], 4);
+    memcpy(&received_location[1], &test_rx_buffer_global[4], 4);
+
+    if (!(received_location[0] >= 0.0f && received_location[0] <= 1.0f &&
+          received_location[1] >= 0.0f && received_location[1] <= 1.0f))
+    {
+        return 0;
+    }
+
+    car_location[0] = received_location[0];
+    car_location[1] = received_location[1];
 
     memset(test_rx_buffer_global, 0, sizeof(test_rx_buffer_global));
     test_rx_index_global = 0;
 
     // global_x = 3.2f * car_location[0];
     // global_y = 2.4f - 2.4f * car_location[1];
+    return 1;
 }
 
-void Unpack_Received_CarAngel()
+static uint8_t Unpack_Received_CarAngel(void)
 {
-    memcpy(&car_angel, &test_rx_buffer_global[0], 4);
+    float received_angle;
+    memcpy(&received_angle, &test_rx_buffer_global[0], 4);
+
+    if (!(received_angle >= -180.0f && received_angle <= 180.0f))
+    {
+        return 0;
+    }
+
+    car_angel = received_angle;
 
     memset(test_rx_buffer_global, 0, sizeof(test_rx_buffer_global));
     test_rx_index_global = 0;
+    return 1;
 }
 
 // ---------------- 具备 CRC16 校验的定长接收状态机 ----------------
@@ -259,7 +291,11 @@ void uart1_rx_interrupt_handler(void)
 
     if (current_cmd_global == 0xAA)
     {
-        Unpack_Received_CarLoc();
+        if (!Unpack_Received_CarLoc())
+        {
+            retry_global_request();
+            return;
+        }
     }
     else if (current_cmd_global == 0xA5)
     {
@@ -267,7 +303,11 @@ void uart1_rx_interrupt_handler(void)
     }
     else
     {
-        Unpack_Received_CarAngel();
+        if (!Unpack_Received_CarAngel())
+        {
+            retry_global_request();
+            return;
+        }
     }
 
     global_infor_type = 5;
