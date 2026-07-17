@@ -3,12 +3,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "math.h"
-#include "myUart.h"
-#include "move_control.h"
-#include "WIFI2SPI.h"
-
-#define SOKOBAN_EMBEDDED 1
 
 #define DEBUG_RECON 0
 #define MAX_ID 12
@@ -29,8 +23,6 @@
 #define UNKNOWN 11
 #define ERROR 0.05f
 
-int angle = 0;
-
 typedef struct
 {
     State next_state;
@@ -50,13 +42,13 @@ typedef struct
 static uint8_t current_hash_version = 0;
 
 // 分离存储避免 HashEntry 的5字节对齐填充：8 MiB + 2 MiB + 1 MiB。
-__attribute__((section(".bss.sdram"))) static uint64_t transposition_signatures[HASH_TABLE_SIZE];
-__attribute__((section(".bss.sdram"))) static uint16_t transposition_g_scores[HASH_TABLE_SIZE];
-__attribute__((section(".bss.sdram"))) static uint8_t transposition_versions[HASH_TABLE_SIZE];
+static uint64_t transposition_signatures[HASH_TABLE_SIZE];
+static uint16_t transposition_g_scores[HASH_TABLE_SIZE];
+static uint8_t transposition_versions[HASH_TABLE_SIZE];
 
 // ChildNode 为 88 字节，池总计 1,196,800 字节（约 1.141 MiB）。
 //__attribute__((section(".ocram_data")))
-__attribute__((section(".bss.sdram"))) static ChildNode all_children_pool[MAX_STEPS][MAX_BRANCHES];
+static ChildNode all_children_pool[MAX_STEPS][MAX_BRANCHES];
 
 // 声明================
 static void get_smooth_path(SokobanContext *ctx, const WaypointPath *grid_path, const uint8_t *obstacles, WaypointPath *out_smooth_path);
@@ -1772,7 +1764,6 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             }
             printf("\n");
 
-#if !SOKOBAN_EMBEDDED
             // 上下左右
             int8_t dd = entity_pos - final_pos;
             if (dd == -16)
@@ -1794,78 +1785,12 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                 // {
                 // }
             }
-#endif
 
             uint8_t final_pos_X = final_pos % 16;
             uint8_t final_pos_Y = final_pos / 16;
             uint8_t entity_pos_X = entity_pos % 16;
             uint8_t entity_pos_Y = entity_pos / 16;
 
-#if SOKOBAN_EMBEDDED
-            // 最后一个网格点需要单独进行坐标微调和朝向校正。
-            if (smooth_path.length > 0)
-                smooth_path.length--;
-            car_move(&smooth_path, angle, 0);
-            while (navigate_flag)
-                wifi_task();
-
-            int8_t dx = (int8_t)entity_pos_X - (int8_t)final_pos_X;
-            int8_t dy = (int8_t)entity_pos_Y - (int8_t)final_pos_Y;
-            float final_actual_x = final_pos_X * 0.2f + 0.1f;
-            float final_actual_y = 2.4f - final_pos_Y * 0.2f - 0.1f;
-            const float back_error = 0.04f;
-
-            if (dx > 0)
-                final_actual_x -= back_error;
-            else if (dx < 0)
-                final_actual_x += back_error;
-            else if (dy > 0)
-                final_actual_y += back_error;
-            else if (dy < 0)
-                final_actual_y -= back_error;
-
-            car_move_point(final_actual_x, final_actual_y, angle, 0);
-            while (navigate_flag)
-                wifi_task();
-
-            if (dx > 0)
-                angle = -90;
-            else if (dx < 0)
-                angle = 90;
-            else if (dy > 0)
-                angle = 180;
-            else if (dy < 0)
-                angle = 0;
-
-            system_delay_ms(200);
-            car_turn(angle);
-            while (!yaw_arrived_flag)
-                wifi_task();
-
-            check_image(3 - is_box, 1);
-            final_image_index = UNKNOWN;
-            vision_angle_switch = 0;
-            while (final_image_index == UNKNOWN)
-            {
-                check_image(3 - is_box, image_rx_state == 0);
-
-                if (dx > 0 && final_actual_x <= final_pos_X * 0.2f + 0.1f)
-                    final_actual_x += 0.005f;
-                else if (dx < 0 && final_actual_x >= final_pos_X * 0.2f + 0.1f)
-                    final_actual_x -= 0.005f;
-                else if (dy > 0 && final_actual_y >= 2.4f - final_pos_Y * 0.2f - 0.1f)
-                    final_actual_y -= 0.005f;
-                else if (dy < 0 && final_actual_y <= 2.4f - final_pos_Y * 0.2f - 0.1f)
-                    final_actual_y += 0.005f;
-
-                car_move_point(final_actual_x, final_actual_y, angle, 0);
-                while (navigate_flag)
-                    wifi_task();
-            }
-            vision_angle_switch = 1;
-            system_delay_ms(200);
-            uint8_t recognized_id = final_image_index;
-#else
             // check_image(3-is_box);
 
             // while (image_rx_state == 1)
@@ -1878,7 +1803,6 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
 
             // uint8_t recognized_id = NO_CLS;
             // recognized_id = final_image_index;
-#endif
 
             if (recognized_id == NO_CLS)
             {
@@ -2525,27 +2449,4 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
     memcpy(ctx->initial_walls, sim_walls, MAP_SIZE);
     get_final_path(ctx, out_full_path); // 对整条路径进行最终的优化处理
     printf("轨迹规划完毕。\n");
-}
-
-uint8_t check_obstacle(SokobanContext *ctx, uint8_t grid_index)
-{
-    if (grid_index >= MAP_SIZE)
-        return 1;
-
-    if (ctx->initial_walls[grid_index] != 0)
-        return 1;
-
-    for (uint8_t i = 0; i < ctx->initial_state.box_count; i++)
-    {
-        if (ctx->initial_state.boxes[i].pos == grid_index)
-            return 1;
-    }
-
-    for (uint8_t i = 0; i < ctx->initial_state.bomb_count; i++)
-    {
-        if (ctx->initial_state.bombs[i] == grid_index)
-            return 1;
-    }
-
-    return 0;
 }
