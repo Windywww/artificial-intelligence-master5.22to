@@ -77,9 +77,9 @@ void wifi_task()
 
     seekfree_assistant_oscilloscope_data.data[0] = global_x;
     seekfree_assistant_oscilloscope_data.data[1] = global_y;
-    seekfree_assistant_oscilloscope_data.data[2] = (actual_v[LF] + actual_v[RB] - actual_v[LB] - actual_v[RF]) / 4.0f;
-    seekfree_assistant_oscilloscope_data.data[3] = (actual_v[LF] + actual_v[LB] + actual_v[RF] + actual_v[RB]) / 4.0f;
-    seekfree_assistant_oscilloscope_data.data[4] = target_vx;
+    seekfree_assistant_oscilloscope_data.data[2] = target_x;
+    seekfree_assistant_oscilloscope_data.data[3] = target_y;
+    seekfree_assistant_oscilloscope_data.data[4] = final_image_index;
     seekfree_assistant_oscilloscope_data.data[5] = target_vy; // 0: 无效 1: 只要坐标 2: 只要角度 3: 坐标+角度 4: 坐标+角度+地图 5: 坐标+角度+地图+小车状态
     seekfree_assistant_oscilloscope_data.data[6] = lost; // 最终目标航向角 单位度
     seekfree_assistant_oscilloscope_data.data[7] = global_infor_type; 

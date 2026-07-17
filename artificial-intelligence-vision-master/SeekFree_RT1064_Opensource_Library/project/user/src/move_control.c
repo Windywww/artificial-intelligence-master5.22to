@@ -43,8 +43,8 @@ float kp_position_y = 4.0f;
 float kd_position_x = 0.0f;
 float kd_position_y = 0.0f;
 
-float path_queue_x[100];
-float path_queue_y[100];
+float path_queue_x[192];
+float path_queue_y[192];
 uint16_t path_length = 0;  // 路径总点数
 uint16_t current_path = 0; // 当前正在追第几个点
 uint8_t navigate_flag = 0; // 1: 正在追路径 0: 没有路径需要追

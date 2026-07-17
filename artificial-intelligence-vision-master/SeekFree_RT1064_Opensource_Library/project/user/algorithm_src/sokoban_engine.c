@@ -1873,6 +1873,7 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             // system_delay_ms(700);
             system_delay_ms(200);
 
+            lost++;
             uint8_t recognized_id = NO_CLS;
             recognized_id = final_image_index;
 
