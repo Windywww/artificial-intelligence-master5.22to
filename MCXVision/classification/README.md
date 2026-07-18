@@ -27,7 +27,7 @@
 | 文件 | 大小 | 运行时动态张量 | 说明 |
 | --- | ---: | ---: | --- |
 | `num_cls_npu.tflite` | 28,032 B | 约 16.5 KB | 实际部署的数字模型 |
-| `box_cls_npu.tflite` | 400,736 B | 约 129.6 KB | 实际部署的 MCX 专用 box 模型 |
+| `box_cls_npu.tflite` | 400,736 B | 约 129.6 KB | 测试版 MCX 专用 box 模型 |
 | `box_cls_openart.tflite` | 106,832 B | - | 原 OpenART `box2.2.5` 模型 |
 | `box_cls_openart_npu_oversized.tflite` | 100,192 B | 约 619 KB | 仅供分析，不可部署 |
 
