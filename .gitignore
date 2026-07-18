@@ -10,6 +10,7 @@ compile_commands.json
 CTestTestfile.cmake
 _deps
 CMakeUserPresets.json
+tmp/
 
 # ==================================
 # Python & uv 包管理和运行环境
