@@ -1,0 +1,26 @@
+{
+  "classes": [
+    "00",
+    "01",
+    "02",
+    "03",
+    "04",
+    "05",
+    "06",
+    "07",
+    "08",
+    "09"
+  ],
+  "image_size": 120,
+  "channels": [
+    16,
+    32,
+    64,
+    128
+  ],
+  "downsampling": "stride-2 convolution",
+  "validation_loss": 0.371364563703537,
+  "validation_accuracy": 0.909456729888916,
+  "epochs_completed": 18,
+  "best_validation_accuracy": 0.909456729888916
+}

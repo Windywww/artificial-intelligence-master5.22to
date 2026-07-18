@@ -1,0 +1,24 @@
+{
+  "classes": [
+    "00",
+    "01",
+    "02",
+    "03",
+    "04",
+    "05",
+    "06",
+    "07",
+    "08",
+    "09"
+  ],
+  "image_size": 120,
+  "channels": [
+    8,
+    16,
+    32
+  ],
+  "validation_loss": 0.7983091473579407,
+  "validation_accuracy": 0.8148893117904663,
+  "epochs_completed": 13,
+  "best_validation_accuracy": 0.8148893117904663
+}
