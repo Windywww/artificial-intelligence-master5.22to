@@ -1,0 +1,37 @@
+{
+  "model": "box_student_npu.tflite",
+  "sha256": "6F0A8F6CD61A0AF426430BBE150CD0C1D7E8B153BA2734C9EED03F7DE6CD677F",
+  "model_size_bytes": 400992,
+  "input_shape": [1, 120, 120, 3],
+  "input_quantization": [1.0, -128],
+  "output_shape": [1, 10],
+  "output_quantization": [0.00390625, -128],
+  "neutron_scratch_bytes": 86400,
+  "input_runtime_bytes": 43200,
+  "scratch_plus_input_bytes": 129600,
+  "neutron_tensors": {
+    "NeutronScratch": {
+      "shape": [86400],
+      "runtime_bytes": 86400,
+      "buffer_bytes": 0
+    },
+    "NeutronMicrocode": {
+      "shape": [904],
+      "runtime_bytes": 904,
+      "buffer_bytes": 904
+    },
+    "NeutronWeights": {
+      "shape": [397616],
+      "runtime_bytes": 397616,
+      "buffer_bytes": 397616
+    }
+  },
+  "limits": {
+    "max_scratch": 100000,
+    "max_model_bytes": 430000,
+    "target": "mcxn94x"
+  },
+  "passed": true,
+  "failures": [],
+  "source_report": "model_train/artifacts/student_best/candidates/distill_t2_hard0.7/box_student_npu.neutron.json"
+}

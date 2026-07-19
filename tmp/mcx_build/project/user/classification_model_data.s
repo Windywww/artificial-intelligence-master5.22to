@@ -11,5 +11,5 @@ num_model_data_end:
 
 	.align 16
 box_model_data:
-	.incbin "../user/models/box_cls_npu.tflite"
+	.incbin "../user/models/box_student_npu.tflite"
 box_model_data_end:

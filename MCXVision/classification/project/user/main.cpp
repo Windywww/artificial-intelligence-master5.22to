@@ -47,6 +47,17 @@ int poll_command(void)
     return -1;
 }
 
+void log_model_ready(const char *model)
+{
+    zf_debug_printf("%s:arena:%u\r\n", model,
+                    static_cast<unsigned int>(mcxvision::model_arena_used()));
+}
+
+void log_model_failure(const char *model, const char *stage)
+{
+    zf_debug_printf("%s:fail:%s\r\n", model, stage);
+}
+
 void process_goal(const uint16_t *frame)
 {
     mcxvision::Blob purple_blob;
@@ -54,6 +65,7 @@ void process_goal(const uint16_t *frame)
                              mcxvision::kCenterRoi, 800U, 0xFFFFFFFFU,
                              false, &purple_blob, 1U) != 0U)
     {
+        zf_debug_printf("goal:purple\r\n");
         send_class(0);
         return;
     }
@@ -63,11 +75,19 @@ void process_goal(const uint16_t *frame)
     const size_t blob_count = mcxvision::find_blobs(
         frame, mcxvision::kBlackThreshold, full_frame,
         1500U, 9500U, true, blobs, kMaxDigitBlobs);
-    if(blob_count == 0U || !mcxvision::model_select(mcxvision::kDigitModel))
+    if(blob_count == 0U)
     {
+        zf_debug_printf("digit:reject:no_blob\r\n");
         send_class(kUnknownClass);
         return;
     }
+    if(!mcxvision::model_select(mcxvision::kDigitModel))
+    {
+        log_model_failure("digit", "select");
+        send_class(kUnknownClass);
+        return;
+    }
+    log_model_ready("digit");
 
     int best_label = -1;
     float best_probability = 0.0f;
@@ -77,10 +97,26 @@ void process_goal(const uint16_t *frame)
         mcxvision::make_digit_canvas(frame, blobs[i], canvas);
         int label = -1;
         float probability = 0.0f;
-        if(mcxvision::model_fill_digit(canvas)
-            && mcxvision::model_run()
-            && mcxvision::model_top1(&label, &probability)
-            && probability > kDigitProbabilityThreshold
+        if(!mcxvision::model_fill_digit(canvas))
+        {
+            log_model_failure("digit", "fill");
+            continue;
+        }
+        if(!mcxvision::model_run())
+        {
+            log_model_failure("digit", "invoke");
+            continue;
+        }
+        if(!mcxvision::model_top1(&label, &probability))
+        {
+            log_model_failure("digit", "top1");
+            continue;
+        }
+
+        zf_debug_printf("digit_raw:blob:%u label:%d p:%d\r\n",
+                        static_cast<unsigned int>(i), label,
+                        static_cast<int>(probability * 100.0f));
+        if(probability > kDigitProbabilityThreshold
             && probability > best_probability)
         {
             best_label = label;
@@ -104,13 +140,38 @@ void process_box(const uint16_t *frame)
 {
     int label = -1;
     float probability = 0.0f;
-    if(!mcxvision::model_select(mcxvision::kBoxModel)
-        || !mcxvision::model_fill_box(frame, mcxvision::kCenterRoi)
-        || !mcxvision::model_run()
-        || !mcxvision::model_top1(&label, &probability)
-        || label < 0 || label >= 10
-        || probability < kBoxProbabilityThreshold)
+    if(!mcxvision::model_select(mcxvision::kBoxModel))
     {
+        log_model_failure("box", "select");
+        send_class(kUnknownClass);
+        return;
+    }
+    log_model_ready("box");
+
+    if(!mcxvision::model_fill_box(frame, mcxvision::kCenterRoi))
+    {
+        log_model_failure("box", "fill");
+        send_class(kUnknownClass);
+        return;
+    }
+    if(!mcxvision::model_run())
+    {
+        log_model_failure("box", "invoke");
+        send_class(kUnknownClass);
+        return;
+    }
+    if(!mcxvision::model_top1(&label, &probability))
+    {
+        log_model_failure("box", "top1");
+        send_class(kUnknownClass);
+        return;
+    }
+
+    zf_debug_printf("box_raw:label:%d p:%d\r\n", label,
+                    static_cast<int>(probability * 100.0f));
+    if(label < 0 || label >= 10 || probability < kBoxProbabilityThreshold)
+    {
+        zf_debug_printf("box:reject\r\n");
         send_class(kUnknownClass);
         return;
     }
