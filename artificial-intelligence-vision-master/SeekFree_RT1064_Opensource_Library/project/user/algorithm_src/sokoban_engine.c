@@ -2267,6 +2267,64 @@ static void get_smooth_path(SokobanContext *ctx, const WaypointPath *grid_path, 
     }
 }
 
+#if ENABLE_LONG_PATH_SEGMENT_SPLIT
+static bool split_long_axis_segments(WaypointPath *path)
+{
+    if (path->length <= 1)
+        return true;
+
+    WaypointPath split_path;
+    waypoint_path_reset(&split_path);
+    if (!waypoint_path_append(&split_path, path->points[0], path->wait_after_ms[0]))
+        return false;
+
+    for (int i = 1; i < path->length; i++)
+    {
+        int start = path->points[i - 1];
+        int end = path->points[i];
+        int dx = end % WIDTH - start % WIDTH;
+        int dy = end / WIDTH - start / WIDTH;
+
+        // 开关启用时路径应为水平或竖直；遇到斜线段则保持原样。
+        if ((dx != 0 && dy != 0) || (dx == 0 && dy == 0))
+        {
+            if (!waypoint_path_append(&split_path, (uint8_t)end, path->wait_after_ms[i]))
+                return false;
+            continue;
+        }
+
+        int distance = abs(dx != 0 ? dx : dy);
+        if (distance <= MAX_PATH_SEGMENT_CELLS)
+        {
+            if (!waypoint_path_append(&split_path, (uint8_t)end, path->wait_after_ms[i]))
+                return false;
+            continue;
+        }
+
+        // 先取满足每段不超过 6 格的最少段数，再均分到相差不超过 1 格。
+        int segment_count = (distance + MAX_PATH_SEGMENT_CELLS - 1) / MAX_PATH_SEGMENT_CELLS;
+        int base_length = distance / segment_count;
+        int longer_segment_count = distance % segment_count;
+        int step_offset = dx > 0 ? 1 : (dx < 0 ? -1 : (dy > 0 ? WIDTH : -WIDTH));
+        int current = start;
+
+        for (int segment = 0; segment < segment_count; segment++)
+        {
+            int segment_length = base_length + (segment < longer_segment_count ? 1 : 0);
+            current += segment_length * step_offset;
+
+            // 新增分割点没有等待事件，原终点继续携带原有等待时间。
+            uint16_t wait_after_ms = segment == segment_count - 1 ? path->wait_after_ms[i] : 0;
+            if (!waypoint_path_append(&split_path, (uint8_t)current, wait_after_ms))
+                return false;
+        }
+    }
+
+    *path = split_path;
+    return true;
+}
+#endif
+
 static void get_final_path(SokobanContext *ctx, WaypointPath *path)
 {
     // 最终优化分两步：先合并连续重复点，再删除不影响转向的共线点。
@@ -2305,6 +2363,9 @@ static void get_final_path(SokobanContext *ctx, WaypointPath *path)
             path->points[i] = unique_points[i];
             path->wait_after_ms[i] = unique_wait_after_ms[i];
         }
+#if ENABLE_LONG_PATH_SEGMENT_SPLIT
+        split_long_axis_segments(path);
+#endif
         return;
     }
 
@@ -2354,6 +2415,9 @@ static void get_final_path(SokobanContext *ctx, WaypointPath *path)
         path->points[i] = new_points[i];
         path->wait_after_ms[i] = new_wait_after_ms[i];
     }
+#if ENABLE_LONG_PATH_SEGMENT_SPLIT
+    split_long_axis_segments(path);
+#endif
 }
 
 void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
