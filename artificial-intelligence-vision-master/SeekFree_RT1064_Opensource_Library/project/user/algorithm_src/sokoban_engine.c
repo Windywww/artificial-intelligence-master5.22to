@@ -2299,9 +2299,12 @@ static void get_smooth_path(SokobanContext *ctx, const WaypointPath *grid_path, 
 
 static void get_final_path(SokobanContext *ctx, WaypointPath *path)
 {
+    // 最终优化分两步：先合并连续重复点，再删除不影响转向的共线点。
+    // wait_after_ms 与 points 使用相同下标，任何等待事件都必须随点一起保留。
     if (path->length == 0)
         return;
 
+    // unique_* 保存去除连续重复点后的中间结果。
     uint8_t unique_points[MAP_SIZE];
     uint16_t unique_wait_after_ms[MAP_SIZE];
     int unique_len = 0;
@@ -2310,6 +2313,7 @@ static void get_final_path(SokobanContext *ctx, WaypointPath *path)
     unique_len++;
     for (int i = 1; i < path->length; i++)
     {
+        // 同一点可能来自相邻宏动作；等待时间必须累加，不能覆盖。
         if (path->points[i] == unique_points[unique_len - 1])
         {
             unique_wait_after_ms[unique_len - 1] = add_wait_saturated(
@@ -2324,6 +2328,7 @@ static void get_final_path(SokobanContext *ctx, WaypointPath *path)
     }
     if (unique_len <= 2)
     {
+        // 点数不足以进行共线优化，直接写回去重结果。
         path->length = (uint16_t)unique_len;
         for (int i = 0; i < unique_len; i++)
         {
@@ -2333,6 +2338,7 @@ static void get_final_path(SokobanContext *ctx, WaypointPath *path)
         return;
     }
 
+    // new_* 保存最终输出；端点始终保留，中间点按转向和等待事件筛选。
     uint8_t new_points[MAP_SIZE];
     uint16_t new_wait_after_ms[MAP_SIZE];
     int new_len = 0;
@@ -2342,6 +2348,7 @@ static void get_final_path(SokobanContext *ctx, WaypointPath *path)
 
     for (int i = 1; i < unique_len - 1; i++)
     {
+        // p-c-n ???? c ????????????????
         int p = unique_points[i - 1];
         int c = unique_points[i];
         int n = unique_points[i + 1];
@@ -2359,6 +2366,7 @@ static void get_final_path(SokobanContext *ctx, WaypointPath *path)
 
         bool is_horizontal = (dy1 == 0 && dy2 == 0 && (dx1 * dx2 > 0));
         bool is_vertical = (dx1 == 0 && dx2 == 0 && (dy1 * dy2 > 0));
+        // ???????????????????????????
         if ((!is_horizontal && !is_vertical) || unique_wait_after_ms[i] != 0)
         {
             new_points[new_len] = c;
