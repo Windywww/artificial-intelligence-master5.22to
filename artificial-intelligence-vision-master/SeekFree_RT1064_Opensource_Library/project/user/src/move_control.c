@@ -38,8 +38,8 @@ uint8_t mode = 0;           // 两种运动模式
 float target_x = 0.3f;      // 目标 x 坐标 单位 m
 float target_y = 1.2f;      // 目标 y 坐标 单位 m
 float min_distance = 0.01f; // 距离小于这个值就认为到达目标点了 单位 m
-float kp_position_x = 3.5f;
-float kp_position_y = 3.0f;
+float kp_position_x = 4.0f;
+float kp_position_y = 4.0f;
 float kd_position_x = 0.0f;
 float kd_position_y = 0.0f;
 
@@ -132,7 +132,7 @@ void wheel_speed_calculate(float vx, float vy, float vz)
         encoder_data[i] = encoder_get_count(encoder_ports[i]);
         encoder_clear_count(encoder_ports[i]);
 
-        float raw_v = (float)encoder_data[i] * SPEED_COEFFICIENT;
+        float raw_v = (float)encoder_data[i] * SPEED_COEFFICIENT*0.925f;
         if (i == RF || i == RB)
         {
             raw_v = -raw_v;
@@ -288,23 +288,55 @@ void navigation_update(void)
     if (global_target_vy < -max_speed)
         global_target_vy = -max_speed;
  // 加速度限制
-    if(last_global_target_vx>0){
-        if(global_target_vx>=last_global_target_vx+amax*0.01f){
+    if (last_global_target_vx >= amax * 0.01f)
+    {
+        if (global_target_vx >= last_global_target_vx + amax * 0.01f)
+        {
             global_target_vx = last_global_target_vx + amax * 0.01f;
         }
-    }else{
-        if(global_target_vx<=last_global_target_vx-amax*0.01f){
+    }
+    else if (last_global_target_vx <= -amax * 0.01f)
+    {
+        if (global_target_vx <= last_global_target_vx - amax * 0.01f)
+        {
             global_target_vx = last_global_target_vx - amax * 0.01f;
         }
     }
+    else
+    {
+        if (global_target_vx >= amax * 0.02f)
+        {
+            global_target_vx = amax * 0.02f;
+        }
+        else if (global_target_vx <= -amax * 0.02f)
+        {
+            global_target_vx = -amax * 0.02f;
+        }
+    }
 
-    if(last_global_target_vy>0){
-        if(global_target_vy>=last_global_target_vy+amax*0.01f){
+    if (last_global_target_vy >= amax * 0.01f)
+    {
+        if (global_target_vy >= last_global_target_vy + amax * 0.01f)
+        {
             global_target_vy = last_global_target_vy + amax * 0.01f;
         }
-    }else{
-        if(global_target_vy<=last_global_target_vy-amax*0.01f){
+    }
+    else if (last_global_target_vy <= -amax * 0.01f)
+    {
+        if (global_target_vy <= last_global_target_vy - amax * 0.01f)
+        {
             global_target_vy = last_global_target_vy - amax * 0.01f;
+        }
+    }
+    else
+    {
+        if (global_target_vy >= amax * 0.02f)
+        {
+            global_target_vy = amax * 0.02f;
+        }
+        else if (global_target_vy <= -amax * 0.02f)
+        {
+            global_target_vy = -amax * 0.02f;
         }
     }
 
@@ -335,7 +367,7 @@ void navigation_update(void)
             // {
             //     stop_flag = 0; // 关闭手刹
             // }
-            if (distance <= 0.015f && stop_flag == 0)
+            if (distance <= min_distance && stop_flag == 0)
             {
                 stop_flag = 1; // 开启手刹
                 walk_mode = 3;
@@ -488,7 +520,7 @@ void navigation_update(void)
         }
         else
         {
-            if (distance <= 0.015f && stop_flag == 0)
+            if (distance <= min_distance && stop_flag == 0)
             {
                 walk_mode = 3;
                 stop_flag = 1; // 开启手刹

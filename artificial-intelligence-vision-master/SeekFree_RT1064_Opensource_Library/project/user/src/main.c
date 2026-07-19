@@ -119,7 +119,7 @@ int main(void)
     }
 
     system_delay_ms(1200);
-    build_map_info(&engine_ctx, final_map_data, 1);
+    build_map_info(&engine_ctx, final_map_data, 0);
     WaypointPath path;
     path.length = 0;
 
@@ -213,7 +213,7 @@ void pit_ch0_handler(void)
     // 不要删，统计时间点用
     time_line += 0.01f; // 每20ms增加0.02s
     move_control_task();
-    if (time_for_vision_loac > 0.5f)
+    if (time_for_vision_loac > 0.2f)
     {
         time_for_vision_loac = 0;
         vision_correct_flag = 1;
