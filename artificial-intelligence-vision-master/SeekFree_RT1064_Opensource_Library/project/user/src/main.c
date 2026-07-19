@@ -120,7 +120,7 @@ int main(void)
 
     system_delay_ms(1200);
     build_map_info(&engine_ctx, final_map_data, 1);
-    WaypointPath path;
+    WaypointPath path = {0};
     path.length = 0;
 
     lost = 1;
@@ -149,7 +149,7 @@ int main(void)
         wifi_task();
     }
 
-    WaypointPath path_move_in;
+    WaypointPath path_move_in = {0};
     path_move_in.length = 1;
     path_move_in.points[0] = 0 + 6 * 16;
     car_move(&path_move_in, angle, 0);

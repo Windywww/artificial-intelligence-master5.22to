@@ -62,6 +62,7 @@ __attribute__((section(".bss.sdram"))) static ChildNode all_children_pool[MAX_ST
 static void get_smooth_path(SokobanContext *ctx, const WaypointPath *grid_path, const uint8_t *obstacles, WaypointPath *out_smooth_path);
 static uint8_t is_deadlock(SokobanContext *ctx, uint8_t idx, State *state, bool is_bomb, const uint8_t *walls);
 static void get_maze_distances(SokobanContext *ctx, const uint8_t *current_walls);
+static void waypoint_path_reset(WaypointPath *path);
 //==================
 
 static inline int neighbor_index(int idx, int direction)
@@ -1197,6 +1198,7 @@ static bool try_infer_identities(SokobanContext *ctx, State *current_state)
 
 static bool get_nearest_path(uint8_t start_pos, const bool *obs_points, const uint8_t *obstacles, WaypointPath *out_path)
 {
+    waypoint_path_reset(out_path);
     if (obs_points[start_pos])
     {
         out_path->points[0] = start_pos;
@@ -2073,6 +2075,7 @@ bool solve(SokobanContext *ctx)
 
 static bool get_micro_path(uint8_t start_pos, uint8_t target_pos, const uint8_t *obstacles, WaypointPath *out_path)
 {
+    waypoint_path_reset(out_path);
 
     if (start_pos == target_pos)
     {
@@ -2233,16 +2236,46 @@ static bool pass(uint8_t startpoint, uint8_t endpoint, float error, const uint8_
     return 1;
 }
 // 节点平滑 
+static uint16_t add_wait_saturated(uint16_t lhs, uint16_t rhs)
+{
+    if (rhs > UINT16_MAX - lhs)
+        return UINT16_MAX;
+    return (uint16_t)(lhs + rhs);
+}
+
+static void waypoint_path_reset(WaypointPath *path)
+{
+    memset(path->points, 0, sizeof(path->points));
+    memset(path->wait_after_ms, 0, sizeof(path->wait_after_ms));
+    path->length = 0;
+}
+
+static bool waypoint_path_append(WaypointPath *path, uint8_t point, uint16_t wait_after_ms)
+{
+    if (path->length >= MAP_SIZE)
+        return false;
+
+    path->points[path->length] = point;
+    path->wait_after_ms[path->length] = wait_after_ms;
+    path->length++;
+    return true;
+}
+
 static void get_smooth_path(SokobanContext *ctx, const WaypointPath *grid_path, const uint8_t *obstacles, WaypointPath *out_smooth_path)
 {
+    waypoint_path_reset(out_smooth_path);
+    if (grid_path->length == 0)
+        return;
+
     if (grid_path->length <= 2)
     {
-
-        *out_smooth_path = *grid_path;
+        for (int i = 0; i < grid_path->length; i++)
+        {
+            waypoint_path_append(out_smooth_path, grid_path->points[i], grid_path->wait_after_ms[i]);
+        }
         return;
     }
-    out_smooth_path->points[0] = grid_path->points[0];
-    out_smooth_path->length = 1;
+    waypoint_path_append(out_smooth_path, grid_path->points[0], grid_path->wait_after_ms[0]);
     int current_idx = 0;
 
     while (current_idx < grid_path->length - 1)
@@ -2258,40 +2291,54 @@ static void get_smooth_path(SokobanContext *ctx, const WaypointPath *grid_path, 
             }
         }
 
-        out_smooth_path->points[out_smooth_path->length++] = grid_path->points[furthest_visible];
+        waypoint_path_append(out_smooth_path, grid_path->points[furthest_visible],
+                             grid_path->wait_after_ms[furthest_visible]);
         current_idx = furthest_visible;
     }
 }
 
 static void get_final_path(SokobanContext *ctx, WaypointPath *path)
 {
-    if (path->length <= 2)
-    {
+    if (path->length == 0)
         return;
-    }
 
     uint8_t unique_points[MAP_SIZE];
+    uint16_t unique_wait_after_ms[MAP_SIZE];
     int unique_len = 0;
-    unique_points[unique_len++] = path->points[0];
+    unique_points[unique_len] = path->points[0];
+    unique_wait_after_ms[unique_len] = path->wait_after_ms[0];
+    unique_len++;
     for (int i = 1; i < path->length; i++)
     {
-
-        if (path->points[i] != unique_points[unique_len - 1])
+        if (path->points[i] == unique_points[unique_len - 1])
         {
-            unique_points[unique_len++] = path->points[i];
+            unique_wait_after_ms[unique_len - 1] = add_wait_saturated(
+                unique_wait_after_ms[unique_len - 1], path->wait_after_ms[i]);
+        }
+        else
+        {
+            unique_points[unique_len] = path->points[i];
+            unique_wait_after_ms[unique_len] = path->wait_after_ms[i];
+            unique_len++;
         }
     }
     if (unique_len <= 2)
     {
-        path->length = unique_len;
+        path->length = (uint16_t)unique_len;
         for (int i = 0; i < unique_len; i++)
+        {
             path->points[i] = unique_points[i];
+            path->wait_after_ms[i] = unique_wait_after_ms[i];
+        }
         return;
     }
 
     uint8_t new_points[MAP_SIZE];
+    uint16_t new_wait_after_ms[MAP_SIZE];
     int new_len = 0;
-    new_points[new_len++] = unique_points[0];
+    new_points[new_len] = unique_points[0];
+    new_wait_after_ms[new_len] = unique_wait_after_ms[0];
+    new_len++;
 
     for (int i = 1; i < unique_len - 1; i++)
     {
@@ -2312,17 +2359,22 @@ static void get_final_path(SokobanContext *ctx, WaypointPath *path)
 
         bool is_horizontal = (dy1 == 0 && dy2 == 0 && (dx1 * dx2 > 0));
         bool is_vertical = (dx1 == 0 && dx2 == 0 && (dy1 * dy2 > 0));
-        if (!is_horizontal && !is_vertical)
+        if ((!is_horizontal && !is_vertical) || unique_wait_after_ms[i] != 0)
         {
-            new_points[new_len++] = c;
+            new_points[new_len] = c;
+            new_wait_after_ms[new_len] = unique_wait_after_ms[i];
+            new_len++;
         }
     }
-    new_points[new_len++] = unique_points[unique_len - 1];
+    new_points[new_len] = unique_points[unique_len - 1];
+    new_wait_after_ms[new_len] = unique_wait_after_ms[unique_len - 1];
+    new_len++;
     // д��ԭ�ṹ��
-    path->length = new_len;
+    path->length = (uint16_t)new_len;
     for (int i = 0; i < new_len; i++)
     {
         path->points[i] = new_points[i];
+        path->wait_after_ms[i] = new_wait_after_ms[i];
     }
 }
 
@@ -2331,7 +2383,7 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
     State sim_state = ctx->initial_state;
     uint8_t sim_walls[MAP_SIZE];
     memcpy(sim_walls, ctx->initial_walls, MAP_SIZE);
-    out_full_path->length = 0;
+    waypoint_path_reset(out_full_path);
     uint8_t obstacles[MAP_SIZE];
     WaypointPath micro_path;
     WaypointPath smooth_path;
@@ -2363,12 +2415,22 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
             return;
         }
         get_smooth_path(ctx, &micro_path, obstacles, &smooth_path);
-        out_full_path->length += smooth_path.length;
         for (int p = 0; p < smooth_path.length; p++)
         {
-            out_full_path->points[out_full_path->length - smooth_path.length + p] = smooth_path.points[p];
+            if (!waypoint_path_append(out_full_path, smooth_path.points[p], smooth_path.wait_after_ms[p]))
+            {
+                printf("Path generation overflow while appending travel points.\n");
+                waypoint_path_reset(out_full_path);
+                return;
+            }
         }
-        out_full_path->points[out_full_path->length++] = act.push_to;
+        if (!waypoint_path_append(out_full_path, act.push_to,
+                                  act.is_explode ? BOMB_EXPLOSION_DELAY_MS : 0))
+        {
+            printf("Path generation overflow while appending push point.\n");
+            waypoint_path_reset(out_full_path);
+            return;
+        }
 
         // ===========================================
 
