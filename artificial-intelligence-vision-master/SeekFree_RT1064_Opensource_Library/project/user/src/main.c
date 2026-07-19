@@ -49,6 +49,154 @@ void imu_calibrate(void);
 float time_line = 0.0f;
 SokobanContext engine_ctx;
 
+#define ROUND_COUNT 3U
+#define ROUND_CLEAR_WAIT_MS 600U
+#define ROUND_MAP_SETTLE_MS 1200U
+#define START_ZONE_GRID_INDEX (0U + 6U * WIDTH)
+
+static void service_navigation(void)
+{
+    while (navigate_flag)
+    {
+        wifi_task();
+    }
+}
+
+static void wait_global_receiver_idle(void)
+{
+    while (global_infor_type != 5)
+    {
+        wifi_task();
+    }
+}
+
+static void request_round_map(void)
+{
+    got_map_flag = 0;
+    wait_global_receiver_idle();
+    want_global_infor(1);
+    while (global_infor_type != 5)
+    {
+        if (global_infor_type == 1)
+        {
+            // 空场阶段 OpenART 不返回地图；持续请求直到新关卡稳定出现。
+            uart_write_byte(UART_GLOBAL_INDEX, 0xBB);
+        }
+        else if (global_infor_type == 2)
+        {
+            uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
+        }
+        wifi_task();
+    }
+}
+
+static void sync_car_position(void)
+{
+    wait_global_receiver_idle();
+    want_global_infor(0);
+    wait_global_receiver_idle();
+
+    global_x = 3.2f * car_location[0];
+    global_y = 2.4f - 2.4f * car_location[1];
+    target_x = global_x;
+    target_y = global_y;
+}
+
+static void reset_round_runtime(void)
+{
+    car_stop();
+    got_map_flag = 0;
+    image_rx_state = 0;
+    final_image_index = 0;
+    count_A = 0;
+    count = 0;
+    got_angle = 0;
+    angle_test = 0;
+    wait_for_loc = 0;
+    loac_test = 0;
+    vision_x = -1.0f;
+    vision_y = -1.0f;
+}
+
+static void return_to_start_zone(void)
+{
+    WaypointPath return_path = {0};
+    return_path.length = 1;
+    return_path.points[0] = START_ZONE_GRID_INDEX;
+    car_move(&return_path, angle, 0);
+    service_navigation();
+}
+
+static uint8_t run_round(uint8_t round_index)
+{
+    WaypointPath path = {0};
+
+    reset_round_runtime();
+
+    // 先确认新关卡已经出现，再同步位置并驶出发车区。
+    request_round_map();
+    if (!got_map_flag)
+    {
+        return 0;
+    }
+    sync_car_position();
+
+    vision_angle_switch = 0;
+    car_move_point(global_x + 0.3f, global_y, angle, 0);
+    service_navigation();
+
+    // 驶出后重新取图，保证解算器中的小车格为实际起点。
+    request_round_map();
+    if (!got_map_flag)
+    {
+        return 0;
+    }
+    system_delay_ms(ROUND_MAP_SETTLE_MS);
+
+    build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 0U : 1U);
+    if (!engine_ctx.map_valid)
+    {
+        return 0;
+    }
+
+    lost = 1;
+    wifi_task();
+    if (!solve(&engine_ctx))
+    {
+        return 0;
+    }
+
+    generate_path(&engine_ctx, &path);
+    if (path.length == 0)
+    {
+        return 0;
+    }
+
+    lost = 66;
+    car_move(&path, angle, 0);
+    service_navigation();
+
+    if (round_index + 1U < ROUND_COUNT)
+    {
+        system_delay_ms(ROUND_CLEAR_WAIT_MS);
+        return_to_start_zone();
+    }
+    else
+    {
+        car_stop();
+    }
+    return 1;
+}
+
+static void fault_stop(void)
+{
+    car_stop();
+    while (1)
+    {
+        wifi_task();
+    }
+}
+
 int main(void)
 {
     clock_init(SYSTEM_CLOCK_600M); // 不可删除
@@ -77,89 +225,20 @@ int main(void)
     interrupt_global_enable(0);
 
     system_delay_ms(600);
-    // 车坐标初始化
-    want_global_infor(0);
-    while (global_infor_type != 5)
+    for (uint8_t round_index = 0; round_index < ROUND_COUNT; round_index++)
     {
-        wifi_task();
-    }
-
-    global_x = 3.2f * car_location[0];
-    global_y = 2.4f - 2.4f * car_location[1];
-    target_x = global_x;
-    target_y = global_y;
-    // 走出发车区
-
-    vision_angle_switch = 0;
-    car_move_point(global_x + 0.3f, global_y, angle, 0);
-
-    while (navigate_flag)
-    {
-        wifi_task();
-    }
-    vision_angle_switch = 0;
-    while (global_infor_type != 5)
-    {
-    }
-
-    want_global_infor(1);
-    while (global_infor_type != 5)
-    {
-        switch (global_infor_type)
+        if (!run_round(round_index))
         {
-        case 1:
-            uart_write_byte(UART_GLOBAL_INDEX, 0xBB);
-            break;
-
-        case 2:
-            uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
-            break;
-        }
-        wifi_task();
-    }
-
-    system_delay_ms(1200);
-    build_map_info(&engine_ctx, final_map_data, 1);
-    WaypointPath path = {0};
-    path.length = 0;
-
-    lost = 1;
-    wifi_task();
-
-    if (solve(&engine_ctx))
-    {
-        generate_path(&engine_ctx, &path);
-    }
-    else
-    {
-        car_move_point(0.3f, 1.2f, angle, 1);
-        while (navigate_flag)
-        {
-            wifi_task();
-        }
-        while (1)
-        {
+            fault_stop();
         }
     }
 
-    lost = 66;
-    car_move(&path, angle, 0);
-    while (navigate_flag)
+    // 第三关完成后保持停车，同时继续处理通信。
+    car_stop();
+    while (1)
     {
         wifi_task();
     }
-
-    WaypointPath path_move_in = {0};
-    path_move_in.length = 1;
-    path_move_in.points[0] = 0 + 6 * 16;
-    car_move(&path_move_in, angle, 0);
-    while (navigate_flag)
-    {
-        wifi_task();
-    }
-    system_delay_ms(1500);
-    // NVIC_SystemReset(); // 复位
-    return 0;
 }
 
 static int16 bias = 0;
