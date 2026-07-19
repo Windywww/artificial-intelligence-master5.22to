@@ -251,7 +251,6 @@ static void engine_init(SokobanContext *ctx, const uint8_t *raw_map)
                 }
                 else
                 {
-                    printf("Map has more than %d boxes.\n", MAX_BOXES);
                     ctx->map_valid = false;
                 }
             }
@@ -267,7 +266,6 @@ static void engine_init(SokobanContext *ctx, const uint8_t *raw_map)
                 }
                 else
                 {
-                    printf("Map has more than %d goals.\n", MAX_GOALS);
                     ctx->map_valid = false;
                 }
             }
@@ -1157,7 +1155,7 @@ static bool try_infer_identities(SokobanContext *ctx, State *current_state)
                 {
                     current_state->boxes[i].id = deficit_id;
                     inferred_something = true;
-                    printf("[智能推断] 确认坐标 %d 的箱子 ID 为 %d。\n", current_state->boxes[i].pos, deficit_id);
+                    //printf("[智能推断] 确认坐标 %d 的箱子 ID 为 %d。\n", current_state->boxes[i].pos, deficit_id);
                 }
             }
         }
@@ -1188,7 +1186,7 @@ static bool try_infer_identities(SokobanContext *ctx, State *current_state)
                     ctx->goals[i].id = deficit_id;
                     ctx->goal_type_map[ctx->goals[i].pos] = deficit_id;
                     inferred_something = true;
-                    printf("[智能推断] 确认坐标 %d 的目标点 ID 为 %d。\n", ctx->goals[i].pos, deficit_id);
+                    //printf("[智能推断] 确认坐标 %d 的目标点 ID 为 %d。\n", ctx->goals[i].pos, deficit_id);
                 }
             }
         }
@@ -1342,9 +1340,6 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
         ctx->solution_actions_len = act_len;
         for (int i = 0; i < act_len; i++)
             ctx->solution_actions[i] = acts[i];
-#if DEBUG_RECON
-        printf("\n[侦察成功] 找到可用视点。\n");
-#endif
         return (SearchRes){RES_SUCCESS, 0, 0};
     }
 
@@ -1372,24 +1367,14 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
             if (next_item_idx < 0 || push_stand_idx < 0)
                 continue;
 
-#if DEBUG_RECON
-            printf("  [尝试] %s位于 %d，推向 %d，站位 %d", is_bomb ? "炸弹" : "箱子", item_idx, next_item_idx, push_stand_idx);
-#endif
-
             bool exploded = false, consumed = false;
 
             if (obstacles[next_item_idx] && !current_walls[next_item_idx])
             {
-#if DEBUG_RECON
-                printf(" -> [剪枝] 目标位置存在物理障碍。\n");
-#endif
                 continue;
             }
             if (obstacles[push_stand_idx] && push_stand_idx != current_state->car_pos)
             {
-#if DEBUG_RECON
-                printf(" -> [剪枝] 小车发力点被占据。\n");
-#endif
                 continue;
             }
 
@@ -1399,9 +1384,6 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
                     exploded = true;
                 else
                 {
-#if DEBUG_RECON
-                    printf(" -> [剪枝] 无法推动箱子撞墙。\n");
-#endif
                     continue;
                 }
             }
@@ -1432,9 +1414,6 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
                     }
                     if (!is_safe)
                     {
-#if DEBUG_RECON
-                        printf(" -> [剪枝] 安全掩码判定该位置无法到达匹配目标。\n");
-#endif
                         continue;
                     }
                 }
@@ -1547,9 +1526,6 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
                 }
                 if (is_deadlock(ctx, next_item_idx, &next_state, is_bomb, walls_for_eval) > next_state.bomb_count)
                 {
-#if DEBUG_RECON
-                    printf(" -> [剪枝] 死锁检测命中。\n");
-#endif
                     continue;
                 }
             }
@@ -1607,7 +1583,6 @@ static bool solve_recon_ida(SokobanContext *ctx, State *start_state, const bool 
     int initial_h = calc_recon_heuristic(ctx, start_state, virtual_obs_points, ctx->initial_walls);
     if (initial_h >= INF_DIST)
     {
-        printf("识别 IDA*：初始状态为死锁。\n");
         return false;
     }
     float threshold = (float)initial_h;
@@ -1847,7 +1822,6 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                 car_move_point(final_actual_x, final_actual_y, angle, 0);
                 while (navigate_flag)
                     wifi_task();
-                }
             } // ��ʶ������Ȼδ֪�����������ʶ�𣨿����ǵ�һ�ζ�׼����׼ȷ��
 
             // ʶ��ʱ����carmove�����Ӿ��Ƕ�У��
@@ -1913,10 +1887,8 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
         }
         else
         {
-            printf("\n[路径受阻] 视点不可达，启动 IDA* 破障。\n");
             if (solve_recon_ida(ctx, current_state, observation_points, virtual_obs_points))
             {
-                printf("[破障成功] 生成 %d 步宏观破障动作。\n", ctx->solution_actions_len);
                 generate_path(ctx, &smooth_path);
                 current_state = &ctx->initial_state;
                 car_move(&smooth_path, angle, 0);
@@ -1925,12 +1897,10 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             }
             else
             {
-                printf("[彻底死局] IDA* 无法开辟通往视点的路径，终止侦察。\n");
                 return;
             }
         }
     }
-
     uint8_t final_box_counts[MAX_ID] = {0};
     uint8_t final_goal_counts[MAX_ID] = {0};
 
@@ -1994,12 +1964,12 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
     }
 }
 // 引擎主入口：执行 IDA* 搜索
-// 返回值：true 表示找到最优解，false 表示无解或超时/超节点限制 
+// 返回值：true 表示找到最优解，false 表示无解或超时/超节点限制
 bool solve(SokobanContext *ctx)
 {
     if (!ctx->map_valid || ctx->initial_state.box_count != ctx->goal_count)
     {
-        //printf("Invalid map: box/goal count mismatch or capacity exceeded.\n");
+        // printf("Invalid map: box/goal count mismatch or capacity exceeded.\n");
         return false;
     }
 
@@ -2035,12 +2005,12 @@ bool solve(SokobanContext *ctx)
         SearchRes res = dfs_ida(ctx, &ctx->initial_state, ctx->initial_walls, 0, initial_h, threshold, acts, 0);
         if (res.f == RES_SUCCESS)
         {
-            //printf("找到解，共搜索 %lu 个节点；g= %d，h=%d。\n", (unsigned long)ctx->total_explored_nodes, res.g, res.h);
+            // printf("找到解，共搜索 %lu 个节点；g= %d，h=%d。\n", (unsigned long)ctx->total_explored_nodes, res.g, res.h);
             return true;
         }
         if (res.f >= RES_INF)
         {
-            //printf("Unsolvable puzzle!\n");
+            // printf("Unsolvable puzzle!\n");
             return false;
         }
         float min_f = res.f;
@@ -2197,7 +2167,7 @@ static bool pass(uint8_t startpoint, uint8_t endpoint, float error, const uint8_
         Line_A_b = Line_B_b;
         Line_B_b = temp;
     }
-    // 加入误差 
+    // 加入误差
     Line_A_b += error;
     Line_B_b -= error;
 
@@ -2235,7 +2205,7 @@ static bool pass(uint8_t startpoint, uint8_t endpoint, float error, const uint8_
     }
     return 1;
 }
-// 节点平滑 
+
 static uint16_t add_wait_saturated(uint16_t lhs, uint16_t rhs)
 {
     if (rhs > UINT16_MAX - lhs)
@@ -2260,7 +2230,7 @@ static bool waypoint_path_append(WaypointPath *path, uint8_t point, uint16_t wai
     path->length++;
     return true;
 }
-
+// 节点平滑
 static void get_smooth_path(SokobanContext *ctx, const WaypointPath *grid_path, const uint8_t *obstacles, WaypointPath *out_smooth_path)
 {
     waypoint_path_reset(out_smooth_path);
@@ -2348,7 +2318,7 @@ static void get_final_path(SokobanContext *ctx, WaypointPath *path)
 
     for (int i = 1; i < unique_len - 1; i++)
     {
-        // p-c-n ???? c ????????????????
+        // p-c-n 用于判断 c 是否位于同一条水平或垂直直线上。
         int p = unique_points[i - 1];
         int c = unique_points[i];
         int n = unique_points[i + 1];
@@ -2366,7 +2336,7 @@ static void get_final_path(SokobanContext *ctx, WaypointPath *path)
 
         bool is_horizontal = (dy1 == 0 && dy2 == 0 && (dx1 * dx2 > 0));
         bool is_vertical = (dx1 == 0 && dx2 == 0 && (dy1 * dy2 > 0));
-        // ???????????????????????????
+        // 带等待的点即使共线也不能删除，否则炸弹爆炸事件会丢失。
         if ((!is_horizontal && !is_vertical) || unique_wait_after_ms[i] != 0)
         {
             new_points[new_len] = c;
@@ -2377,7 +2347,7 @@ static void get_final_path(SokobanContext *ctx, WaypointPath *path)
     new_points[new_len] = unique_points[unique_len - 1];
     new_wait_after_ms[new_len] = unique_wait_after_ms[unique_len - 1];
     new_len++;
-    // д��ԭ�ṹ��
+
     path->length = (uint16_t)new_len;
     for (int i = 0; i < new_len; i++)
     {
@@ -2419,7 +2389,6 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
 
         if (!get_micro_path(sim_state.car_pos, act.move_to, obstacles, &micro_path))
         {
-            printf("致命错误：底盘寻路断裂，无法抵达发力点 %d。\n", act.move_to);
             return;
         }
         get_smooth_path(ctx, &micro_path, obstacles, &smooth_path);
@@ -2427,7 +2396,7 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
         {
             if (!waypoint_path_append(out_full_path, smooth_path.points[p], smooth_path.wait_after_ms[p]))
             {
-                printf("Path generation overflow while appending travel points.\n");
+                // 节点溢出!!!
                 waypoint_path_reset(out_full_path);
                 return;
             }
@@ -2435,7 +2404,6 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
         if (!waypoint_path_append(out_full_path, act.push_to,
                                   act.is_explode ? BOMB_EXPLOSION_DELAY_MS : 0))
         {
-            printf("Path generation overflow while appending push point.\n");
             waypoint_path_reset(out_full_path);
             return;
         }
@@ -2498,7 +2466,7 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
         }
         sim_state.car_pos = act.push_to;
     }
-    // 更新初始状态为最终状�?
+    // 更新初始状态为最终状态
     ctx->initial_state = sim_state;
     memcpy(ctx->initial_walls, sim_walls, MAP_SIZE);
     get_final_path(ctx, out_full_path); // 对整条路径进行最终的优化处理
@@ -2506,7 +2474,7 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
 
 /**
  * @brief 实时障碍物检查函数（供运控避�?/侧向补偿调用�?
- * @param ctx 引擎上下文指�?
+ * @param ctx 引擎上下文指针
  * @param grid_index 待检查的网格索引 (0~191)
  * @return uint8_t 1: 有障�?(墙、箱子、炸�?)  0: 空地或纯目标�?
  */
@@ -2515,17 +2483,15 @@ uint8_t check_obstacle(SokobanContext *ctx, uint8_t grid_index)
     // 0. 越界保护
     if (grid_index >= MAP_SIZE)
         return 1;
-    }
 
     // 1. 检查所有的墙体（边界死�?=1，普通内�?=1，优先轰炸墙=2�?
     // 说明：engine_init �? generate_path 都会实时更新 initial_walls�?
     // 墙被炸掉后值为 0，所以这里只�? >= 1 就是墙�?
     if (ctx->initial_walls[grid_index] >= 1)
-    {
         return 1;
 
     // 2. 检查现存的动态箱�?
-        for (uint8_t i = 0; i < ctx->initial_state.box_count; i++)
+    for (uint8_t i = 0; i < ctx->initial_state.box_count; i++)
     {
         if (ctx->initial_state.boxes[i].pos == grid_index)
             return 1;
