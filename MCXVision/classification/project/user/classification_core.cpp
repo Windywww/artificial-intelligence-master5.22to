@@ -2,16 +2,25 @@
 
 #include <string.h>
 
+/*
+ * 与模型无关的图像算法：解析 4 字节命令、转换 RGB/LAB、按颜色寻找连通域，
+ * 再把数字区域制作成 28x28 模型输入。这里不依赖 MCX SDK，可在 PC 上单元测试。
+ */
+
 namespace mcxvision
 {
 
+// 阈值来自 OpenART 迁移后的标定；LAB 的 a/b 允许负数，不能用 uint8_t。
 const LabThreshold kBlackThreshold = {0, 31, -62, 43, -64, 44};
 const LabThreshold kPurpleThreshold = {35, 88, 71, 127, -95, -45};
+// box 模型固定取中心 120x120 区域。
 const Roi kCenterRoi = {20, 0, 120, 120};
 
 namespace
 {
 
+// 连通域工作区使用静态数组，避免在栈上分配整帧大小的内存。
+// mask=1 表示待处理，像素入队后立即清零，保证每个像素只处理一次。
 uint8_t s_blob_mask[kImageWidth * kImageHeight];
 uint16_t s_blob_queue[kImageWidth * kImageHeight];
 
@@ -35,6 +44,7 @@ float fast_cube_root(float value)
         return 0.0f;
     }
 
+    // 先通过 float 位模式估计立方根，再做两次 Newton 迭代，降低 MCU 计算开销。
     union
     {
         float f;
@@ -51,7 +61,7 @@ float fast_cube_root(float value)
 
 float srgb_to_linear(float value)
 {
-    // Low-cost approximation of the IEC 61966-2-1 inverse transfer curve.
+    // IEC 61966-2-1 反传递曲线的低成本近似，把 sRGB 变成线性光强。
     return value * (value * (value * 0.305306011f + 0.682171111f) + 0.012522878f);
 }
 
@@ -69,6 +79,7 @@ uint16_t byte_swap_16(uint16_t value)
 
 bool inside_goal_mask(int x, int y)
 {
+    // goal 模式上下边缘有固定干扰条，排除后避免误识别成数字。
     const bool lower = x >= 12 && x < 148 && y >= 110 && y < 115;
     const bool upper = x >= 19 && x < 137 && y >= 5 && y < 11;
     return lower || upper;
@@ -111,6 +122,8 @@ void UartPacketParser::reset()
 
 bool UartPacketParser::push(uint8_t byte, uint8_t *flag)
 {
+    // 状态：0 等 A5，1 等 5A，2 等 flag，3 等重复 flag。
+    // 状态 1/3 收到新 A5 时重新作为包头，提高噪声后的恢复能力。
     switch(state_)
     {
         case 0:
@@ -152,6 +165,7 @@ bool UartPacketParser::push(uint8_t byte, uint8_t *flag)
 void rgb888_to_lab(uint8_t red, uint8_t green, uint8_t blue,
                    float *l, float *a, float *b)
 {
+    // 先 RGB -> XYZ，再 XYZ -> LAB；XYZ 除数是 D65 标准白点归一化值。
     const float r = srgb_to_linear(red / 255.0f);
     const float g = srgb_to_linear(green / 255.0f);
     const float bl = srgb_to_linear(blue / 255.0f);
@@ -181,6 +195,7 @@ void rgb888_to_lab(uint8_t red, uint8_t green, uint8_t blue,
 void read_oriented_rgb(const uint16_t *frame, int x, int y,
                        uint8_t *red, uint8_t *green, uint8_t *blue)
 {
+    // 坐标反转实现 180 度方向变换；字节交换后再拆出 RGB565 的 5/6/5 位分量。
     const int source_x = kImageWidth - 1 - clamp_int(x, 0, kImageWidth - 1);
     const int source_y = kImageHeight - 1 - clamp_int(y, 0, kImageHeight - 1);
     const uint16_t rgb565 = byte_swap_16(frame[source_y * kImageWidth + source_x]);
@@ -227,6 +242,7 @@ size_t find_blobs(const uint16_t *frame,
                   Blob *output,
                   size_t output_capacity)
 {
+    // 第一步：只在 ROI 内生成二值颜色 mask。
     memset(s_blob_mask, 0, sizeof(s_blob_mask));
 
     const int x0 = clamp_int(roi.x, 0, kImageWidth);
@@ -243,6 +259,7 @@ size_t find_blobs(const uint16_t *frame,
         }
     }
 
+    // 第二步：扫描 mask；每个未处理像素作为一次 BFS 的起点。
     size_t output_count = 0;
     for(int y = y0; y < y1; ++y)
     {
@@ -276,6 +293,7 @@ size_t find_blobs(const uint16_t *frame,
                 if(current_y < min_y) min_y = current_y;
                 if(current_y > max_y) max_y = current_y;
 
+                // 8 邻域包含上下左右和四个对角方向。
                 for(int dy = -1; dy <= 1; ++dy)
                 {
                     const int next_y = current_y + dy;
@@ -304,6 +322,7 @@ size_t find_blobs(const uint16_t *frame,
                 }
             }
 
+            // 过滤小噪声和大背景，只保存面积合格的连通区域。
             if(area >= min_area && area < max_area_exclusive)
             {
                 if(output_count < output_capacity && output != 0)
@@ -326,6 +345,7 @@ void make_digit_canvas(const uint16_t *frame,
                        const Blob &blob,
                        uint8_t output[kDigitCanvasSize * kDigitCanvasSize])
 {
+    // 清零避免上一候选数字残留；最长边缩放到约 20 像素，四周保留边距。
     memset(output, 0, kDigitCanvasSize * kDigitCanvasSize);
     const int max_side = blob.w > blob.h ? blob.w : blob.h;
     if(max_side <= 0)
@@ -344,6 +364,7 @@ void make_digit_canvas(const uint16_t *frame,
     const int offset_x = static_cast<int>((kDigitCanvasSize - blob.w * scale) / 2.0f);
     const int offset_y = static_cast<int>((kDigitCanvasSize - blob.h * scale) / 2.0f);
 
+    // 最近邻采样：目标画布的每个像素反查原 Blob 的整数坐标。
     for(int dy = 0; dy < scaled_h; ++dy)
     {
         const int source_y = blob.y + (dy * blob.h) / scaled_h;

@@ -8,6 +8,10 @@
 #include "tensorflow/lite/micro/micro_op_resolver.h"
 #include "tensorflow/lite/schema/schema_generated.h"
 
+/*
+ * classification_model_data.s 用 .incbin 把模型放进片内 Flash。
+ * 这里只声明数组起始地址，不复制模型，也不从 SD 卡读取。
+ */
 extern "C"
 {
 extern const uint8_t num_model_data[];
@@ -22,14 +26,18 @@ namespace mcxvision
 namespace
 {
 
+// 两个模型共用 190 KiB 静态 Tensor Arena，必须计入 SRAM 预算。
 static const size_t kTensorArenaSize = 190U * 1024U;
 __ALIGNED(16) uint8_t s_tensor_arena[kTensorArenaSize];
+// placement new 在这块原始字节存储上构造解释器，不进行堆分配。
 __ALIGNED(16) uint8_t s_interpreter_storage[sizeof(tflite::MicroInterpreter)];
 tflite::MicroInterpreter *s_interpreter = 0;
+// -1 表示尚未选择模型。
 ModelKind s_active_model = static_cast<ModelKind>(-1);
 
 int rounded_int(float value)
 {
+    // static_cast<int> 直接截断，先加/减 0.5 才得到通常的四舍五入。
     return value >= 0.0f
         ? static_cast<int>(value + 0.5f)
         : static_cast<int>(value - 0.5f);
@@ -44,6 +52,7 @@ int clamp_int(int value, int low, int high)
 
 bool tensor_is_image(const TfLiteTensor *tensor)
 {
+    // 两个模型输入均为 [1, height, width, channels] 四维图像张量。
     return tensor != 0 && tensor->dims != 0 && tensor->dims->size == 4
         && tensor->dims->data[0] == 1;
 }
@@ -55,6 +64,7 @@ bool write_image_value(TfLiteTensor *tensor, size_t index, uint8_t pixel, ModelK
         return false;
     }
 
+    // 数字模型实数域为 0..1，box 模型为 0..255，再按 scale/zero_point 量化。
     const float real_value = kind == kDigitModel ? pixel / 255.0f : static_cast<float>(pixel);
     switch(tensor->type)
     {
@@ -64,6 +74,7 @@ bool write_image_value(TfLiteTensor *tensor, size_t index, uint8_t pixel, ModelK
             {
                 return false;
             }
+            // TFLite 量化公式：q = round(real / scale) + zero_point。
             const int quantized = rounded_int(real_value / tensor->params.scale)
                 + tensor->params.zero_point;
             tensor->data.int8[index] = static_cast<int8_t>(clamp_int(quantized, -128, 127));
@@ -91,6 +102,7 @@ bool write_image_value(TfLiteTensor *tensor, size_t index, uint8_t pixel, ModelK
 
 float output_value(const TfLiteTensor *tensor, int index)
 {
+    // 不同 dtype 的输出统一还原成 float，供 top1 逻辑比较。
     switch(tensor->type)
     {
         case kTfLiteFloat32:
@@ -108,11 +120,13 @@ float output_value(const TfLiteTensor *tensor, int index)
 
 bool model_select(ModelKind kind)
 {
+    // 同模型连续请求直接复用，避免反复 AllocateTensors。
     if(s_interpreter != 0 && s_active_model == kind)
     {
         return true;
     }
 
+    // 根据枚举选择 Flash 中对应的 FlatBuffer 起始地址。
     const uint8_t *model_data = kind == kDigitModel ? num_model_data : box_model_data;
     const tflite::Model *model = tflite::GetModel(model_data);
     if(model == 0 || model->version() != TFLITE_SCHEMA_VERSION)
@@ -122,13 +136,16 @@ bool model_select(ModelKind kind)
 
     if(s_interpreter != 0)
     {
+        // placement new 没有 delete，切换模型时显式调用析构函数。
         s_interpreter->~MicroInterpreter();
         s_interpreter = 0;
     }
+    // 清零便于调试，也避免模型切换后保留旧张量数据。
     memset(s_tensor_arena, 0, sizeof(s_tensor_arena));
 
     s_interpreter = new (s_interpreter_storage) tflite::MicroInterpreter(
         model, CLASSIFICATION_GetOpsResolver(), s_tensor_arena, kTensorArenaSize);
+    // 在 Arena 中规划输入、输出、中间张量和 Neutron scratch。
     if(s_interpreter->AllocateTensors() != kTfLiteOk)
     {
         s_interpreter->~MicroInterpreter();
@@ -154,11 +171,13 @@ bool model_fill_digit(const uint8_t canvas[kDigitCanvasSize * kDigitCanvasSize])
         return false;
     }
 
+    // 兼容 1 通道灰度和 3 通道 RGB 数字模型。
     const int channels = input->dims->data[3];
     if(channels != 1 && channels != 3)
     {
         return false;
     }
+    // HWC 布局中，一个像素的各通道在内存中连续排列。
     for(int i = 0; i < kDigitCanvasSize * kDigitCanvasSize; ++i)
     {
         for(int channel = 0; channel < channels; ++channel)
@@ -185,6 +204,7 @@ bool model_fill_box(const uint16_t *frame, const Roi &roi)
         return false;
     }
 
+    // 从模型读取尺寸，不把 120 硬编码进填充逻辑。
     const int height = input->dims->data[1];
     const int width = input->dims->data[2];
     const int channels = input->dims->data[3];
@@ -193,6 +213,7 @@ bool model_fill_box(const uint16_t *frame, const Roi &roi)
         return false;
     }
 
+    // 最近邻缩放：模型输入坐标反查 ROI 源像素，不创建额外图像缓冲区。
     for(int y = 0; y < height; ++y)
     {
         const int source_y = roi.y + (y * roi.h) / height;
@@ -206,6 +227,7 @@ bool model_fill_box(const uint16_t *frame, const Roi &roi)
             const size_t pixel_index = static_cast<size_t>(y * width + x) * channels;
             if(channels == 1)
             {
+                // 整数近似 BT.601 亮度公式。
                 const uint8_t gray = static_cast<uint8_t>((77U * red + 150U * green + 29U * blue) >> 8);
                 if(!write_image_value(input, pixel_index, gray, kBoxModel)) return false;
             }
@@ -222,6 +244,7 @@ bool model_fill_box(const uint16_t *frame, const Roi &roi)
 
 bool model_run(void)
 {
+    // Invoke 真正执行 Neutron 图；失败时上层日志记录为 invoke 阶段。
     return s_interpreter != 0 && s_interpreter->Invoke() == kTfLiteOk;
 }
 
@@ -237,6 +260,7 @@ bool model_top1(int *label, float *probability)
         return false;
     }
 
+    // 将输出各维相乘，例如 [1,10] 得到 10 个类别值。
     int count = 1;
     for(int i = 0; i < output->dims->size; ++i)
     {
@@ -247,6 +271,7 @@ bool model_top1(int *label, float *probability)
         return false;
     }
 
+    // 线性扫描最大值，best_label 即模型类别下标 0..9。
     int best_label = 0;
     float best_probability = output_value(output, 0);
     for(int i = 1; i < count; ++i)
@@ -265,6 +290,7 @@ bool model_top1(int *label, float *probability)
 
 size_t model_arena_used(void)
 {
+    // 实际 Arena 用量不等同于模型文件大小或 NeutronScratch 大小。
     return s_interpreter == 0 ? 0U : s_interpreter->arena_used_bytes();
 }
 
