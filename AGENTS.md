@@ -13,6 +13,9 @@
   - `classification_model_data.s`：通过 `.incbin` 将模型放入片内 Flash。
   - `main.cpp`：摄像头、串口和分类任务入口。
   - `models/`：部署用 `.tflite` 和对应报告。
+- `project/mdk/`：可直接 Rebuild、Download 和 Debug 的 Keil MDK 工程。
+- `libraries/`：该工程所需的板级代码、CMSIS、MCX SDK、eIQ/TFLite Micro、
+  Neutron 和逐飞驱动；必需的预编译 `.a`/`.lib` 也在这里。
 - `tests/`：不依赖 MCX SDK 的图像核心单元测试。
 - `tools/`：训练、TFLite 评估和模型比较脚本。
 - `training_output/`、`training_output_v2/`、`training_output_v3/`、
@@ -23,22 +26,9 @@
 `0xFE` 数字分类、`0xBB` box 分类和原类别字节响应。模型加入
 `project/user/models` 后，还要把 `classification_model_data.s` 加入汇编组。
 
-### `tmp/`
-
-这是本地构建、资料和预览目录，不是新的源代码根目录：
-
-- `tmp/mcx_build/`：MCXVision/官方例程的可构建工程快照。
-  - `libraries/board`：板级初始化、时钟和 SDMMC 配置。
-  - `libraries/CMSIS`：CMSIS 头文件和驱动接口。
-  - `libraries/components/eiq/tensorflow-lite`：eIQ/TFLite Micro 组件、静态库和示例模型。
-  - `libraries/sdk_drivers`、`zf_devices`、`zf_drivers`：SDK 外设与逐飞设备/驱动代码。
-  - `project/mdk`：Keil 工程、scatter 文件、Listings、Objects 和 build log；其中
-    `Objects/`、`Listings/` 是生成物。
-  - `project/user`：官方例程的用户代码、模型和 Neutron 源文件快照。
-- `tmp/pdfs/`：说明书、手册和人工阅读用图片/联系表，不参与编译。
-
-修改 MCX 代码时优先编辑 `MCXVision/classification/project/user`；`tmp/mcx_build` 只
-用于对照官方工程或复现构建，不要把构建生成物当作源代码提交。
+`MCXVision/classification` 是 MCX 部署工程的唯一真源。修改代码或模型后直接在
+`project/mdk/mcx_vision_board.uvprojx` 中 Rebuild；不要在 `tmp/` 建立第二份工程。
+`Objects/`、`Listings/`、map 和 build log 都是本地生成物，不作为源码提交。
 
 ## NeutronScratch 验证方法
 
@@ -63,7 +53,7 @@ runtime_bytes = product(shape) * bytes_per_element(dtype)
 
 ```bash
 python model_train/train_model/inspect_neutron.py \
-  MCXVision/classification/project/user/models/box_cls_npu.tflite \
+  MCXVision/classification/project/user/models/box_student_npu.tflite \
   --max-scratch 100000 \
   --max-model-bytes 430000 \
   --report tmp/box_cls_neutron.json

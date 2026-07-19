@@ -50,28 +50,24 @@ MCXN947 物理片内 Flash 为 2 MB。官方例程的默认 scatter 文件给 Co
 
 如果以后需要 SD 更新，建议采用“启动时校验 SD 模型并写入预留 Flash 槽，运行时从 Flash 建立模型”的方案，而不是从 SD 读入 SRAM。
 
-## 接入官方工程
+## Keil 构建与下载
 
-以官方 `【例程】Example/E07_mcx_vision_camera_qqvga_demo` 为底板：
+本目录已经包含完整的 MCXN947 工程，不需要再复制到官方例程。使用 MDK 5.38a
+或更高版本打开 `project/mdk/mcx_vision_board.uvprojx`，然后执行 Rebuild、Download；
+下载后手动复位。工程只引用本目录的 `libraries` 和 `project/user`，其中 SCC8660 已配置为
+QQVGA，官方旧模型文件也已从构建中排除。
 
-1. 将本目录 `project/user` 的内容合并到例程 `project/user`，用本目录的 `main.cpp` 替换原文件。
-2. 在 `libraries/zf_devices/zf_device_scc8660.h` 中把 `FRAME_SIZE` 改成 `SCC8660_QQVGA`。尺寸不正确时迁移代码会直接编译报错。
-3. 从 Keil 构建中排除官方的 `zf_model_process.cpp`、`model.cpp`、`model_data.s` 和 `model_ops_npu.cpp`，避免重复占用 Tensor Arena。
-4. 把 `classification_core.cpp`、`classification_models.cpp`、`classification_model_ops_npu.cpp` 作为 C++ 文件加入 `user` 组。
-5. 把 `classification_model_data.s` 作为汇编文件加入；两个头文件可作为普通头文件加入。
-6. 保持 `models` 子目录位于 `project/user/models`。汇编文件的 `.incbin` 路径以 `project/mdk` 为工作目录。
-7. 使用 MDK 5.38a 或更高版本构建、下载，下载后手动复位。
-
-本机集成快照可在 `tmp/mcx_build/project/mdk` 下执行全量 Rebuild：
+命令行全量 Rebuild：
 
 ```powershell
+Set-Location MCXVision\classification\project\mdk
 & 'D:\Apps\work\Keil5\UV4\UV4.exe' -r '.\mcx_vision_board.uvprojx' `
-  -j0 -o '.\student_rebuild.log'
+  -j0 -o '.\rebuild.log'
 ```
 
-当前机器安装的是未激活的 MDK-Lite。2026-07-19 使用新 student 模型执行 Rebuild，
-ArmClang 编译和链接布局均成功，最终 AXF 仍被授权限制 `L6050U` 拒绝（代码
-95,200 B）；按说明书激活 Keil 后才能完成链接。这不是芯片 Flash 或 SRAM 容量错误。
+2026-07-19 在已激活的 Keil 上使用 student 模型完成全量 Rebuild，结果为 0 errors、
+0 warnings；生成的 AXF 已通过 `ZF-WLFS-CMSIS-DAP` 和 `MCXN9XX_2048.FLM`
+成功下载到 MCXN947。
 
 该次链接器生成的 map 已确认：
 
@@ -81,7 +77,7 @@ ArmClang 编译和链接布局均成功，最终 AXF 仍被授权限制 `L6050U`
 - `RW_m_data = 333,472 / 416,756 B`，静态余量 83,284 B。
 
 以上 map 数值不能替代目标板上的 `AllocateTensors()`、一次真实 `Invoke()` 和
-`model_arena_used()` 检查；激活 MDK 后必须重新 Rebuild 并以新 map 为准。
+`model_arena_used()` 检查；修改源码或模型后必须重新 Rebuild 并以新 map 为准。
 
 ## 内存设计
 

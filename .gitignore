@@ -45,6 +45,8 @@ eggs/
 *.keras
 *.tflite
 !MCXVision/classification/project/user/models/box_student_npu.tflite
+!MCXVision/classification/project/user/models/num_cls.tflite
+!MCXVision/classification/project/user/models/num_cls_npu.tflite
 saved_model/
 *.ckpt
 *.ckpt.meta
@@ -84,6 +86,8 @@ datasets/
 *.bin
 *.a
 *.lib
+!MCXVision/classification/libraries/**/*.a
+!MCXVision/classification/libraries/**/*.lib
 
 # ==================================
 # 编译中间文件
@@ -102,7 +106,10 @@ datasets/
 Objects/
 Listings/
 DebugConfig/
+!MCXVision/classification/project/mdk/DebugConfig/
+!MCXVision/classification/project/mdk/DebugConfig/**
 *.uvoptx
+!MCXVision/classification/project/mdk/mcx_vision_board.uvoptx
 *.uvguix.*
 *.uvgui.*
 *.bak
