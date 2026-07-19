@@ -45,6 +45,12 @@ float kd_position_y = 0.0f;
 
 float path_queue_x[100];
 float path_queue_y[100];
+uint16_t path_queue_wait_ticks[100];
+#define PATH_WAIT_NOT_STARTED 0U
+#define PATH_WAIT_FIRST_TICK 1U
+#define PATH_WAIT_COUNTING 2U
+uint16_t path_wait_remaining_ticks = 0;
+uint8_t path_wait_armed = 0;
 uint16_t path_length = 0;  // 路径总点数
 uint16_t current_path = 0; // 当前正在追第几个点
 uint8_t navigate_flag = 0; // 1: 正在追路径 0: 没有路径需要追
@@ -257,6 +263,59 @@ uint8_t first_time_fix = 1;
 float vision_x = -1;
 float vision_y = -1;
 float vision_angle = 999;
+
+static uint16_t wait_ms_to_ticks(uint16_t wait_ms)
+{
+    uint32_t ticks = ((uint32_t)wait_ms + WAYPOINT_CONTROL_PERIOD_MS - 1U) /
+                     WAYPOINT_CONTROL_PERIOD_MS;
+    return ticks > UINT16_MAX ? UINT16_MAX : (uint16_t)ticks;
+}
+
+static void arm_path_wait(void)
+{
+    path_wait_remaining_ticks = path_queue_wait_ticks[current_path];
+    path_wait_armed = path_wait_remaining_ticks != 0 ? PATH_WAIT_FIRST_TICK : PATH_WAIT_NOT_STARTED;
+}
+
+static uint8_t consume_path_wait(uint8_t is_last_point)
+{
+    if (path_wait_armed == PATH_WAIT_NOT_STARTED && path_queue_wait_ticks[current_path] != 0)
+    {
+        path_wait_remaining_ticks = path_queue_wait_ticks[current_path];
+        path_wait_armed = PATH_WAIT_FIRST_TICK;
+    }
+
+    if (path_wait_armed == PATH_WAIT_FIRST_TICK)
+    {
+        path_wait_armed = PATH_WAIT_COUNTING;
+        if (is_last_point)
+        {
+            if (count_A <= 5)
+                count_A++;
+        }
+        else if (count <= 5)
+        {
+            count++;
+        }
+        return 1;
+    }
+
+    if (path_wait_armed != PATH_WAIT_COUNTING || path_wait_remaining_ticks == 0)
+        return 0;
+
+    if (is_last_point)
+    {
+        if (count_A <= 5)
+            count_A++;
+    }
+    else if (count <= 5)
+    {
+        count++;
+    }
+    path_wait_remaining_ticks--;
+    return 1;
+}
+
 void navigation_update(void)
 {
     // 参数：&对象, 目标坐标, 到达目标时的末速度
@@ -371,11 +430,15 @@ void navigation_update(void)
             {
                 stop_flag = 1; // 开启手刹
                 walk_mode = 3;
+                arm_path_wait();
             }
             if (stop_flag == 1)
             {
                 target_vx = 0.0f;
                 target_vy = 0.0f;
+
+                if (consume_path_wait(is_last_point))
+                    return;
 
                 if (count_A <= 5)
                 {
@@ -497,6 +560,8 @@ void navigation_update(void)
                 navigate_flag = 0;
                 walk_mode = 3;
                 stop_flag = 0;
+                path_wait_remaining_ticks = 0;
+                path_wait_armed = 0;
                 count_A = 0;
                 got_angle = 0;
                 first_time_fix = 1;
@@ -524,11 +589,15 @@ void navigation_update(void)
             {
                 walk_mode = 3;
                 stop_flag = 1; // 开启手刹
+                arm_path_wait();
             }
             if (stop_flag == 1)
             {
                 target_vx = 0.0f;
                 target_vy = 0.0f;
+
+                if (consume_path_wait(is_last_point))
+                    return;
 
                 if (count <= 5)
                 {
@@ -656,6 +725,8 @@ void navigation_update(void)
 
                 count = 0;
                 stop_flag = 0;
+                path_wait_remaining_ticks = 0;
+                path_wait_armed = 0;
                 current_path++;
                 first_time_fix = 1;
                 target_x = path_queue_x[current_path];
@@ -763,10 +834,13 @@ void car_move(WaypointPath *path, float yaw, uint8_t m)
     {
         path_queue_x[i] = (path->points[i] % 16) * 0.2f + 0.1f;
         path_queue_y[i] = 2.4 - (path->points[i] / 16) * 0.2f - 0.1f;
+        path_queue_wait_ticks[i] = wait_ms_to_ticks(path->wait_after_ms[i]);
     }
 
     path_length = path->length;
     current_path = 0;
+    path_wait_remaining_ticks = 0;
+    path_wait_armed = 0;
     mode = m;
 
     target_x = path_queue_x[0];
@@ -793,6 +867,9 @@ void car_move_point(float x, float y, float yaw, uint8_t m)
 {
     path_length = 1;
     current_path = 0;
+    path_queue_wait_ticks[0] = 0;
+    path_wait_remaining_ticks = 0;
+    path_wait_armed = 0;
     mode = m;
 
     target_x = x;

@@ -61,6 +61,7 @@ __attribute__((section(".bss.sdram"))) static ChildNode all_children_pool[MAX_ST
 static void get_smooth_path(SokobanContext *ctx, const WaypointPath *grid_path, const uint8_t *obstacles, WaypointPath *out_smooth_path);
 static uint8_t is_deadlock(SokobanContext *ctx, uint8_t idx, State *state, bool is_bomb, const uint8_t *walls);
 static void get_maze_distances(SokobanContext *ctx, const uint8_t *current_walls);
+static void waypoint_path_reset(WaypointPath *path);
 //==================
 
 static inline int neighbor_index(int idx, int direction)
@@ -248,7 +249,6 @@ static void engine_init(SokobanContext *ctx, const uint8_t *raw_map)
                 }
                 else
                 {
-                    printf("Map has more than %d boxes.\n", MAX_BOXES);
                     ctx->map_valid = false;
                 }
             }
@@ -264,7 +264,6 @@ static void engine_init(SokobanContext *ctx, const uint8_t *raw_map)
                 }
                 else
                 {
-                    printf("Map has more than %d goals.\n", MAX_GOALS);
                     ctx->map_valid = false;
                 }
             }
@@ -1154,7 +1153,7 @@ static bool try_infer_identities(SokobanContext *ctx, State *current_state)
                 {
                     current_state->boxes[i].id = deficit_id;
                     inferred_something = true;
-                    printf("[智能推断] 确认坐标 %d 的箱子 ID 为 %d。\n", current_state->boxes[i].pos, deficit_id);
+                    //printf("[智能推断] 确认坐标 %d 的箱子 ID 为 %d。\n", current_state->boxes[i].pos, deficit_id);
                 }
             }
         }
@@ -1185,7 +1184,7 @@ static bool try_infer_identities(SokobanContext *ctx, State *current_state)
                     ctx->goals[i].id = deficit_id;
                     ctx->goal_type_map[ctx->goals[i].pos] = deficit_id;
                     inferred_something = true;
-                    printf("[智能推断] 确认坐标 %d 的目标点 ID 为 %d。\n", ctx->goals[i].pos, deficit_id);
+                    //printf("[智能推断] 确认坐标 %d 的目标点 ID 为 %d。\n", ctx->goals[i].pos, deficit_id);
                 }
             }
         }
@@ -1195,6 +1194,7 @@ static bool try_infer_identities(SokobanContext *ctx, State *current_state)
 
 static bool get_nearest_path(uint8_t start_pos, const bool *obs_points, const uint8_t *obstacles, WaypointPath *out_path)
 {
+    waypoint_path_reset(out_path);
     if (obs_points[start_pos])
     {
         out_path->points[0] = start_pos;
@@ -1338,9 +1338,6 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
         ctx->solution_actions_len = act_len;
         for (int i = 0; i < act_len; i++)
             ctx->solution_actions[i] = acts[i];
-#if DEBUG_RECON
-        printf("\n[侦察成功] 找到可用视点。\n");
-#endif
         return (SearchRes){RES_SUCCESS, 0, 0};
     }
 
@@ -1368,24 +1365,14 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
             if (next_item_idx < 0 || push_stand_idx < 0)
                 continue;
 
-#if DEBUG_RECON
-            printf("  [尝试] %s位于 %d，推向 %d，站位 %d", is_bomb ? "炸弹" : "箱子", item_idx, next_item_idx, push_stand_idx);
-#endif
-
             bool exploded = false, consumed = false;
 
             if (obstacles[next_item_idx] && !current_walls[next_item_idx])
             {
-#if DEBUG_RECON
-                printf(" -> [剪枝] 目标位置存在物理障碍。\n");
-#endif
                 continue;
             }
             if (obstacles[push_stand_idx] && push_stand_idx != current_state->car_pos)
             {
-#if DEBUG_RECON
-                printf(" -> [剪枝] 小车发力点被占据。\n");
-#endif
                 continue;
             }
 
@@ -1395,9 +1382,6 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
                     exploded = true;
                 else
                 {
-#if DEBUG_RECON
-                    printf(" -> [剪枝] 无法推动箱子撞墙。\n");
-#endif
                     continue;
                 }
             }
@@ -1428,9 +1412,6 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
                     }
                     if (!is_safe)
                     {
-#if DEBUG_RECON
-                        printf(" -> [剪枝] 安全掩码判定该位置无法到达匹配目标。\n");
-#endif
                         continue;
                     }
                 }
@@ -1543,9 +1524,6 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
                 }
                 if (is_deadlock(ctx, next_item_idx, &next_state, is_bomb, walls_for_eval) > next_state.bomb_count)
                 {
-#if DEBUG_RECON
-                    printf(" -> [剪枝] 死锁检测命中。\n");
-#endif
                     continue;
                 }
             }
@@ -1603,7 +1581,6 @@ static bool solve_recon_ida(SokobanContext *ctx, State *start_state, const bool 
     int initial_h = calc_recon_heuristic(ctx, start_state, virtual_obs_points, ctx->initial_walls);
     if (initial_h >= INF_DIST)
     {
-        printf("识别 IDA*：初始状态为死锁。\n");
         return false;
     }
     float threshold = (float)initial_h;
@@ -1909,10 +1886,8 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
         }
         else
         {
-            printf("\n[路径受阻] 视点不可达，启动 IDA* 破障。\n");
             if (solve_recon_ida(ctx, current_state, observation_points, virtual_obs_points))
             {
-                printf("[破障成功] 生成 %d 步宏观破障动作。\n", ctx->solution_actions_len);
                 generate_path(ctx, &smooth_path);
                 current_state = &ctx->initial_state;
                 car_move(&smooth_path, angle, 0);
@@ -1921,12 +1896,10 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             }
             else
             {
-                printf("[彻底死局] IDA* 无法开辟通往视点的路径，终止侦察。\n");
                 return;
             }
         }
     }
-
     uint8_t final_box_counts[MAX_ID] = {0};
     uint8_t final_goal_counts[MAX_ID] = {0};
 
@@ -2071,6 +2044,7 @@ bool solve(SokobanContext *ctx)
 
 static bool get_micro_path(uint8_t start_pos, uint8_t target_pos, const uint8_t *obstacles, WaypointPath *out_path)
 {
+    waypoint_path_reset(out_path);
 
     if (start_pos == target_pos)
     {
@@ -2251,17 +2225,47 @@ static bool pass(uint8_t startpoint, uint8_t endpoint, float error, const uint8_
     }
     return 1;
 }
+
+static uint16_t add_wait_saturated(uint16_t lhs, uint16_t rhs)
+{
+    if (rhs > UINT16_MAX - lhs)
+        return UINT16_MAX;
+    return (uint16_t)(lhs + rhs);
+}
+
+static void waypoint_path_reset(WaypointPath *path)
+{
+    memset(path->points, 0, sizeof(path->points));
+    memset(path->wait_after_ms, 0, sizeof(path->wait_after_ms));
+    path->length = 0;
+}
+
+static bool waypoint_path_append(WaypointPath *path, uint8_t point, uint16_t wait_after_ms)
+{
+    if (path->length >= MAP_SIZE)
+        return false;
+
+    path->points[path->length] = point;
+    path->wait_after_ms[path->length] = wait_after_ms;
+    path->length++;
+    return true;
+}
 // 节点平滑
 static void get_smooth_path(SokobanContext *ctx, const WaypointPath *grid_path, const uint8_t *obstacles, WaypointPath *out_smooth_path)
 {
+    waypoint_path_reset(out_smooth_path);
+    if (grid_path->length == 0)
+        return;
+
     if (grid_path->length <= 2)
     {
-
-        *out_smooth_path = *grid_path;
+        for (int i = 0; i < grid_path->length; i++)
+        {
+            waypoint_path_append(out_smooth_path, grid_path->points[i], grid_path->wait_after_ms[i]);
+        }
         return;
     }
-    out_smooth_path->points[0] = grid_path->points[0];
-    out_smooth_path->length = 1;
+    waypoint_path_append(out_smooth_path, grid_path->points[0], grid_path->wait_after_ms[0]);
     int current_idx = 0;
 
     while (current_idx < grid_path->length - 1)
@@ -2277,43 +2281,125 @@ static void get_smooth_path(SokobanContext *ctx, const WaypointPath *grid_path, 
             }
         }
 
-        out_smooth_path->points[out_smooth_path->length++] = grid_path->points[furthest_visible];
+        waypoint_path_append(out_smooth_path, grid_path->points[furthest_visible],
+                             grid_path->wait_after_ms[furthest_visible]);
         current_idx = furthest_visible;
     }
 }
 
-static void get_final_path(SokobanContext *ctx, WaypointPath *path)
+#if ENABLE_LONG_PATH_SEGMENT_SPLIT
+static bool split_long_axis_segments(WaypointPath *path)
 {
-    if (path->length <= 2)
-    {
-        return;
-    }
+    if (path->length <= 1)
+        return true;
 
-    uint8_t unique_points[MAP_SIZE];
-    int unique_len = 0;
-    unique_points[unique_len++] = path->points[0];
+    WaypointPath split_path;
+    waypoint_path_reset(&split_path);
+    if (!waypoint_path_append(&split_path, path->points[0], path->wait_after_ms[0]))
+        return false;
+
     for (int i = 1; i < path->length; i++)
     {
+        int start = path->points[i - 1];
+        int end = path->points[i];
+        int dx = end % WIDTH - start % WIDTH;
+        int dy = end / WIDTH - start / WIDTH;
 
-        if (path->points[i] != unique_points[unique_len - 1])
+        // 开关启用时路径应为水平或竖直；遇到斜线段则保持原样。
+        if ((dx != 0 && dy != 0) || (dx == 0 && dy == 0))
         {
-            unique_points[unique_len++] = path->points[i];
+            if (!waypoint_path_append(&split_path, (uint8_t)end, path->wait_after_ms[i]))
+                return false;
+            continue;
+        }
+
+        int distance = abs(dx != 0 ? dx : dy);
+        if (distance <= MAX_PATH_SEGMENT_CELLS)
+        {
+            if (!waypoint_path_append(&split_path, (uint8_t)end, path->wait_after_ms[i]))
+                return false;
+            continue;
+        }
+
+        // 先取满足每段不超过 6 格的最少段数，再均分到相差不超过 1 格。
+        int segment_count = (distance + MAX_PATH_SEGMENT_CELLS - 1) / MAX_PATH_SEGMENT_CELLS;
+        int base_length = distance / segment_count;
+        int longer_segment_count = distance % segment_count;
+        int step_offset = dx > 0 ? 1 : (dx < 0 ? -1 : (dy > 0 ? WIDTH : -WIDTH));
+        int current = start;
+
+        for (int segment = 0; segment < segment_count; segment++)
+        {
+            int segment_length = base_length + (segment < longer_segment_count ? 1 : 0);
+            current += segment_length * step_offset;
+
+            // 新增分割点没有等待事件，原终点继续携带原有等待时间。
+            uint16_t wait_after_ms = segment == segment_count - 1 ? path->wait_after_ms[i] : 0;
+            if (!waypoint_path_append(&split_path, (uint8_t)current, wait_after_ms))
+                return false;
+        }
+    }
+
+    *path = split_path;
+    return true;
+}
+#endif
+
+static void get_final_path(SokobanContext *ctx, WaypointPath *path)
+{
+    // 最终优化分两步：先合并连续重复点，再删除不影响转向的共线点。
+    // wait_after_ms 与 points 使用相同下标，任何等待事件都必须随点一起保留。
+    if (path->length == 0)
+        return;
+
+    // unique_* 保存去除连续重复点后的中间结果。
+    uint8_t unique_points[MAP_SIZE];
+    uint16_t unique_wait_after_ms[MAP_SIZE];
+    int unique_len = 0;
+    unique_points[unique_len] = path->points[0];
+    unique_wait_after_ms[unique_len] = path->wait_after_ms[0];
+    unique_len++;
+    for (int i = 1; i < path->length; i++)
+    {
+        // 同一点可能来自相邻宏动作；等待时间必须累加，不能覆盖。
+        if (path->points[i] == unique_points[unique_len - 1])
+        {
+            unique_wait_after_ms[unique_len - 1] = add_wait_saturated(
+                unique_wait_after_ms[unique_len - 1], path->wait_after_ms[i]);
+        }
+        else
+        {
+            unique_points[unique_len] = path->points[i];
+            unique_wait_after_ms[unique_len] = path->wait_after_ms[i];
+            unique_len++;
         }
     }
     if (unique_len <= 2)
     {
-        path->length = unique_len;
+        // 点数不足以进行共线优化，直接写回去重结果。
+        path->length = (uint16_t)unique_len;
         for (int i = 0; i < unique_len; i++)
+        {
             path->points[i] = unique_points[i];
+            path->wait_after_ms[i] = unique_wait_after_ms[i];
+        }
+#if ENABLE_LONG_PATH_SEGMENT_SPLIT
+        split_long_axis_segments(path);
+#endif
         return;
     }
 
+    // new_* 保存最终输出；端点始终保留，中间点按转向和等待事件筛选。
     uint8_t new_points[MAP_SIZE];
+    uint16_t new_wait_after_ms[MAP_SIZE];
     int new_len = 0;
-    new_points[new_len++] = unique_points[0];
+    new_points[new_len] = unique_points[0];
+    new_wait_after_ms[new_len] = unique_wait_after_ms[0];
+    new_len++;
 
     for (int i = 1; i < unique_len - 1; i++)
     {
+        // p-c-n 用于判断 c 是否位于同一条水平或垂直直线上。
         int p = unique_points[i - 1];
         int c = unique_points[i];
         int n = unique_points[i + 1];
@@ -2331,18 +2417,27 @@ static void get_final_path(SokobanContext *ctx, WaypointPath *path)
 
         bool is_horizontal = (dy1 == 0 && dy2 == 0 && (dx1 * dx2 > 0));
         bool is_vertical = (dx1 == 0 && dx2 == 0 && (dy1 * dy2 > 0));
-        if (!is_horizontal && !is_vertical)
+        // 带等待的点即使共线也不能删除，否则炸弹爆炸事件会丢失。
+        if ((!is_horizontal && !is_vertical) || unique_wait_after_ms[i] != 0)
         {
-            new_points[new_len++] = c;
+            new_points[new_len] = c;
+            new_wait_after_ms[new_len] = unique_wait_after_ms[i];
+            new_len++;
         }
     }
-    new_points[new_len++] = unique_points[unique_len - 1];
-    // д��ԭ�ṹ��
-    path->length = new_len;
+    new_points[new_len] = unique_points[unique_len - 1];
+    new_wait_after_ms[new_len] = unique_wait_after_ms[unique_len - 1];
+    new_len++;
+
+    path->length = (uint16_t)new_len;
     for (int i = 0; i < new_len; i++)
     {
         path->points[i] = new_points[i];
+        path->wait_after_ms[i] = new_wait_after_ms[i];
     }
+#if ENABLE_LONG_PATH_SEGMENT_SPLIT
+    split_long_axis_segments(path);
+#endif
 }
 
 void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
@@ -2350,7 +2445,7 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
     State sim_state = ctx->initial_state;
     uint8_t sim_walls[MAP_SIZE];
     memcpy(sim_walls, ctx->initial_walls, MAP_SIZE);
-    out_full_path->length = 0;
+    waypoint_path_reset(out_full_path);
     uint8_t obstacles[MAP_SIZE];
     WaypointPath micro_path;
     WaypointPath smooth_path;
@@ -2378,16 +2473,24 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
 
         if (!get_micro_path(sim_state.car_pos, act.move_to, obstacles, &micro_path))
         {
-            printf("致命错误：底盘寻路断裂，无法抵达发力点 %d。\n", act.move_to);
             return;
         }
         get_smooth_path(ctx, &micro_path, obstacles, &smooth_path);
-        out_full_path->length += smooth_path.length;
         for (int p = 0; p < smooth_path.length; p++)
         {
-            out_full_path->points[out_full_path->length - smooth_path.length + p] = smooth_path.points[p];
+            if (!waypoint_path_append(out_full_path, smooth_path.points[p], smooth_path.wait_after_ms[p]))
+            {
+                // 节点溢出!!!
+                waypoint_path_reset(out_full_path);
+                return;
+            }
         }
-        out_full_path->points[out_full_path->length++] = act.push_to;
+        if (!waypoint_path_append(out_full_path, act.push_to,
+                                  act.is_explode ? BOMB_EXPLOSION_DELAY_MS : 0))
+        {
+            waypoint_path_reset(out_full_path);
+            return;
+        }
 
         // ===========================================
 
@@ -2447,7 +2550,7 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
         }
         sim_state.car_pos = act.push_to;
     }
-    // 更新初始状态为最终状�?
+    // 更新初始状态为最终状态
     ctx->initial_state = sim_state;
     memcpy(ctx->initial_walls, sim_walls, MAP_SIZE);
     get_final_path(ctx, out_full_path); // 对整条路径进行最终的优化处理
@@ -2455,7 +2558,7 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
 
 /**
  * @brief 实时障碍物检查函数（供运控避�?/侧向补偿调用�?
- * @param ctx 引擎上下文指�?
+ * @param ctx 引擎上下文指针
  * @param grid_index 待检查的网格索引 (0~191)
  * @return uint8_t 1: 有障�?(墙、箱子、炸�?)  0: 空地或纯目标�?
  */
@@ -2469,7 +2572,6 @@ uint8_t check_obstacle(SokobanContext *ctx, uint8_t grid_index)
     // 说明：engine_init �? generate_path 都会实时更新 initial_walls�?
     // 墙被炸掉后值为 0，所以这里只�? >= 1 就是墙�?
     if (ctx->initial_walls[grid_index] >= 1)
-
         return 1;
 
     // 2. 检查现存的动态箱�?

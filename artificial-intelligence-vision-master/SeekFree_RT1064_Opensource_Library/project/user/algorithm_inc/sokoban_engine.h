@@ -19,6 +19,13 @@
 #define MAX_STEPS 100
 #define INF_DIST 9999
 #define NO_CLS 0
+#define WAYPOINT_CONTROL_PERIOD_MS 10U
+#define BOMB_EXPLOSION_DELAY_MS 800U
+#define MAX_PATH_SEGMENT_CELLS 6U
+// 设为 1 时，将最终路径中超过 6 格的水平/竖直线段均匀拆分；设为 0 时不处理。
+#ifndef ENABLE_LONG_PATH_SEGMENT_SPLIT
+#define ENABLE_LONG_PATH_SEGMENT_SPLIT 1
+#endif
 
 // 置换表采用分离数组：签名 8 MiB、g 值 2 MiB、版本号 1 MiB。
 #define HASH_TABLE_SIZE 1048576
@@ -57,6 +64,8 @@ typedef struct
 typedef struct
 {
     uint8_t points[MAP_SIZE];
+    // Delay after arriving at the corresponding point, in milliseconds.
+    uint16_t wait_after_ms[MAP_SIZE];
     uint16_t length;
 } WaypointPath;
 
