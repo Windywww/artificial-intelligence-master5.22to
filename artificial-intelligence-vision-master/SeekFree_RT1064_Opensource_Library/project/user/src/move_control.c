@@ -56,9 +56,10 @@ PID_TypeDef pid[4];
 uint8_t vision_angle_switch = 0;
 // SecondOrder_Set_Follow_t planner_x; // x 轴 s 曲线跟随规划器
 // SecondOrder_Set_Follow_t planner_y; // y 轴 s 曲线跟随规划器
-
+uint8_t wrong_time = 0;
 // 小车在横着走竖着走还是斜着走,0是横，1是竖；2是斜3是不走,4等待炸弹延时
 uint8_t walk_mode = 3;
+extern uint8_t vision_correct_flag;
 void move_control_init()
 {
     for (int i = 0; i < 4; i++)
@@ -257,6 +258,9 @@ uint8_t first_time_fix = 1;
 float vision_x = -1;
 float vision_y = -1;
 float vision_angle = 999;
+
+// 接收视觉接收判定
+float time_vision = 0;
 void navigation_update(void)
 {
     // 参数：&对象, 目标坐标, 到达目标时的末速度
@@ -381,7 +385,8 @@ void navigation_update(void)
                 target_vy = 0.0f;
                 if (walk_mode == 4)
                 {
-                    if(count_A<=90){
+                    if (count_A <= 90)
+                    {
                         count_A++;
                         return;
                     }
@@ -450,7 +455,7 @@ void navigation_update(void)
                         }
                     }
 
-                    if (first_time_fix)
+                    if (first_time_fix == 1)
                     {
                         if (wait_for_loc == 0)
                         {
@@ -459,47 +464,60 @@ void navigation_update(void)
                                 return;
                             }
                             want_global_infor(0);
+                            time_vision = time_line;
                             wait_for_loc = 1;
                         }
+                        uint8_t if_longtime = 0;
                         if (wait_for_loc == 1)
                         {
-                            if (global_infor_type == 5)
+                            if (time_line - time_vision >= 9.0f)
                             {
-                                wait_for_loc = 0;
+                                if_longtime = 1;
+                            }
+                            else
+                            {
+                                if (global_infor_type == 5)
+                                {
+                                    wait_for_loc = 0;
+                                }
+                                else
+                                {
+                                    return;
+                                }
+                            }
+                        }
+
+                        if (!if_longtime)
+                        {
+                            if (car_location[0] - vision_x >= -0.002f && car_location[0] - vision_x <= 0.002f &&
+                                car_location[1] - vision_y >= -0.002f &&
+                                car_location[1] - vision_y <= 0.002f)
+                            {
+                                loac_test++;
+                            }
+                            else
+                            {
+                                loac_test = 0;
+                                vision_x = car_location[0];
+                                vision_y = car_location[1];
+                            }
+
+                            if (loac_test >= 3)
+                            {
+                                float dx = global_x - 3.2f * car_location[0];
+                                float dy = global_y - (2.4f - 2.4f * car_location[1]);
+
+                                global_x = 3.2f * (car_location[0] + vision_x) * 0.5f;
+                                global_y = 2.4f - 2.4f * (car_location[1] + vision_y) * 0.5f;
                             }
                             else
                             {
                                 return;
                             }
                         }
-                        if (car_location[0] - vision_x >= -0.002f && car_location[0] - vision_x <= 0.002f &&
-                            car_location[1] - vision_y >= -0.002f &&
-                            car_location[1] - vision_y <= 0.002f)
-                        {
-                            loac_test++;
-                        }
-                        else
-                        {
-                            loac_test = 0;
-                            vision_x = car_location[0];
-                            vision_y = car_location[1];
-                        }
-
-                        if (loac_test >= 3)
-                        {
-                            float dx = global_x - 3.2f * car_location[0];
-                            float dy = global_y - (2.4f - 2.4f * car_location[1]);
-
-                            global_x = 3.2f * (car_location[0] + vision_x) * 0.5f;
-                            global_y = 2.4f - 2.4f * (car_location[1] + vision_y) * 0.5f;
-                            vision_x = -1;
-                            vision_y = -1;
-                            loac_test = 0;
-                        }
-                        else
-                        {
-                            return;
-                        }
+                        vision_x = -1;
+                        vision_y = -1;
+                        loac_test = 0;
                         first_time_fix = 0;
                         stop_flag = 0;
                         return;
@@ -514,6 +532,9 @@ void navigation_update(void)
                 first_time_fix = 1;
                 last_global_target_vx = 0;
                 last_global_target_vy = 0;
+
+                //周期矫正状态位归零
+                vision_correct_flag = 0;
                 for (int k = 0; k < 4; k++)
                 {
                     pid[k].duty_out = 0.0f;   // 清空已经累加的 PWM 输出
@@ -615,7 +636,7 @@ void navigation_update(void)
                             }
                         }
                     }
-                    if (first_time_fix)
+                    if (first_time_fix == 1)
                     {
                         if (vision_point_num == 0)
                         {
@@ -626,54 +647,65 @@ void navigation_update(void)
                                     return;
                                 }
                                 want_global_infor(0);
+                                time_vision = time_line;
                                 wait_for_loc = 1;
                             }
+                            uint8_t if_longtime = 0;
                             if (wait_for_loc == 1)
                             {
-                                if (global_infor_type == 5)
+                                if (time_line - time_vision >= 9.0f)
                                 {
-                                    wait_for_loc = 0;
+                                    if_longtime = 1;
+                                }
+                                else
+                                {
+                                    if (global_infor_type == 5)
+                                    {
+                                        wait_for_loc = 0;
+                                    }
+                                    else
+                                    {
+                                        return;
+                                    }
+                                }
+                            }
+                            if (!if_longtime)
+                            {
+                                if (car_location[0] - vision_x >= -0.002f && car_location[0] - vision_x <= 0.002f &&
+                                    car_location[1] - vision_y >= -0.002f && car_location[1] - vision_y <= 0.002f)
+                                {
+                                    loac_test++;
+                                }
+                                else
+                                {
+                                    loac_test = 0;
+                                    vision_x = car_location[0];
+                                    vision_y = car_location[1];
+                                }
+                                if (loac_test >= 3)
+                                {
+                                    float dx = global_x - 3.2f * car_location[0];
+                                    float dy = global_y - (2.4f - 2.4f * car_location[1]);
+                                    // if (sqrtf(dx * dx + dy * dy) >= 0.25f)
+                                    // {
+                                    //     // 如果视觉坐标和里程计坐标差距超过 25cm 就不修正了
+                                    // }
+                                    // else
+                                    // {
+                                    global_x = 3.2f * (car_location[0] + vision_x) * 0.5f;
+                                    global_y = 2.4f - 2.4f * (car_location[1] + vision_y) * 0.5f;
+                                    // actual_yaw = car_angel - 90;
+                                    // }
                                 }
                                 else
                                 {
                                     return;
                                 }
                             }
-
-                            if (car_location[0] - vision_x >= -0.002f && car_location[0] - vision_x <= 0.002f &&
-                                car_location[1] - vision_y >= -0.002f && car_location[1] - vision_y <= 0.002f)
-                            {
-                                loac_test++;
-                            }
-                            else
-                            {
-                                loac_test = 0;
-                                vision_x = car_location[0];
-                                vision_y = car_location[1];
-                            }
-                            if (loac_test >= 3)
-                            {
-                                float dx = global_x - 3.2f * car_location[0];
-                                float dy = global_y - (2.4f - 2.4f * car_location[1]);
-                                // if (sqrtf(dx * dx + dy * dy) >= 0.25f)
-                                // {
-                                //     // 如果视觉坐标和里程计坐标差距超过 25cm 就不修正了
-                                // }
-                                // else
-                                // {
-                                global_x = 3.2f * (car_location[0] + vision_x) * 0.5f;
-                                global_y = 2.4f - 2.4f * (car_location[1] + vision_y) * 0.5f;
-                                // actual_yaw = car_angel - 90;
-                                // }
-                                loac_test = 0;
-                                vision_x = -1;
-                                vision_y = -1;
-                            }
-                            else
-                            {
-                                return;
-                            }
                         }
+                        loac_test = 0;
+                        vision_x = -1;
+                        vision_y = -1;
                         first_time_fix = 0;
                         stop_flag = 0;
                         return;
@@ -685,7 +717,9 @@ void navigation_update(void)
                 current_path++;
                 first_time_fix = 1;
                 got_angle = 0;
-                if (fabs(path_queue_x[current_path]- 3.1)<=0.001f && fabs(path_queue_y[current_path]+0.7)<=0.001f)
+                //周期矫正状态位归零
+                vision_correct_flag = 0;
+                if (fabs(path_queue_x[current_path] - 3.1) <= 0.001f && fabs(path_queue_y[current_path] + 0.7) <= 0.001f)
                 {
                     target_x = path_queue_x[current_path - 1];
                     target_y = path_queue_y[current_path - 1];
@@ -836,7 +870,7 @@ void car_move_point(float x, float y, float yaw, uint8_t m)
     current_path = 0;
     mode = m;
     path_queue_x[0] = x;
-    path_queue_y[1] = y;
+    path_queue_y[0] = y;
 
     target_x = x;
     target_y = y;

@@ -48,7 +48,8 @@
 #define ROUND_CLEAR_WAIT_MS 600U
 #define ROUND_MAP_SETTLE_MS 1200U
 #define START_ZONE_GRID_INDEX (0U + 6U * WIDTH)
-
+extern uint8_t vision_run_correct_switch;
+extern  
 void imu_calibrate(void);
 
 float time_line = 0.0f;
@@ -74,23 +75,23 @@ static void return_to_start_zone(void)
 {
     first_time_fix = 2;
     vision_angle_switch = 0;
-    car_move_point(global_x,1.2,angle,0);
+    vision_run_correct_switch = 0;
+    car_move_point(global_x, 1.2, angle, 0);
     while (navigate_flag)
     {
         wifi_task();
     }
 
     first_time_fix = 2;
-    vision_angle_switch = 0;
-    car_move_point(0.3,1.2,angle,0);
+    car_move_point(0.3, 1.2, angle, 0);
     while (navigate_flag)
     {
         wifi_task();
     }
-    
+    first_time_fix = 2;
 }
 
-//等 navigate_flag 变 0
+// 等 navigate_flag 变 0
 static void wait_navigation(void)
 {
     while (navigate_flag)
@@ -98,7 +99,7 @@ static void wait_navigation(void)
         wifi_task();
     }
 }
-//等 global_infor_type 变 5
+// 等 global_infor_type 变 5
 static void wait_global_info(void)
 {
     while (global_infor_type != 5)
@@ -106,11 +107,11 @@ static void wait_global_info(void)
         wifi_task();
     }
 }
-//要一次地图
+// 要一次地图
 static void request_round_map(void)
 {
     got_map_flag = 0;
-    wait_global_receiver_idle();
+    wait_global_info();
     want_global_infor(1);
     while (global_infor_type != 5)
     {
@@ -127,7 +128,7 @@ static void request_round_map(void)
         wifi_task();
     }
 }
-//矫正一次target_x target_y
+// 矫正一次target_x target_y
 static void sync_car_position(void)
 {
     wait_global_info();
@@ -150,8 +151,8 @@ static uint8_t run_round(uint8_t round_index)
     WaypointPath path = {0};
     reset_round_runtime();
 
-    sync_car_position();
-    //走出发车区
+    // sync_car_position();
+    // 走出发车区
     vision_angle_switch = 0;
     car_move_point(global_x + 0.25f, global_y, angle, 0);
     wait_navigation();
@@ -162,9 +163,9 @@ static uint8_t run_round(uint8_t round_index)
     {
         return 0;
     }
-    //system_delay_ms(ROUND_MAP_SETTLE_MS);   // 有什么用？
+    // system_delay_ms(ROUND_MAP_SETTLE_MS);   // 有什么用？
 
-    build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 1U : 1U);
+    build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 0U : 1U);
     if (!engine_ctx.map_valid)
     {
         return 0;
@@ -190,7 +191,7 @@ static uint8_t run_round(uint8_t round_index)
     return_to_start_zone();
     return 1;
 }
-//停车
+// 停车
 static void fault_stop(void)
 {
     car_stop();
@@ -228,7 +229,8 @@ int main(void)
     interrupt_global_enable(0);
 
     system_delay_ms(600);
-    //循环跑三关
+    sync_car_position();
+    // 循环跑三关
     for (uint8_t round_index = 0; round_index < ROUND_COUNT; round_index++)
     {
         if (!run_round(round_index))
@@ -291,46 +293,55 @@ void pit_ch1_handler(void)
 
 float time_for_vision_loac = 0;
 uint8_t vision_correct_flag = 0;
+uint8_t vision_run_correct_switch = 1;
 void pit_ch0_handler(void)
 {
     myuart_timeout_tick_10ms();
     // 不要删，统计时间点用
     time_line += 0.01f; // 每20ms增加0.02s
     move_control_task();
-    if (time_for_vision_loac > 0.5f)
+    if (vision_run_correct_switch)
     {
-        time_for_vision_loac = 0;
-        vision_correct_flag = 1;
-    }
+        if (time_for_vision_loac > 0.5f)
+        {
+            time_for_vision_loac = 0;
+            vision_correct_flag = 1;
+        }
 
-    if (vision_correct_flag == 0)
-    {
-        time_for_vision_loac += 0.01f;
-    }
-    else if (vision_correct_flag == 1)
-    {
-        if (walk_mode != 3)
+        if (vision_correct_flag == 0)
+        {
+            time_for_vision_loac += 0.01f;
+        }
+        else if (vision_correct_flag == 1)
+        {
+            if (walk_mode != 3)
+            {
+                if (global_infor_type == 5)
+                {
+                    want_global_infor(0);
+                    vision_correct_flag = 2;
+                }
+            }
+        }
+        if (vision_correct_flag == 2)
         {
             if (global_infor_type == 5)
             {
-                want_global_infor(0);
-                vision_correct_flag = 2;
+                if (walk_mode == 0)
+                {
+                    global_y = 2.4f - 2.4f * car_location[1];
+                }
+                else if (walk_mode == 1)
+                {
+                    global_x = 3.2f * car_location[0];
+                }
+                vision_correct_flag = 0;
             }
         }
     }
-    if (vision_correct_flag == 2)
+    else
     {
-        if (global_infor_type == 5)
-        {
-            if (walk_mode == 0)
-            {
-                global_y = 2.4f - 2.4f * car_location[1];
-            }
-            else if (walk_mode == 1)
-            {
-                global_x = 3.2f * car_location[0];
-            }
-            vision_correct_flag = 0;
-        }
+        vision_correct_flag = 0;
+        time_for_vision_loac = 0;
     }
 }

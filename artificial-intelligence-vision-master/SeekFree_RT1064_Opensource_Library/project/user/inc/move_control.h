@@ -102,5 +102,5 @@ extern uint8_t got_angle;
 
 extern uint8_t walk_mode;
 extern uint8_t first_time_fix;
-
+extern uint8_t wrong_time;
 #endif
