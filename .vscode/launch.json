@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Run rt1064 algorithm_main",
+            "name": "PC simulation: rt1064 algorithm_main",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}\\rt1064\\algorithm_main.exe",
@@ -12,7 +12,7 @@
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
-            "miDebuggerPath": "C:\\msys64\\ucrt64\\bin\\gdb.exe",
+            "miDebuggerPath": "${env:USERPROFILE}\\scoop\\shims\\gdb.exe",
             "preLaunchTask": "build rt1064 algorithm_main"
         }
     ]
