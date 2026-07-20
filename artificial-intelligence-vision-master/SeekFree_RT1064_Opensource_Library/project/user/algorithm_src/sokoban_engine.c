@@ -1891,6 +1891,10 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                 generate_path(ctx, &smooth_path);
                 current_state = &ctx->initial_state;
                 car_move(&smooth_path, angle, 0);
+                while (navigate_flag)
+                {
+                    wifi_task();
+                }
                 // ? Ӳ���ӿ�Ԥ������ smooth_path ���͸����
                 continue;
             }
