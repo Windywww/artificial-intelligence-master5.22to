@@ -102,7 +102,7 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path);
 void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls);
 
 // RT1064 运动控制使用的实时状态接口。
-uint8_t check_obstacle(SokobanContext *ctx, uint8_t grid_index);
+// uint8_t check_obstacle(SokobanContext *ctx, uint8_t grid_index);
 extern int angle;
 
 #endif // SOKOBAN_ENGINE_H

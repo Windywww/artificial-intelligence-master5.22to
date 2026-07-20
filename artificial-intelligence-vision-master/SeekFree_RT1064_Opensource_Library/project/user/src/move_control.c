@@ -57,7 +57,7 @@ uint8_t vision_angle_switch = 0;
 // SecondOrder_Set_Follow_t planner_x; // x 轴 s 曲线跟随规划器
 // SecondOrder_Set_Follow_t planner_y; // y 轴 s 曲线跟随规划器
 
-//小车在横着走竖着走还是斜着走,0是横，1是竖；2是斜3是不走
+// 小车在横着走竖着走还是斜着走,0是横，1是竖；2是斜3是不走,4等待炸弹延时
 uint8_t walk_mode = 3;
 void move_control_init()
 {
@@ -132,7 +132,7 @@ void wheel_speed_calculate(float vx, float vy, float vz)
         encoder_data[i] = encoder_get_count(encoder_ports[i]);
         encoder_clear_count(encoder_ports[i]);
 
-        float raw_v = (float)encoder_data[i] * SPEED_COEFFICIENT*0.925;
+        float raw_v = (float)encoder_data[i] * SPEED_COEFFICIENT * 0.925;
         if (i == RF || i == RB)
         {
             raw_v = -raw_v;
@@ -287,7 +287,7 @@ void navigation_update(void)
         global_target_vy = max_speed;
     if (global_target_vy < -max_speed)
         global_target_vy = -max_speed;
- // 加速度限制
+    // 加速度限制
     if (last_global_target_vx >= amax * 0.01f)
     {
         if (global_target_vx >= last_global_target_vx + amax * 0.01f)
@@ -370,229 +370,87 @@ void navigation_update(void)
             if (distance <= 0.015f && stop_flag == 0)
             {
                 stop_flag = 1; // 开启手刹
-                walk_mode = 3;
+                if (walk_mode != 4)
+                {
+                    walk_mode = 3;
+                }
             }
             if (stop_flag == 1)
             {
                 target_vx = 0.0f;
                 target_vy = 0.0f;
-
-                if (count_A <= 5)
+                if (walk_mode == 4)
                 {
-                    count_A++;
-                    return;
-                }
-
-                if (vision_angle_switch)
-                {
-                    if (got_angle == 0)
-                    {
-                        if (global_infor_type == 5)
-                        {
-                            want_global_infor(2);
-                            got_angle = 1;
-                        }
-                        else
-                        {
-                            return;
-                        }
-                    }
-                    if (got_angle == 1)
-                    {
-                        if (global_infor_type == 5)
-                        {
-                            got_angle = 0;
-                        }
-                        else
-                        {
-                            uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
-                            return;
-                        }
-                    }
-                    if (got_angle != 2)
-                    {
-                        if (car_angel - vision_angle <= 2 && car_angel - vision_angle >= -2)
-                        {
-                            angle_test++;
-                        }
-                        else
-                        {
-                            angle_test = 0;
-                            vision_angle = car_angel;
-                        }
-
-                        if (angle_test >= 3)
-                        {
-                            actual_yaw = car_angel - 90;
-                            while (actual_yaw > 180.0f)
-                                actual_yaw -= 360.0f;
-                            while (actual_yaw < -180.0f)
-                                actual_yaw += 360.0f;
-                            vision_angle = 999;
-                            angle_test = 0;
-                            got_angle = 2;
-                        }
-                        else
-                        {
-                            return;
-                        }
-                    }
-                }
-
-                if (first_time_fix)
-                {
-                    if (wait_for_loc == 0)
-                    {
-                        if (global_infor_type != 5)
-                        {
-                            return;
-                        }
-                        want_global_infor(0);
-                        wait_for_loc = 1;
-                    }
-                    if (wait_for_loc == 1)
-                    {
-                        if (global_infor_type == 5)
-                        {
-                            wait_for_loc = 0;
-                        }
-                        else
-                        {
-                            return;
-                        }
-                    }
-                    if (car_location[0] - vision_x >= -0.002f && car_location[0] - vision_x <= 0.002f &&
-                        car_location[1] - vision_y >= -0.002f &&
-                        car_location[1] - vision_y <= 0.002f)
-                    {
-                        loac_test++;
-                    }
-                    else
-                    {
-                        loac_test = 0;
-                        vision_x = car_location[0];
-                        vision_y = car_location[1];
-                    }
-
-                    if (loac_test >= 3)
-                    {
-                        float dx = global_x - 3.2f * car_location[0];
-                        float dy = global_y - (2.4f - 2.4f * car_location[1]);
-
-                        global_x = 3.2f * (car_location[0] + vision_x) * 0.5f;
-                        global_y = 2.4f - 2.4f * (car_location[1] + vision_y) * 0.5f;
-                        vision_x = -1;
-                        vision_y = -1;
-                        loac_test = 0;
-                    }
-                    else
-                    {
+                    if(count_A<=90){
+                        count_A++;
                         return;
                     }
-                    first_time_fix = 0;
-                    stop_flag = 0;
-                    return;
                 }
-
-                navigate_flag = 0;
-                walk_mode = 3;
-                stop_flag = 0;
-                count_A = 0;
-                got_angle = 0;
-                first_time_fix = 1;
-                last_global_target_vx = 0;
-                last_global_target_vy = 0;
-                for (int k = 0; k < 4; k++)
+                else
                 {
-                    pid[k].duty_out = 0.0f;   // 清空已经累加的 PWM 输出
-                    pid[k].error_last = 0.0f; // 清空历史误差
-                    pid[k].error_acc = 0.0f; // 清空更早的历史误差
-                }
-
-                return; // 开启手刹了 就不继续往下算了 等下个周期再算新的目标点
-            }
-            else
-            {
-                float yaw_rad = actual_yaw * 3.1415926f / 180.0f;
-                target_vx = global_target_vx * cosf(yaw_rad) + global_target_vy * sinf(yaw_rad);
-                target_vy = -global_target_vx * sinf(yaw_rad) + global_target_vy * cosf(yaw_rad);
-            }
-        }
-        else
-        {
-            if (distance <= 0.015f && stop_flag == 0)
-            {
-                walk_mode = 3;
-                stop_flag = 1; // 开启手刹
-            }
-            if (stop_flag == 1)
-            {
-                target_vx = 0.0f;
-                target_vy = 0.0f;
-
-                if (count <= 5)
-                {
-                    count++;
-                    return;
-                }
-                if (vision_angle_switch)
-                {
-                    if (got_angle == 0)
+                    if (count_A <= 5)
                     {
-                        if (global_infor_type == 5)
+                        count_A++;
+                        return;
+                    }
+
+                    if (vision_angle_switch)
+                    {
+                        if (got_angle == 0)
                         {
-                            want_global_infor(2);
-                            got_angle = 1;
+                            if (global_infor_type == 5)
+                            {
+                                want_global_infor(2);
+                                got_angle = 1;
+                            }
+                            else
+                            {
+                                return;
+                            }
                         }
-                        else
+                        if (got_angle == 1)
                         {
-                            return;
+                            if (global_infor_type == 5)
+                            {
+                                got_angle = 0;
+                            }
+                            else
+                            {
+                                uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
+                                return;
+                            }
+                        }
+                        if (got_angle != 2)
+                        {
+                            if (car_angel - vision_angle <= 2 && car_angel - vision_angle >= -2)
+                            {
+                                angle_test++;
+                            }
+                            else
+                            {
+                                angle_test = 0;
+                                vision_angle = car_angel;
+                            }
+
+                            if (angle_test >= 3)
+                            {
+                                actual_yaw = car_angel - 90;
+                                while (actual_yaw > 180.0f)
+                                    actual_yaw -= 360.0f;
+                                while (actual_yaw < -180.0f)
+                                    actual_yaw += 360.0f;
+                                vision_angle = 999;
+                                angle_test = 0;
+                                got_angle = 2;
+                            }
+                            else
+                            {
+                                return;
+                            }
                         }
                     }
-                    if (got_angle == 1)
-                    {
-                        if (global_infor_type == 5)
-                        {
-                            got_angle = 0;
-                        }
-                        else
-                        {
-                            uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
-                            return;
-                        }
-                    }
-                    if (got_angle != 2)
-                    {
-                        if (car_angel - vision_angle <= 2 && car_angel - vision_angle >= -2)
-                        {
-                            angle_test++;
-                        }
-                        else
-                        {
-                            angle_test = 0;
-                            vision_angle = car_angel;
-                        }
 
-                        if (angle_test >= 3)
-                        {
-                            actual_yaw = car_angel - 90;
-                            while (actual_yaw > 180.0f)
-                                actual_yaw -= 360.0f;
-                            while (actual_yaw < -180.0f)
-                                actual_yaw += 360.0f;
-                            vision_angle = 999;
-                            angle_test = 0;
-                            got_angle = 2;
-                        }
-                        else
-                        {
-                            return;
-                        }
-                    }
-                }
-                if (first_time_fix)
-                {
-                    if (vision_point_num == 0)
+                    if (first_time_fix)
                     {
                         if (wait_for_loc == 0)
                         {
@@ -614,9 +472,9 @@ void navigation_update(void)
                                 return;
                             }
                         }
-
                         if (car_location[0] - vision_x >= -0.002f && car_location[0] - vision_x <= 0.002f &&
-                            car_location[1] - vision_y >= -0.002f && car_location[1] - vision_y <= 0.002f)
+                            car_location[1] - vision_y >= -0.002f &&
+                            car_location[1] - vision_y <= 0.002f)
                         {
                             loac_test++;
                         }
@@ -626,62 +484,245 @@ void navigation_update(void)
                             vision_x = car_location[0];
                             vision_y = car_location[1];
                         }
+
                         if (loac_test >= 3)
                         {
                             float dx = global_x - 3.2f * car_location[0];
                             float dy = global_y - (2.4f - 2.4f * car_location[1]);
-                            // if (sqrtf(dx * dx + dy * dy) >= 0.25f)
-                            // {
-                            //     // 如果视觉坐标和里程计坐标差距超过 25cm 就不修正了
-                            // }
-                            // else
-                            // {
+
                             global_x = 3.2f * (car_location[0] + vision_x) * 0.5f;
                             global_y = 2.4f - 2.4f * (car_location[1] + vision_y) * 0.5f;
-                            // actual_yaw = car_angel - 90;
-                            // }
-                            loac_test = 0;
                             vision_x = -1;
                             vision_y = -1;
+                            loac_test = 0;
                         }
                         else
                         {
                             return;
                         }
+                        first_time_fix = 0;
+                        stop_flag = 0;
+                        return;
                     }
-                    first_time_fix = 0;
-                    stop_flag = 0;
-                    return;
+                }
+
+                navigate_flag = 0;
+                walk_mode = 3;
+                stop_flag = 0;
+                count_A = 0;
+                got_angle = 0;
+                first_time_fix = 1;
+                last_global_target_vx = 0;
+                last_global_target_vy = 0;
+                for (int k = 0; k < 4; k++)
+                {
+                    pid[k].duty_out = 0.0f;   // 清空已经累加的 PWM 输出
+                    pid[k].error_last = 0.0f; // 清空历史误差
+                    pid[k].error_acc = 0.0f;  // 清空更早的历史误差
+                }
+
+                return; // 开启手刹了 就不继续往下算了 等下个周期再算新的目标点
+            }
+            else
+            {
+                float yaw_rad = actual_yaw * 3.1415926f / 180.0f;
+                target_vx = global_target_vx * cosf(yaw_rad) + global_target_vy * sinf(yaw_rad);
+                target_vy = -global_target_vx * sinf(yaw_rad) + global_target_vy * cosf(yaw_rad);
+            }
+        }
+        else
+        {
+            if (distance <= 0.015f && stop_flag == 0)
+            {
+                if (walk_mode != 4)
+                {
+                    walk_mode = 3;
+                }
+                stop_flag = 1; // 开启手刹
+            }
+            if (stop_flag == 1)
+            {
+                target_vx = 0.0f;
+                target_vy = 0.0f;
+
+                if (walk_mode == 4)
+                {
+                    if (count <= 90)
+                    {
+                        count++;
+                        return;
+                    }
+                }
+                else
+                {
+                    if (count <= 5)
+                    {
+                        count++;
+                        return;
+                    }
+                    if (vision_angle_switch)
+                    {
+                        if (got_angle == 0)
+                        {
+                            if (global_infor_type == 5)
+                            {
+                                want_global_infor(2);
+                                got_angle = 1;
+                            }
+                            else
+                            {
+                                return;
+                            }
+                        }
+                        if (got_angle == 1)
+                        {
+                            if (global_infor_type == 5)
+                            {
+                                got_angle = 0;
+                            }
+                            else
+                            {
+                                uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
+                                return;
+                            }
+                        }
+                        if (got_angle != 2)
+                        {
+                            if (car_angel - vision_angle <= 2 && car_angel - vision_angle >= -2)
+                            {
+                                angle_test++;
+                            }
+                            else
+                            {
+                                angle_test = 0;
+                                vision_angle = car_angel;
+                            }
+
+                            if (angle_test >= 3)
+                            {
+                                actual_yaw = car_angel - 90;
+                                while (actual_yaw > 180.0f)
+                                    actual_yaw -= 360.0f;
+                                while (actual_yaw < -180.0f)
+                                    actual_yaw += 360.0f;
+                                vision_angle = 999;
+                                angle_test = 0;
+                                got_angle = 2;
+                            }
+                            else
+                            {
+                                return;
+                            }
+                        }
+                    }
+                    if (first_time_fix)
+                    {
+                        if (vision_point_num == 0)
+                        {
+                            if (wait_for_loc == 0)
+                            {
+                                if (global_infor_type != 5)
+                                {
+                                    return;
+                                }
+                                want_global_infor(0);
+                                wait_for_loc = 1;
+                            }
+                            if (wait_for_loc == 1)
+                            {
+                                if (global_infor_type == 5)
+                                {
+                                    wait_for_loc = 0;
+                                }
+                                else
+                                {
+                                    return;
+                                }
+                            }
+
+                            if (car_location[0] - vision_x >= -0.002f && car_location[0] - vision_x <= 0.002f &&
+                                car_location[1] - vision_y >= -0.002f && car_location[1] - vision_y <= 0.002f)
+                            {
+                                loac_test++;
+                            }
+                            else
+                            {
+                                loac_test = 0;
+                                vision_x = car_location[0];
+                                vision_y = car_location[1];
+                            }
+                            if (loac_test >= 3)
+                            {
+                                float dx = global_x - 3.2f * car_location[0];
+                                float dy = global_y - (2.4f - 2.4f * car_location[1]);
+                                // if (sqrtf(dx * dx + dy * dy) >= 0.25f)
+                                // {
+                                //     // 如果视觉坐标和里程计坐标差距超过 25cm 就不修正了
+                                // }
+                                // else
+                                // {
+                                global_x = 3.2f * (car_location[0] + vision_x) * 0.5f;
+                                global_y = 2.4f - 2.4f * (car_location[1] + vision_y) * 0.5f;
+                                // actual_yaw = car_angel - 90;
+                                // }
+                                loac_test = 0;
+                                vision_x = -1;
+                                vision_y = -1;
+                            }
+                            else
+                            {
+                                return;
+                            }
+                        }
+                        first_time_fix = 0;
+                        stop_flag = 0;
+                        return;
+                    }
                 }
 
                 count = 0;
                 stop_flag = 0;
                 current_path++;
                 first_time_fix = 1;
-                target_x = path_queue_x[current_path];
-                target_y = path_queue_y[current_path];
                 got_angle = 0;
-                // 下面是更改小车从一个节点走到另一个节点走的状态(横向，纵向，斜向)以及角度信息
-                float d_point_x = target_x - path_queue_x[current_path - 1];
-                float d_point_y = target_y - path_queue_y[current_path - 1];
-                if(d_point_x!=0&&d_point_y!=0){
-                    walk_mode = 2;
-                }else if (d_point_x!=0&&d_point_y == 0)
+                if (path_queue_x[current_path] == 15 && path_queue_y[current_path] == 15)
                 {
-                    walk_mode = 0;
-                }else if (d_point_x==0&&d_point_y!=0)
-                {
-                    walk_mode = 1;
-                }else{
-                    walk_mode = 3;
+                    target_x = path_queue_x[current_path - 1];
+                    target_y = path_queue_y[current_path - 1];
+                    walk_mode = 4;
                 }
-                
-                
-                speed_angle = atan2f(d_point_y, d_point_x); // 计算角度
+                else
+                {
+                    target_x = path_queue_x[current_path];
+                    target_y = path_queue_y[current_path];
+                    float d_point_x = target_x - path_queue_x[current_path - 1];
+                    float d_point_y = target_y - path_queue_y[current_path - 1];
+                    if (d_point_x != 0 && d_point_y != 0)
+                    {
+                        walk_mode = 2;
+                    }
+                    else if (d_point_x != 0 && d_point_y == 0)
+                    {
+                        walk_mode = 0;
+                    }
+                    else if (d_point_x == 0 && d_point_y != 0)
+                    {
+                        walk_mode = 1;
+                    }
+                    else
+                    {
+                        walk_mode = 3;
+                    }
+
+                    speed_angle = atan2f(d_point_y, d_point_x); // 计算角度
+
+                    // 下面是统计小车跑过的节点个数，从而判断是否应该让视觉矫正(n个节点矫正一次)
+                    vision_point_num = (vision_point_num + 1) % VISION_CORRECT_T;
+                }
                 last_global_target_vx = 0;
                 last_global_target_vy = 0;
-                // 下面是统计小车跑过的节点个数，从而判断是否应该让视觉矫正(n个节点矫正一次)
-                vision_point_num = (vision_point_num + 1) % VISION_CORRECT_T;
+                // 下面是更改小车从一个节点走到另一个节点走的状态(横向，纵向，斜向)以及角度信息
+
                 return; // 如果到达了当前目标点了 就不继续往下算了 等下个周期再算新的目标点
             }
             else
@@ -794,6 +835,8 @@ void car_move_point(float x, float y, float yaw, uint8_t m)
     path_length = 1;
     current_path = 0;
     mode = m;
+    path_queue_x[0] = x;
+    path_queue_y[1] = y;
 
     target_x = x;
     target_y = y;

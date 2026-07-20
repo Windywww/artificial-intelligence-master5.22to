@@ -221,7 +221,7 @@ void pit_ch0_handler(void)
 
     if (vision_correct_flag == 0)
     {
-        time_for_vision_loac += 0.02f;
+        time_for_vision_loac += 0.01f;
     }
     else if (vision_correct_flag == 1)
     {
