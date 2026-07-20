@@ -150,7 +150,7 @@ static uint8_t run_round(uint8_t round_index)
     WaypointPath path = {0};
     reset_round_runtime();
 
-    sync_car_position();
+    //sync_car_position();
     //走出发车区
     vision_angle_switch = 0;
     car_move_point(global_x + 0.25f, global_y, angle, 0);
