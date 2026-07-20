@@ -2090,7 +2090,7 @@ static bool get_micro_path(uint8_t start_pos, uint8_t target_pos, const uint8_t 
             }
         }
     }
-
+ 
     if (!found)
         return false;
 
@@ -2423,6 +2423,7 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
     memcpy(ctx->initial_walls, sim_walls, MAP_SIZE);
     get_final_path(ctx, out_full_path); // 对整条路径进行最终的优化处理
 }
+
 
 // /**
 //  * @brief 实时障碍物检查函数（供运控避�?/侧向补偿调用�?

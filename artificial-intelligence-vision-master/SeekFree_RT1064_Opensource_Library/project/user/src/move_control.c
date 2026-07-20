@@ -685,7 +685,7 @@ void navigation_update(void)
                 current_path++;
                 first_time_fix = 1;
                 got_angle = 0;
-                if (path_queue_x[current_path] == 15 && path_queue_y[current_path] == 15)
+                if (fabs(path_queue_x[current_path]- 3.1)<=0.001f && fabs(path_queue_y[current_path]+0.7)<=0.001f)
                 {
                     target_x = path_queue_x[current_path - 1];
                     target_y = path_queue_y[current_path - 1];

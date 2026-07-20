@@ -101,5 +101,6 @@ extern uint8_t wait_for_loc;
 extern uint8_t got_angle;
 
 extern uint8_t walk_mode;
+extern uint8_t first_time_fix;
 
 #endif
