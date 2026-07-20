@@ -105,7 +105,6 @@ float yaw_pid_calculate(void)
         vz = 0.6f;
     if (vz < -0.6f)
         vz = -0.6f;
-
     if (error1_yaw < 1.0f && error1_yaw > -1.0f)
     {
         vz = 0.0f;
@@ -862,7 +861,7 @@ void car_turn(float yaw)
     final_target_yaw = yaw;
     yaw_arrived_flag = 0;
 }
-
+ 
 void car_move_point(float x, float y, float yaw, uint8_t m)
 {
     path_length = 1;

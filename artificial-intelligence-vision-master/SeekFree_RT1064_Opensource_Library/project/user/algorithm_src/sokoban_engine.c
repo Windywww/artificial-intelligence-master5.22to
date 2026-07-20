@@ -1719,14 +1719,15 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             current_state->car_pos = final_pos;
 
             int8_t dd = entity_pos - final_pos;
-            if (dd == -16)
+            if (dd == -16){
                 dd = 0;
-            else if (dd == 1)
-                dd = 1;
-            else if (dd == 16)
-                dd = 2;
-            else if (dd == -1)
-                dd = 3;
+            }
+            else if (dd == 1){
+                dd = 1;}
+            else if (dd == 16){
+                dd = 2;}
+            else if (dd == -1){
+                dd = 3;}
 
             //--��Ϊ�˲��ߵ����һ���㣬���һ������������
             smooth_path.length--;
@@ -1748,32 +1749,34 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             // back_error��С������ʶ����ľ���
             float back_error = 0.025;
             // ȷ�����һ��λ������
-            if (dx > 0)
-                final_actual_x -= back_error;
-            else if (dx < 0)
-                final_actual_x += back_error;
-            else if (dy > 0)
-                final_actual_y += back_error;
-            else if (dy < 0)
-                final_actual_y -= back_error;
+            if (dx > 0){
+                final_actual_x -= back_error;}
+            else if (dx < 0){
+                final_actual_x += back_error;}
+            else if (dy > 0){
+                final_actual_y += back_error;}
+            else if (dy < 0){
+                final_actual_y -= back_error;}
 
             car_move_point(final_actual_x, final_actual_y, angle, 0);
-            while (navigate_flag)
+            while (navigate_flag){
                 wifi_task();
+            }
 
-            if (dx > 0)
-                angle = -90;
-            else if (dx < 0)
-                angle = 90;
-            else if (dy > 0)
-                angle = 180;
-            else if (dy < 0)
-                angle = 0;
+            if (dx > 0){
+                angle = -90;}
+            else if (dx < 0){
+                angle = 90;}
+            else if (dy > 0){
+                angle = 180;}
+            else if (dy < 0){
+                angle = 0;}
 
             system_delay_ms(200);
             car_turn(angle);
-            while (!yaw_arrived_flag)
+            while (!yaw_arrived_flag){
                 wifi_task();
+            }
 
             check_image(3 - is_box, 1);
             final_image_index = UNKNOWN;
@@ -1818,8 +1821,9 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                 }
 
                 car_move_point(final_actual_x, final_actual_y, angle, 0);
-                while (navigate_flag)
+                while (navigate_flag){
                     wifi_task();
+                }
             }
             // ��ʶ������Ȼδ֪�����������ʶ�𣨿����ǵ�һ�ζ�׼����׼ȷ��
 
@@ -1867,22 +1871,22 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                 unid_goals--;
             }
 
-            while (try_infer_identities(ctx, current_state))
-            {
+            // while (try_infer_identities(ctx, current_state))
+            // {
 
-                unid_boxes = 0;
-                unid_goals = 0;
-                for (int k = 0; k < current_state->box_count; k++)
-                {
-                    if (current_state->boxes[k].id == UNKNOWN)
-                        unid_boxes++;
-                }
-                for (int k = 0; k < ctx->goal_count; k++)
-                {
-                    if (ctx->goals[k].id == UNKNOWN)
-                        unid_goals++;
-                }
-            }
+            //     unid_boxes = 0;
+            //     unid_goals = 0;
+            //     for (int k = 0; k < current_state->box_count; k++)
+            //     {
+            //         if (current_state->boxes[k].id == UNKNOWN)
+            //             unid_boxes++;
+            //     }
+            //     for (int k = 0; k < ctx->goal_count; k++)
+            //     {
+            //         if (ctx->goals[k].id == UNKNOWN)
+            //             unid_goals++;
+            //     }
+            // }
         }
         else
         {

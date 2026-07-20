@@ -49,6 +49,25 @@ void imu_calibrate(void);
 float time_line = 0.0f;
 SokobanContext engine_ctx;
 
+// 阻塞式：回发车区
+void back_carhome()
+{
+    car_move_point(global_x, 1.2f, angle, 0);
+    first_time_fix = 0;
+    vision_angle_switch = 0;
+    while (navigate_flag)
+    {
+        wifi_task();
+    }
+    car_move_point(0.3f, 1.2f, angle, 0);
+    first_time_fix = 0;
+    vision_angle_switch = 0;
+    while (navigate_flag)
+    {
+        wifi_task();
+    }
+}
+
 int main(void)
 {
     clock_init(SYSTEM_CLOCK_600M); // 不可删除
@@ -119,7 +138,7 @@ int main(void)
     }
 
     system_delay_ms(1200);
-    build_map_info(&engine_ctx, final_map_data, 1);
+    build_map_info(&engine_ctx, final_map_data, 0);
     WaypointPath path = {0};
     path.length = 0;
 
@@ -132,11 +151,8 @@ int main(void)
     }
     else
     {
-        car_move_point(0.3f, 1.2f, angle, 1);
-        while (navigate_flag)
-        {
-            wifi_task();
-        }
+        //while阻塞式
+        back_carhome();
         while (1)
         {
         }
@@ -149,14 +165,8 @@ int main(void)
         wifi_task();
     }
 
-    WaypointPath path_move_in = {0};
-    path_move_in.length = 1;
-    path_move_in.points[0] = 0 + 6 * 16;
-    car_move(&path_move_in, angle, 0);
-    while (navigate_flag)
-    {
-        wifi_task();
-    }
+    //while阻塞式
+    back_carhome();
     system_delay_ms(1500);
     // NVIC_SystemReset(); // 复位
     return 0;
@@ -205,7 +215,7 @@ void pit_ch1_handler(void)
         actual_yaw += 360.0f;
 }
 
-uint8_t time_for_vision_loac = 0;
+float time_for_vision_loac = 0;
 uint8_t vision_correct_flag = 0;
 void pit_ch0_handler(void)
 {
@@ -213,7 +223,7 @@ void pit_ch0_handler(void)
     // 不要删，统计时间点用
     time_line += 0.01f; // 每20ms增加0.02s
     move_control_task();
-    if (time_for_vision_loac > 0.2f)
+    if (time_for_vision_loac > 0.4f)
     {
         time_for_vision_loac = 0;
         vision_correct_flag = 1;
@@ -221,7 +231,7 @@ void pit_ch0_handler(void)
 
     if (vision_correct_flag == 0)
     {
-        time_for_vision_loac += 0.02f;
+        time_for_vision_loac += 0.01f;
     }
     else if (vision_correct_flag == 1)
     {

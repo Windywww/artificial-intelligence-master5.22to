@@ -21,9 +21,11 @@
 #define NO_CLS 0
 #define WAYPOINT_CONTROL_PERIOD_MS 10U
 #define BOMB_EXPLOSION_DELAY_MS 800U
+// 拆分路径的极限值
 #define MAX_PATH_SEGMENT_CELLS 6U
 // 设为 1 时，将最终路径中超过 6 格的水平/竖直线段均匀拆分；设为 0 时不处理。
 #ifndef ENABLE_LONG_PATH_SEGMENT_SPLIT
+// 1启用拆分路径，0禁用
 #define ENABLE_LONG_PATH_SEGMENT_SPLIT 1
 #endif
 
@@ -68,7 +70,7 @@ typedef struct
     uint16_t wait_after_ms[MAP_SIZE];
     uint16_t length;
 } WaypointPath;
-
+ 
 typedef struct
 {
     // 地图边缘上实际存在的墙是不可引爆的边界墙；边缘空地仍可通行。
