@@ -49,8 +49,7 @@
 #define ROUND_MAP_SETTLE_MS 1200U
 #define START_ZONE_GRID_INDEX (0U + 6U * WIDTH)
 extern uint8_t vision_run_correct_switch;
-extern  
-void imu_calibrate(void);
+extern void imu_calibrate(void);
 
 float time_line = 0.0f;
 SokobanContext engine_ctx;
@@ -59,6 +58,7 @@ static void reset_round_runtime(void)
 {
     car_stop();
     got_map_flag = 0;
+    first_time_fix = 1;
     image_rx_state = 0;
     final_image_index = 0;
     count_A = 0;
@@ -128,7 +128,7 @@ static void request_round_map(void)
         wifi_task();
     }
 }
-// 矫正一次target_x target_y
+// 矫正一次target_x target_y,阻塞式
 static void sync_car_position(void)
 {
     wait_global_info();
@@ -140,7 +140,34 @@ static void sync_car_position(void)
     target_x = global_x;
     target_y = global_y;
 }
+// 矫正一次车角度，阻塞式,多次采样
+float main_vision_angle = 999;
+float same_time = 0;
 
+static void sync_car_angle(void)
+{
+    while (same_time <= 2)
+    {
+        wait_global_info();
+        want_global_infor(2);
+        wait_global_info();
+        if (fabs(car_angel - main_vision_angle) <= 0.1)
+        {
+            same_time++;
+        }
+        else
+        {
+            same_time = 0;
+        }
+    }
+    same_time = 0;
+    main_vision_angle = 999;
+    actual_yaw = car_angel-90;
+    while (actual_yaw > 180.0f)
+        actual_yaw -= 360.0f;
+    while (actual_yaw < -180.0f)
+        actual_yaw += 360.0f;
+}
 /**
  * @brief 跑一关
  * @param round_index 0第一关 1第二关 2第三关
@@ -151,12 +178,12 @@ static uint8_t run_round(uint8_t round_index)
     WaypointPath path = {0};
     reset_round_runtime();
 
-    // sync_car_position();
-    // 走出发车区
     vision_angle_switch = 0;
     car_move_point(global_x + 0.25f, global_y, angle, 0);
     wait_navigation();
 
+    // 测试时加上，防止地图不对
+    system_delay_ms(2000);
     // 获取地图
     request_round_map();
     if (!got_map_flag)
@@ -230,12 +257,13 @@ int main(void)
 
     system_delay_ms(600);
     sync_car_position();
+    vision_run_correct_switch = 1;
     // 循环跑三关
     for (uint8_t round_index = 0; round_index < ROUND_COUNT; round_index++)
     {
         if (!run_round(round_index))
         {
-            fault_stop();
+            return_to_start_zone();
         }
     }
     // 第三关完成后保持停车，同时继续处理通信。
@@ -294,46 +322,54 @@ void pit_ch1_handler(void)
 float time_for_vision_loac = 0;
 uint8_t vision_correct_flag = 0;
 uint8_t vision_run_correct_switch = 1;
-void pit_ch0_handler(void)
+float time_vision_main = 0;
+void run_vision_correct()
 {
-    myuart_timeout_tick_10ms();
-    // 不要删，统计时间点用
-    time_line += 0.01f; // 每20ms增加0.02s
-    move_control_task();
-    if (vision_run_correct_switch)
+    if (vision_run_correct_switch == 1 && walk_mode != 3 && walk_mode != 4)
     {
-        if (time_for_vision_loac > 0.5f)
-        {
-            time_for_vision_loac = 0;
-            vision_correct_flag = 1;
-        }
-
         if (vision_correct_flag == 0)
         {
             time_for_vision_loac += 0.01f;
+            if (time_for_vision_loac >= 0.5f)
+            {
+                vision_correct_flag = 1;
+                time_for_vision_loac = 0;
+            }
         }
         else if (vision_correct_flag == 1)
         {
-            if (walk_mode != 3)
+            if (global_infor_type != 5)
             {
-                if (global_infor_type == 5)
-                {
-                    want_global_infor(0);
-                    vision_correct_flag = 2;
-                }
+                return;
             }
+            want_global_infor(0);
+            time_vision_main = time_line;
+            vision_correct_flag = 2;
         }
-        if (vision_correct_flag == 2)
+        else if (vision_correct_flag == 2)
         {
-            if (global_infor_type == 5)
+            // 超时判定
+            if (time_line - time_vision_main >= 0.3f)
+            {
+                wrong_over_time++;
+                vision_correct_flag = 0;
+                global_infor_type = 5;
+                want_global_infor(5);
+                return;
+            }
+            if (global_infor_type != 5)
+            {
+                return;
+            }
+            else
             {
                 if (walk_mode == 0)
                 {
-                    global_y = 2.4f - 2.4f * car_location[1];
+                    global_y = 2.4 - 2.4 * car_location[1];
                 }
                 else if (walk_mode == 1)
                 {
-                    global_x = 3.2f * car_location[0];
+                    global_x = 3.2 * car_location[0];
                 }
                 vision_correct_flag = 0;
             }
@@ -341,7 +377,21 @@ void pit_ch0_handler(void)
     }
     else
     {
+        if (vision_correct_flag == 2)
+        {
+            global_infor_type = 5;
+            want_global_infor(5);
+        }
         vision_correct_flag = 0;
         time_for_vision_loac = 0;
     }
+}
+
+void pit_ch0_handler(void)
+{
+    myuart_timeout_tick_10ms();
+    // 不要删，统计时间点用
+    time_line += 0.01f; // 每10ms增加0.01s
+    move_control_task();
+    run_vision_correct();
 }

@@ -78,7 +78,7 @@ void wifi_task()
     seekfree_assistant_oscilloscope_data.data[1] = global_y;
     seekfree_assistant_oscilloscope_data.data[2] = target_x;
     seekfree_assistant_oscilloscope_data.data[3] = target_y;
-    seekfree_assistant_oscilloscope_data.data[4] = actual_yaw;
+    seekfree_assistant_oscilloscope_data.data[4] = wrong_over_time;
     seekfree_assistant_oscilloscope_data.data[5] = global_infor_type; // 0: 无效 1: 只要坐标 2: 只要角度 3: 坐标+角度 4: 坐标+角度+地图 5: 坐标+角度+地图+小车状态
     seekfree_assistant_oscilloscope_data.data[6] = time_line; // 最终目标航向角 单位度
     seekfree_assistant_oscilloscope_data.data[7] = final_image_index; 
