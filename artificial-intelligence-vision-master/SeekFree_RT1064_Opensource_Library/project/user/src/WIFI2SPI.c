@@ -11,7 +11,7 @@ extern float imu_vx;
 extern float imu_vy;
 // 示波器要使用时，发送以下结构体,默认最大容量为8个，如果需要更多数据，请查看seekfree_assistant_oscilloscope_struct的定义
 seekfree_assistant_oscilloscope_struct SendData;
-extern uint8_t time_for_vision_loac;
+extern float time_for_vision_loac;
 
 uint8_t lost = 0;
 /**

@@ -205,7 +205,7 @@ void pit_ch1_handler(void)
         actual_yaw += 360.0f;
 }
 
-uint8_t time_for_vision_loac = 0;
+float time_for_vision_loac = 0;
 uint8_t vision_correct_flag = 0;
 void pit_ch0_handler(void)
 {

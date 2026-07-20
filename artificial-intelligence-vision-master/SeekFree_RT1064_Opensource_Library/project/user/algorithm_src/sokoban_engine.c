@@ -2144,14 +2144,36 @@ static bool get_micro_path(uint8_t start_pos, uint8_t target_pos, const uint8_t 
 
 static bool pass(uint8_t startpoint, uint8_t endpoint, float error, const uint8_t *obstacles)
 {
+
     uint8_t start_x = startpoint % WIDTH;
     uint8_t start_y = startpoint / WIDTH;
     uint8_t end_x = endpoint % WIDTH;
     uint8_t end_y = endpoint / WIDTH;
-    if (start_x == end_x || start_y == end_y)
+    if (start_x == end_x)
     {
+        int y_step = (start_y < end_y) ? 1 : -1;
+        for (int y_run = start_y; y_run * y_step <= end_y * y_step; y_run += y_step)
+        {
+            if (obstacles[y_run * 16 + end_x])
+            {
+                return 0;
+            }
+        }
         return 1;
     }
+    if (start_y == end_y)
+    {
+        int x_step = (start_x < end_x) ? 1 : -1;
+        for (int x_run = start_x; x_run * x_step <= end_x * x_step; x_run += x_step)
+        {
+            if (obstacles[end_y * 16 + x_run])
+            {
+                return 0;
+            }
+        }
+        return 1;
+    }
+    return 0;
     float start_xf = start_x * 0.2f + 0.1f;
     float start_yf = start_y * 0.2f + 0.1f;
     float end_xf = end_x * 0.2f + 0.1f;
@@ -2203,9 +2225,8 @@ static bool pass(uint8_t startpoint, uint8_t endpoint, float error, const uint8_
             bool in_the_way = false;
             float x_runf = x_run * 0.2f + 0.1f;
             float y_runf = y_run * 0.2f + 0.1f;
-            static const float plus_xy[4][2] = {
-                {0.1f, -0.1f}, {0.1f, 0.1f}, {-0.1f, 0.1f}, {-0.1f, -0.1f}};
-            for (int i = 0; i < 4; i++)
+            float plus_xy[4][2] = {{0.1, -0.1}, {0.1, 0.1}, {-0.1, 0.1}, {-0.1, -0.1}};
+            for (uint8_t i = 0; i < 4; i++)
             {
                 float x = x_runf + plus_xy[i][0];
                 float y = y_runf + plus_xy[i][1];
@@ -2228,6 +2249,7 @@ static bool pass(uint8_t startpoint, uint8_t endpoint, float error, const uint8_
     }
     return 1;
 }
+
 // 节点平滑
 static void get_smooth_path(SokobanContext *ctx, const WaypointPath *grid_path, const uint8_t *obstacles, WaypointPath *out_smooth_path)
 {
