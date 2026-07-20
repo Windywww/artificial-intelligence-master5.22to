@@ -44,6 +44,11 @@
 #include <math.h>
 #include "sokoban_engine.h"
 
+#define ROUND_COUNT 3U
+#define ROUND_CLEAR_WAIT_MS 600U
+#define ROUND_MAP_SETTLE_MS 1200U
+#define START_ZONE_GRID_INDEX (0U + 6U * WIDTH)
+
 void imu_calibrate(void);
 
 float time_line = 0.0f;
@@ -84,6 +89,117 @@ static void return_to_start_zone(void)
     }
     
 }
+
+//等 navigate_flag 变 0
+static void wait_navigation(void)
+{
+    while (navigate_flag)
+    {
+        wifi_task();
+    }
+}
+//等 global_infor_type 变 5
+static void wait_global_info(void)
+{
+    while (global_infor_type != 5)
+    {
+        wifi_task();
+    }
+}
+//要一次地图
+static void request_round_map(void)
+{
+    got_map_flag = 0;
+    wait_global_receiver_idle();
+    want_global_infor(1);
+    while (global_infor_type != 5)
+    {
+        switch (global_infor_type)
+        {
+        case 1:
+            uart_write_byte(UART_GLOBAL_INDEX, 0xBB);
+            break;
+
+        case 2:
+            uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
+            break;
+        }
+        wifi_task();
+    }
+}
+//矫正一次target_x target_y
+static void sync_car_position(void)
+{
+    wait_global_info();
+    want_global_infor(0);
+    wait_global_info();
+
+    global_x = 3.2f * car_location[0];
+    global_y = 2.4f - 2.4f * car_location[1];
+    target_x = global_x;
+    target_y = global_y;
+}
+
+/**
+ * @brief 跑一关
+ * @param round_index 0第一关 1第二关 2第三关
+ * @return 1 成功 0失败
+ */
+static uint8_t run_round(uint8_t round_index)
+{
+    WaypointPath path = {0};
+    reset_round_runtime();
+
+    sync_car_position();
+    //走出发车区
+    vision_angle_switch = 0;
+    car_move_point(global_x + 0.25f, global_y, angle, 0);
+    wait_navigation();
+
+    // 获取地图
+    request_round_map();
+    if (!got_map_flag)
+    {
+        return 0;
+    }
+    //system_delay_ms(ROUND_MAP_SETTLE_MS);   // 有什么用？
+
+    build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 1U : 1U);
+    if (!engine_ctx.map_valid)
+    {
+        return 0;
+    }
+
+    lost = 1;
+    wifi_task();
+    if (!solve(&engine_ctx))
+    {
+        return 0;
+    }
+
+    generate_path(&engine_ctx, &path);
+    if (path.length == 0)
+    {
+        return 0;
+    }
+
+    lost = 66;
+    car_move(&path, angle, 0);
+    wait_navigation();
+
+    return_to_start_zone();
+    return 1;
+}
+//停车
+static void fault_stop(void)
+{
+    car_stop();
+    while (1)
+    {
+        wifi_task();
+    }
+}
+
 int main(void)
 {
     clock_init(SYSTEM_CLOCK_600M); // 不可删除
@@ -112,78 +228,20 @@ int main(void)
     interrupt_global_enable(0);
 
     system_delay_ms(600);
-    // 车坐标初始化
-    want_global_infor(0);
-    while (global_infor_type != 5)
+    //循环跑三关
+    for (uint8_t round_index = 0; round_index < ROUND_COUNT; round_index++)
     {
-        wifi_task();
-    }
-
-    global_x = 3.2f * car_location[0];
-    global_y = 2.4f - 2.4f * car_location[1];
-    target_x = global_x;
-    target_y = global_y;
-    // 走出发车区
-
-    vision_angle_switch = 0;
-    car_move_point(global_x + 0.25f, global_y, angle, 0);
-
-    while (navigate_flag)
-    {
-        wifi_task();
-    }
-    vision_angle_switch = 0;
-    while (global_infor_type != 5)
-    {
-    }
-
-    want_global_infor(1);
-    while (global_infor_type != 5)
-    {
-        switch (global_infor_type)
+        if (!run_round(round_index))
         {
-        case 1:
-            uart_write_byte(UART_GLOBAL_INDEX, 0xBB);
-            break;
-
-        case 2:
-            uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
-            break;
-        }
-        wifi_task();
-    }
-
-    system_delay_ms(1200);
-    build_map_info(&engine_ctx, final_map_data, 1);
-    WaypointPath path;
-    path.length = 0;
-
-    lost = 1;
-    wifi_task();
-
-    if (solve(&engine_ctx))
-    {
-        generate_path(&engine_ctx, &path);
-    }
-    else
-    {
-        //while阻塞式
-        return_to_start_zone();
-        while (1)
-        {
-            wifi_task();
+            fault_stop();
         }
     }
-
-    lost = 66;
-    car_move(&path, angle, 0);
-    while (navigate_flag)
+    // 第三关完成后保持停车，同时继续处理通信。
+    car_stop();
+    while (1)
     {
         wifi_task();
     }
-
-    return_to_start_zone();
-    system_delay_ms(1500);
     // NVIC_SystemReset(); // 复位
     return 0;
 }
