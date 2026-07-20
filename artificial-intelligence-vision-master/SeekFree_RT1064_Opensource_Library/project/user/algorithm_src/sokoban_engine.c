@@ -11,7 +11,7 @@
 #define SOKOBAN_EMBEDDED 1
 
 #define DEBUG_RECON 0
-#define MAX_ID 12
+#define MAX_ID 12   //id可能的取值个数
 #define MAX_ALLOWABLE_NODES 700000 // 限制搜索节点总数
 #ifndef SOKOBAN_CURRENT_WEIGHT
 #define SOKOBAN_CURRENT_WEIGHT 3.0f
@@ -1909,19 +1909,17 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
         }
         else
         {
-            printf("\n[路径受阻] 视点不可达，启动 IDA* 破障。\n");
             if (solve_recon_ida(ctx, current_state, observation_points, virtual_obs_points))
             {
-                printf("[破障成功] 生成 %d 步宏观破障动作。\n", ctx->solution_actions_len);
                 generate_path(ctx, &smooth_path);
                 current_state = &ctx->initial_state;
                 car_move(&smooth_path, angle, 0);
-                // ? Ӳ���ӿ�Ԥ������ smooth_path ���͸����
+                while (navigate_flag)
+                    wifi_task();
                 continue;
             }
             else
             {
-                printf("[彻底死局] IDA* 无法开辟通往视点的路径，终止侦察。\n");
                 return;
             }
         }
@@ -2357,7 +2355,6 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
 
         if (!get_micro_path(sim_state.car_pos, act.move_to, obstacles, &micro_path))
         {
-            printf("致命错误：底盘寻路断裂，无法抵达发力点 %d。\n", act.move_to);
             return;
         }
         get_smooth_path(ctx, &micro_path, obstacles, &smooth_path);
@@ -2367,6 +2364,10 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
             out_full_path->points[out_full_path->length - smooth_path.length + p] = smooth_path.points[p];
         }
         out_full_path->points[out_full_path->length++] = act.push_to;
+        if (act.is_explode)
+        {
+            out_full_path->points[out_full_path->length++] = 255;   //延时特殊标记符号
+        }
 
         // ===========================================
 

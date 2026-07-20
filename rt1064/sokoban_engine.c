@@ -2368,7 +2368,10 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
             out_full_path->points[out_full_path->length - smooth_path.length + p] = smooth_path.points[p];
         }
         out_full_path->points[out_full_path->length++] = act.push_to;
-
+        if (act.is_explode)
+        {
+            out_full_path->points[out_full_path->length++] = 255;   //延时特殊标记符号
+        }
         // ===========================================
 
         printf("步骤 %02d [行驶] ", i + 1);

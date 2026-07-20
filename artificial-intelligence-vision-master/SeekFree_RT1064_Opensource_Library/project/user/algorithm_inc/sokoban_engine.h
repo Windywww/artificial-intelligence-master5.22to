@@ -56,7 +56,7 @@ typedef struct
 
 typedef struct
 {
-    uint8_t points[MAP_SIZE];
+    uint8_t points[MAP_SIZE];   //255 = (15，15) 不会和常规点共线
     uint16_t length;
 } WaypointPath;
 
