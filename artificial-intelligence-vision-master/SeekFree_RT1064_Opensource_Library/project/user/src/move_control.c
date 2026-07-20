@@ -45,7 +45,9 @@ float kd_position_y = 0.0f;
 
 float path_queue_x[100];
 float path_queue_y[100];
+// 与路径点使用相同下标，表示“到达该点后”需要原地等待的 10 ms 控制周期数。
 uint16_t path_queue_wait_ticks[100];
+// 等待必须区分尚未启动、到点后的首周期和正式倒计时，保证实际等待不会被缩短。
 #define PATH_WAIT_NOT_STARTED 0U
 #define PATH_WAIT_FIRST_TICK 1U
 #define PATH_WAIT_COUNTING 2U
@@ -238,9 +240,9 @@ void odometry_update()
  *
  */
 
-// 记录视觉传来的信息连续相同的次数
+// 节点停车位置矫正已经累计的连续稳定帧数。
 uint8_t loac_test = 0;
-// 标志位，表示此刻串口是否正在使用
+// 1 表示节点位置矫正已经发出请求，正在等待全局 OpenART 返回。
 uint8_t wait_for_loc = 0;
 // 记录小车跑过的节点个数是否应该让视觉矫正
 uint8_t vision_point_num = 0;
@@ -256,14 +258,34 @@ volatile uint8_t count = 0;
 
 uint8_t got_angle = 0;
 uint8_t angle_test = 0;
-// 是为了小车到节点根据视觉传来的坐标再矫正一次
+// 1 表示当前节点尚未执行停车位置矫正；矫正后再次到点时直接完成或切换节点。
 uint8_t first_time_fix = 1;
 
-// 视觉传来的坐标,角度
+// 节点位置稳定样本的世界坐标均值，以及节点角度稳定判定的上一帧角度。
 float vision_x = -1;
 float vision_y = -1;
 float vision_angle = 999;
 
+#define NODE_VISION_STABLE_SAMPLE_COUNT 3U
+#define NODE_VISION_STABLE_TOLERANCE_M 0.01f
+#define NODE_VISION_MAX_TARGET_ERROR_M 0.12f
+#define NODE_VISION_MAX_REJECT_BATCHES 2U
+
+static uint8_t node_vision_reject_batches = 0;
+
+// 这些量仅供调试器观察，不在 PIT 中打印，避免阻塞 10 ms 控制中断。
+static volatile uint32_t node_vision_angle_accept_count = 0;
+static volatile uint32_t node_vision_position_accept_count = 0;
+static volatile uint32_t node_vision_position_reject_count = 0;
+static volatile uint32_t node_vision_position_skip_count = 0;
+static volatile float node_vision_last_target_error_m = 0.0f;
+
+/**
+ * @brief 将 WaypointPath 中的毫秒等待时间换算为 10 ms 控制周期数。
+ *
+ * 使用向上取整，避免等待时间不能整除控制周期时少等一个周期；中间结果使用
+ * 32 位计算并在返回前饱和到 uint16_t，防止加法或强制转换溢出。
+ */
 static uint16_t wait_ms_to_ticks(uint16_t wait_ms)
 {
     uint32_t ticks = ((uint32_t)wait_ms + WAYPOINT_CONTROL_PERIOD_MS - 1U) /
@@ -271,12 +293,25 @@ static uint16_t wait_ms_to_ticks(uint16_t wait_ms)
     return ticks > UINT16_MAX ? UINT16_MAX : (uint16_t)ticks;
 }
 
+/**
+ * @brief 第一次进入当前节点停车状态时装载该点的等待计数器。
+ *
+ * 普通节点的等待值为 0，不会进入倒计时；炸弹爆炸节点通常装载 80 个 tick。
+ */
 static void arm_path_wait(void)
 {
     path_wait_remaining_ticks = path_queue_wait_ticks[current_path];
     path_wait_armed = path_wait_remaining_ticks != 0 ? PATH_WAIT_FIRST_TICK : PATH_WAIT_NOT_STARTED;
 }
 
+/**
+ * @brief 在 PIT 中非阻塞地消费当前节点的等待时间。
+ * @return 1 表示本周期仍应停车并立即返回；0 表示可以继续节点视觉矫正或切点。
+ *
+ * FIRST_TICK 只把状态切到 COUNTING，不递减剩余 tick，使等待从到点后的下一控制
+ * 周期开始，确保实际等待不少于路径要求。等待期间同时推进原有到点稳定计数，
+ * 避免 800 ms 爆炸等待完成后再额外叠加固定的停车稳定延迟。
+ */
 static uint8_t consume_path_wait(uint8_t is_last_point)
 {
     if (path_wait_armed == PATH_WAIT_NOT_STARTED && path_queue_wait_ticks[current_path] != 0)
@@ -313,6 +348,170 @@ static uint8_t consume_path_wait(uint8_t is_last_point)
         count++;
     }
     path_wait_remaining_ticks--;
+    return 1;
+}
+
+static void reset_path_wait_state(void)
+{
+    // 切换节点、结束路径或接收新运动命令时统一清理，禁止等待事件泄漏到下一目标。
+    path_wait_remaining_ticks = 0;
+    path_wait_armed = PATH_WAIT_NOT_STARTED;
+}
+
+static void reset_node_position_samples(void)
+{
+    wait_for_loc = 0;
+    loac_test = 0;
+    vision_x = -1.0f;
+    vision_y = -1.0f;
+}
+
+static void reset_node_correction_for_new_target(void)
+{
+    // 分类阶段会连续调用 car_move_point()，每个新目标都必须从全新的视觉状态开始。
+    reset_node_position_samples();
+    node_vision_reject_batches = 0;
+    got_angle = 0;
+    angle_test = 0;
+    vision_angle = 999.0f;
+    first_time_fix = 1;
+}
+
+static float wrapped_angle_difference(float current, float previous)
+{
+    float difference = current - previous;
+    while (difference > 180.0f)
+        difference -= 360.0f;
+    while (difference < -180.0f)
+        difference += 360.0f;
+    return difference;
+}
+
+/**
+ * @brief 节点停车后的非阻塞角度矫正。
+ * @return 1 表示角度矫正关闭或已经完成；0 表示仍在等待/收集视觉角度。
+ *
+ * 状态 0 发出请求，状态 1 等待响应，状态 2 表示本节点已经矫正完成。首帧仅建立
+ * 基准，后续要求连续三帧相差不超过 2 度。角差折算到 [-180, 180]，因此
+ * 359 度与 1 度会被正确识别为接近，而不是相差 358 度。
+ */
+static uint8_t correct_node_angle_step(void)
+{
+    if (!vision_angle_switch || got_angle == 2)
+        return 1;
+
+    if (got_angle == 0)
+    {
+        if (global_infor_type != 5)
+            return 0;
+        want_global_infor(2);
+        got_angle = 1;
+        return 0;
+    }
+
+    if (global_infor_type != 5)
+    {
+        uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
+        return 0;
+    }
+    got_angle = 0;
+
+    if (vision_angle > 360.0f || vision_angle < -360.0f)
+    {
+        vision_angle = car_angel;
+        angle_test = 1;
+        return 0;
+    }
+
+    if (fabsf(wrapped_angle_difference(car_angel, vision_angle)) <= 2.0f)
+    {
+        angle_test++;
+    }
+    else
+    {
+        vision_angle = car_angel;
+        angle_test = 1;
+    }
+
+    if (angle_test < NODE_VISION_STABLE_SAMPLE_COUNT)
+        return 0;
+
+    actual_yaw = car_angel - 90.0f;
+    while (actual_yaw > 180.0f)
+        actual_yaw -= 360.0f;
+    while (actual_yaw < -180.0f)
+        actual_yaw += 360.0f;
+    vision_angle = 999.0f;
+    angle_test = 0;
+    got_angle = 2;
+    node_vision_angle_accept_count++;
+    return 1;
+}
+
+/**
+ * @brief 节点停车后的非阻塞位置矫正。
+ * @return 1 表示本节点已经应用或放弃视觉位置；0 表示仍在等待/收集位置帧。
+ *
+ * 每次响应都先换算为世界坐标。连续三帧相邻均值误差不超过 1 cm 后，才用均值
+ * 同时更新 global_x/global_y。均值距离当前目标点超过 12 cm 时视为错误识别：
+ * 第一批异常重新采样，连续两批异常则保留里程计并放行，避免永久停在节点。
+ */
+static uint8_t correct_node_position_step(void)
+{
+    if (!wait_for_loc)
+    {
+        if (global_infor_type != 5)
+            return 0;
+        want_global_infor(0);
+        wait_for_loc = 1;
+        return 0;
+    }
+
+    if (global_infor_type != 5)
+        return 0;
+    wait_for_loc = 0;
+
+    float sample_x = 3.2f * car_location[0];
+    float sample_y = 2.4f - 2.4f * car_location[1];
+    if (loac_test == 0 || fabsf(sample_x - vision_x) > NODE_VISION_STABLE_TOLERANCE_M ||
+        fabsf(sample_y - vision_y) > NODE_VISION_STABLE_TOLERANCE_M)
+    {
+        vision_x = sample_x;
+        vision_y = sample_y;
+        loac_test = 1;
+        return 0;
+    }
+
+    uint8_t next_sample_count = (uint8_t)(loac_test + 1U);
+    vision_x += (sample_x - vision_x) / (float)next_sample_count;
+    vision_y += (sample_y - vision_y) / (float)next_sample_count;
+    loac_test = next_sample_count;
+    if (loac_test < NODE_VISION_STABLE_SAMPLE_COUNT)
+        return 0;
+
+    float corrected_x = vision_x;
+    float corrected_y = vision_y;
+    float target_error_x = corrected_x - target_x;
+    float target_error_y = corrected_y - target_y;
+    float target_error = sqrtf(target_error_x * target_error_x + target_error_y * target_error_y);
+    node_vision_last_target_error_m = target_error;
+    reset_node_position_samples();
+
+    if (target_error > NODE_VISION_MAX_TARGET_ERROR_M)
+    {
+        node_vision_position_reject_count++;
+        node_vision_reject_batches++;
+        if (node_vision_reject_batches < NODE_VISION_MAX_REJECT_BATCHES)
+            return 0;
+        node_vision_reject_batches = 0;
+        node_vision_position_skip_count++;
+        return 1;
+    }
+
+    global_x = corrected_x;
+    global_y = corrected_y;
+    node_vision_reject_batches = 0;
+    node_vision_position_accept_count++;
     return 1;
 }
 
@@ -437,6 +636,7 @@ void navigation_update(void)
                 target_vx = 0.0f;
                 target_vy = 0.0f;
 
+                // 路径点等待优先于节点矫正；炸弹节点倒计时未完成时始终保持停车。
                 if (consume_path_wait(is_last_point))
                     return;
 
@@ -446,112 +646,13 @@ void navigation_update(void)
                     return;
                 }
 
-                if (vision_angle_switch)
-                {
-                    if (got_angle == 0)
-                    {
-                        if (global_infor_type == 5)
-                        {
-                            want_global_infor(2);
-                            got_angle = 1;
-                        }
-                        else
-                        {
-                            return;
-                        }
-                    }
-                    if (got_angle == 1)
-                    {
-                        if (global_infor_type == 5)
-                        {
-                            got_angle = 0;
-                        }
-                        else
-                        {
-                            uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
-                            return;
-                        }
-                    }
-                    if (got_angle != 2)
-                    {
-                        if (car_angel - vision_angle <= 2 && car_angel - vision_angle >= -2)
-                        {
-                            angle_test++;
-                        }
-                        else
-                        {
-                            angle_test = 0;
-                            vision_angle = car_angel;
-                        }
-
-                        if (angle_test >= 3)
-                        {
-                            actual_yaw = car_angel - 90;
-                            while (actual_yaw > 180.0f)
-                                actual_yaw -= 360.0f;
-                            while (actual_yaw < -180.0f)
-                                actual_yaw += 360.0f;
-                            vision_angle = 999;
-                            angle_test = 0;
-                            got_angle = 2;
-                        }
-                        else
-                        {
-                            return;
-                        }
-                    }
-                }
+                if (!correct_node_angle_step())
+                    return;
 
                 if (first_time_fix)
                 {
-                    if (wait_for_loc == 0)
-                    {
-                        if (global_infor_type != 5)
-                        {
-                            return;
-                        }
-                        want_global_infor(0);
-                        wait_for_loc = 1;
-                    }
-                    if (wait_for_loc == 1)
-                    {
-                        if (global_infor_type == 5)
-                        {
-                            wait_for_loc = 0;
-                        }
-                        else
-                        {
-                            return;
-                        }
-                    }
-                    if (car_location[0] - vision_x >= -0.002f && car_location[0] - vision_x <= 0.002f &&
-                        car_location[1] - vision_y >= -0.002f &&
-                        car_location[1] - vision_y <= 0.002f)
-                    {
-                        loac_test++;
-                    }
-                    else
-                    {
-                        loac_test = 0;
-                        vision_x = car_location[0];
-                        vision_y = car_location[1];
-                    }
-
-                    if (loac_test >= 3)
-                    {
-                        float dx = global_x - 3.2f * car_location[0];
-                        float dy = global_y - (2.4f - 2.4f * car_location[1]);
-
-                        global_x = 3.2f * (car_location[0] + vision_x) * 0.5f;
-                        global_y = 2.4f - 2.4f * (car_location[1] + vision_y) * 0.5f;
-                        vision_x = -1;
-                        vision_y = -1;
-                        loac_test = 0;
-                    }
-                    else
-                    {
+                    if (!correct_node_position_step())
                         return;
-                    }
                     first_time_fix = 0;
                     stop_flag = 0;
                     return;
@@ -560,11 +661,9 @@ void navigation_update(void)
                 navigate_flag = 0;
                 walk_mode = 3;
                 stop_flag = 0;
-                path_wait_remaining_ticks = 0;
-                path_wait_armed = 0;
+                reset_path_wait_state();
                 count_A = 0;
-                got_angle = 0;
-                first_time_fix = 1;
+                reset_node_correction_for_new_target();
                 last_global_target_vx = 0;
                 last_global_target_vy = 0;
                 for (int k = 0; k < 4; k++)
@@ -596,6 +695,7 @@ void navigation_update(void)
                 target_vx = 0.0f;
                 target_vy = 0.0f;
 
+                // 普通节点同样先消费路径等待，再进行节点角度和位置矫正。
                 if (consume_path_wait(is_last_point))
                     return;
 
@@ -604,119 +704,19 @@ void navigation_update(void)
                     count++;
                     return;
                 }
-                if (vision_angle_switch)
-                {
-                    if (got_angle == 0)
-                    {
-                        if (global_infor_type == 5)
-                        {
-                            want_global_infor(2);
-                            got_angle = 1;
-                        }
-                        else
-                        {
-                            return;
-                        }
-                    }
-                    if (got_angle == 1)
-                    {
-                        if (global_infor_type == 5)
-                        {
-                            got_angle = 0;
-                        }
-                        else
-                        {
-                            uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
-                            return;
-                        }
-                    }
-                    if (got_angle != 2)
-                    {
-                        if (car_angel - vision_angle <= 2 && car_angel - vision_angle >= -2)
-                        {
-                            angle_test++;
-                        }
-                        else
-                        {
-                            angle_test = 0;
-                            vision_angle = car_angel;
-                        }
+                if (!correct_node_angle_step())
+                    return;
 
-                        if (angle_test >= 3)
-                        {
-                            actual_yaw = car_angel - 90;
-                            while (actual_yaw > 180.0f)
-                                actual_yaw -= 360.0f;
-                            while (actual_yaw < -180.0f)
-                                actual_yaw += 360.0f;
-                            vision_angle = 999;
-                            angle_test = 0;
-                            got_angle = 2;
-                        }
-                        else
-                        {
-                            return;
-                        }
-                    }
-                }
                 if (first_time_fix)
                 {
                     if (vision_point_num == 0)
                     {
-                        if (wait_for_loc == 0)
-                        {
-                            if (global_infor_type != 5)
-                            {
-                                return;
-                            }
-                            want_global_infor(0);
-                            wait_for_loc = 1;
-                        }
-                        if (wait_for_loc == 1)
-                        {
-                            if (global_infor_type == 5)
-                            {
-                                wait_for_loc = 0;
-                            }
-                            else
-                            {
-                                return;
-                            }
-                        }
-
-                        if (car_location[0] - vision_x >= -0.002f && car_location[0] - vision_x <= 0.002f &&
-                            car_location[1] - vision_y >= -0.002f && car_location[1] - vision_y <= 0.002f)
-                        {
-                            loac_test++;
-                        }
-                        else
-                        {
-                            loac_test = 0;
-                            vision_x = car_location[0];
-                            vision_y = car_location[1];
-                        }
-                        if (loac_test >= 3)
-                        {
-                            float dx = global_x - 3.2f * car_location[0];
-                            float dy = global_y - (2.4f - 2.4f * car_location[1]);
-                            // if (sqrtf(dx * dx + dy * dy) >= 0.25f)
-                            // {
-                            //     // 如果视觉坐标和里程计坐标差距超过 25cm 就不修正了
-                            // }
-                            // else
-                            // {
-                            global_x = 3.2f * (car_location[0] + vision_x) * 0.5f;
-                            global_y = 2.4f - 2.4f * (car_location[1] + vision_y) * 0.5f;
-                            // actual_yaw = car_angel - 90;
-                            // }
-                            loac_test = 0;
-                            vision_x = -1;
-                            vision_y = -1;
-                        }
-                        else
-                        {
+                        if (!correct_node_position_step())
                             return;
-                        }
+                    }
+                    else
+                    {
+                        reset_node_position_samples();
                     }
                     first_time_fix = 0;
                     stop_flag = 0;
@@ -725,13 +725,11 @@ void navigation_update(void)
 
                 count = 0;
                 stop_flag = 0;
-                path_wait_remaining_ticks = 0;
-                path_wait_armed = 0;
+                reset_path_wait_state();
                 current_path++;
-                first_time_fix = 1;
+                reset_node_correction_for_new_target();
                 target_x = path_queue_x[current_path];
                 target_y = path_queue_y[current_path];
-                got_angle = 0;
                 // 下面是更改小车从一个节点走到另一个节点走的状态(横向，纵向，斜向)以及角度信息
                 float d_point_x = target_x - path_queue_x[current_path - 1];
                 float d_point_y = target_y - path_queue_y[current_path - 1];
@@ -834,13 +832,17 @@ void car_move(WaypointPath *path, float yaw, uint8_t m)
     {
         path_queue_x[i] = (path->points[i] % 16) * 0.2f + 0.1f;
         path_queue_y[i] = 2.4 - (path->points[i] / 16) * 0.2f - 0.1f;
+        // 等待元数据与 points[i] 同下标，在进入 10 ms 控制循环前统一换算为 tick。
         path_queue_wait_ticks[i] = wait_ms_to_ticks(path->wait_after_ms[i]);
     }
 
     path_length = path->length;
     current_path = 0;
-    path_wait_remaining_ticks = 0;
-    path_wait_armed = 0;
+    // 新路径不能继承上一次路径尚未完成的等待、视觉请求或稳定帧计数。
+    reset_path_wait_state();
+    reset_node_correction_for_new_target();
+    count = 0;
+    count_A = 0;
     mode = m;
 
     target_x = path_queue_x[0];
@@ -867,9 +869,12 @@ void car_move_point(float x, float y, float yaw, uint8_t m)
 {
     path_length = 1;
     current_path = 0;
+    // 单点移动没有 WaypointPath 事件，因此显式清零等待，避免复用旧路径的第 0 项。
     path_queue_wait_ticks[0] = 0;
-    path_wait_remaining_ticks = 0;
-    path_wait_armed = 0;
+    reset_path_wait_state();
+    reset_node_correction_for_new_target();
+    count = 0;
+    count_A = 0;
     mode = m;
 
     target_x = x;
@@ -894,6 +899,10 @@ void car_stop()
     target_vx = 0.0f;
     target_vy = 0.0f;
     navigate_flag = 0;
+    reset_path_wait_state();
+    reset_node_correction_for_new_target();
+    count = 0;
+    count_A = 0;
 
     // 同步一下虚拟规划器，防止切回导航时暴冲
     // planner_x.p = global_x;
