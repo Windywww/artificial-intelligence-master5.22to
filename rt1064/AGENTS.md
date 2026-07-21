@@ -1,5 +1,8 @@
-当前算法可通过调节以下参数平衡在不同复杂度的地图中解算的实时性与路径质量：
-ctx->current_weight
-ctx->min_weight
-MOVE_PENALTY
-IDA_THRESHOLD_STEP
+当前算法可通过以下参数平衡不同复杂度地图的解算速度与路径质量：
+
+- `ctx->current_weight`
+- `ctx->min_weight`
+- `MOVE_PENALTY`
+
+IDA* 的下一轮阈值必须使用本轮越界节点的最小 `f`，不要恢复固定阈值步长。
+墙类型保持 `0/1/2/3` 编码；普通墙、隔离墙、死锁墙的实际爆破附加代价为 `2/1/0`，启发式附加代价为 `20/0/0`。

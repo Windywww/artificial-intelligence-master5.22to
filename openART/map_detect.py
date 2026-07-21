@@ -644,7 +644,6 @@ def send_float_packet(deg):
     float_bytes = struct.pack('<f', deg)
     packet.extend(float_bytes)
     append_crc16(packet)
-    print(packet)
     uart.write(packet)
 
 def parse_uart_packet():
@@ -719,19 +718,23 @@ greend = (15, 100, -69, -36, 30, 69)
 greenl = (15, 100, -90, -44, 21, 87)
 
 # ================= 小车检测参数 =================
-# TODO(USER): 在屏幕中心、四角分别采集蓝绿 LAB。优先调整 a/b，L 建议保持较宽，
+# 在屏幕中心、四角分别采集蓝绿 LAB。优先调整 a/b，L 建议保持较宽，
 # 避免屏幕中心亮、四角暗导致同一颜色被截断。
 # blued/bluel/greend/greenl 用于严格双色检测，最终中心不再使用宽松阈值。
 CAR_DEBUG = False
-# TODO(USER): 测试阈值和几何参数时临时改为 True，稳定后务必关闭，避免串口打印拖慢帧率。
+# alpha 越小越稳但延迟越大。0.65最合适
+CAR_CENTER_FILTER_ALPHA = 0.65
+# 测试阈值和几何参数时临时改为 True，稳定后务必关闭，避免串口打印拖慢帧率。
 CAR_STRICT_PIXELS_THRESHOLD = 25
 CAR_STRICT_AREA_THRESHOLD = 30
-CAR_STRICT_MERGE_MARGIN = 3
+CAR_STRICT_MERGE_MARGIN = 4
+# 车速较高而经常全场补搜时增大 TRACK_ROI_SCALE；误跟踪时减小。
+CAR_TRACK_ROI_SCALE = 1.5
+
 
 # 严格双 blob 联合边框中心的权重，其余权重分配给双质心中点。
 # TODO(USER): 默认 0.5；边缘缺损明显时减小，两色面积变化明显时增大。
 STRICT_BBOX_CENTER_WEIGHT = 0.50
-
 # TODO(USER): 根据日志中的两个严格 blob 调整。中心距离通常约为半个小车边长。
 CAR_PAIR_AREA_RATIO_MIN = 0.35
 CAR_PAIR_AREA_RATIO_MAX = 2.80
@@ -740,17 +743,12 @@ CAR_PAIR_DIST_MAX = 0.85
 CAR_PAIR_DIST_EXPECTED = 0.48
 CAR_PAIR_SIZE_MAX = 1.45
 
-# TODO(USER): 车速较高而经常全场补搜时增大 TRACK_ROI_SCALE；误跟踪时减小。
-CAR_TRACK_ROI_SCALE = 1.25
 CAR_TRACK_SCORE_WEIGHT = 0.35
-
-# TODO(USER): alpha 越小越稳但延迟越大。屏幕链路已有延迟，建议在 0.30~0.55 间测试。
-CAR_CENTER_FILTER_ALPHA = 0.55
 # 角度使用单位圆 EMA；中心距仅 5~8 像素时，角度比中心坐标更容易抖动。
 # TODO(USER): 20 FPS 下建议在 0.35~0.60 间测试；转向跟随慢则增大，静止抖动大则减小。
 CAR_ANGLE_FILTER_ALPHA = 0.38
 # 质心方向始终可用；仅当半色块具有足够伸长度时才融合其长轴法线。
-CAR_ANGLE_DEBUG = True
+CAR_ANGLE_DEBUG = False
 CAR_USE_FLOAT_CENTROID = True
 # 只变换质心和长轴端点，在俯视方格坐标中计算角度，不对整幅图像做 warp。
 CAR_ANGLE_USE_HOMOGRAPHY = True
@@ -871,7 +869,7 @@ def generate_mappoints(empty):
 
 generate_mappoints(True)
 while True:
-    flag = 0
+    flag = 0xFE
     if uart.any():
         alls = uart.read(uart.any())
         flag = alls[-1]

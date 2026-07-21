@@ -6,22 +6,26 @@
 
 #define DEBUG_RECON 0
 #define MAX_ID 12
+#ifndef MAX_ALLOWABLE_NODES
 #define MAX_ALLOWABLE_NODES 700000 // 限制搜索节点总数
+#endif
 #ifndef SOKOBAN_CURRENT_WEIGHT
 #define SOKOBAN_CURRENT_WEIGHT 3.0f
 #endif
 #ifndef SOKOBAN_MIN_WEIGHT
-#define SOKOBAN_MIN_WEIGHT 1.5f
-#endif
-#ifndef IDA_THRESHOLD_STEP
-#define IDA_THRESHOLD_STEP 16.0f
+#define SOKOBAN_MIN_WEIGHT 3.0f
 #endif
 #ifndef MOVE_PENALTY
 #define MOVE_PENALTY 10
 #endif
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define UNKNOWN 11
 #define ERROR 0.05f
+// 节点上限必须作为独立状态逐层传播，不能与无解或下一阈值混淆。
+#define RES_NODE_LIMIT -2.0f
+// 保持置换表总容量不变，每个集合容纳四个相同低位索引的状态。
+#define HASH_WAYS 4
+#define HASH_SET_COUNT (HASH_TABLE_SIZE / HASH_WAYS)
+#define HASH_SET_MASK (HASH_SET_COUNT - 1)
 
 typedef struct
 {
@@ -53,7 +57,8 @@ static ChildNode all_children_pool[MAX_STEPS][MAX_BRANCHES];
 // 声明================
 static void get_smooth_path(SokobanContext *ctx, const WaypointPath *grid_path, const uint8_t *obstacles, WaypointPath *out_smooth_path);
 static uint8_t is_deadlock(SokobanContext *ctx, uint8_t idx, State *state, bool is_bomb, const uint8_t *walls);
-static void get_maze_distances(SokobanContext *ctx, const uint8_t *current_walls);
+// 按当前墙布局和剩余炸弹数，构建各目标点的反向推动距离表。
+static void get_maze_distances(SokobanContext *ctx, const uint8_t *current_walls, uint8_t bomb_count);
 //==================
 
 static inline int neighbor_index(int idx, int direction)
@@ -148,6 +153,7 @@ static void init_zobrist()
         zobrist_goal_mask[i] = xorshift64(&seed);
 }
 
+// 对小车、箱子、炸弹、墙和未完成目标生成完整 Zobrist 状态签名。
 static uint64_t compute_initial_base_hash(const State *state, const uint8_t *walls)
 {
     uint64_t h = 0;
@@ -165,32 +171,62 @@ static uint64_t compute_initial_base_hash(const State *state, const uint8_t *wal
     return h;
 }
 
+// 查询四路组相联置换表；已存在不劣状态时返回 true，否则写入当前 g。
 static bool hash_table_insert_or_check(const State *state, int g_score, int tolerance)
 {
     uint64_t sig = state->base_hash;
-    uint32_t idx = sig & HASH_MASK;
-    // 直接对位映射 (Direct Mapped)
-    if (transposition_versions[idx] == current_hash_version &&
-        transposition_signatures[idx] == sig)
+    uint32_t set_start = (uint32_t)(sig & HASH_SET_MASK) * HASH_WAYS;
+    uint32_t replacement = set_start;
+    uint16_t worst_g = 0;
+    // 优先使用空路；集合已满时替换 g 值最大的条目。
+    for (uint32_t way = 0; way < HASH_WAYS; way++)
     {
-        if (transposition_g_scores[idx] <= g_score + tolerance)
+        uint32_t idx = set_start + way;
+        if (transposition_versions[idx] != current_hash_version)
         {
-            return true;
+            replacement = idx;
+            worst_g = UINT16_MAX;
+            break;
         }
-        else
+
+        if (transposition_signatures[idx] == sig)
         {
+            if (transposition_g_scores[idx] <= g_score + tolerance)
+                return true;
+
             transposition_g_scores[idx] = (uint16_t)g_score;
             return false;
         }
-    }
-    else
-    {
 
-        transposition_versions[idx] = current_hash_version;
-        transposition_signatures[idx] = sig;
-        transposition_g_scores[idx] = (uint16_t)g_score;
-        return false;
+        if (transposition_g_scores[idx] >= worst_g)
+        {
+            worst_g = transposition_g_scores[idx];
+            replacement = idx;
+        }
     }
+
+    transposition_versions[replacement] = current_hash_version;
+    transposition_signatures[replacement] = sig;
+    transposition_g_scores[replacement] = (uint16_t)g_score;
+    return false;
+}
+
+// 引爆动作保留基础推动代价，此处只返回墙类型对应的额外代价。
+static inline uint16_t wall_action_penalty(uint8_t wall_type)
+{
+    if (wall_type == WALL_NORMAL)
+        return BOMB_PENALTY;
+    if (wall_type == WALL_SEPARATOR)
+        return BOMB_PENALTY / 2;
+    return 0;
+}
+
+// 距离启发式中的普通墙、隔离墙、死锁墙代价依次为 20、0、0。
+static inline uint16_t wall_heuristic_penalty(uint8_t wall_type)
+{
+    if (wall_type == WALL_NORMAL)
+        return VIRTUAL_WALL_COST;
+    return 0;
 }
 
 static void engine_init(SokobanContext *ctx, const uint8_t *raw_map)
@@ -226,7 +262,7 @@ static void engine_init(SokobanContext *ctx, const uint8_t *raw_map)
             uint8_t val = raw_map[idx];
             if (val == 1)
             {
-                ctx->initial_walls[idx] = 1;
+                ctx->initial_walls[idx] = WALL_NORMAL;
                 if (x == 0 || x == WIDTH - 1 || y == 0 || y == HEIGHT - 1)
                 {
                     ctx->boundary_walls[idx] = 1;
@@ -328,7 +364,7 @@ static void engine_init(SokobanContext *ctx, const uint8_t *raw_map)
 
         for (int i = 0; i < MAP_SIZE; i++)
         {
-            if (ctx->initial_walls[i] == 1 && !ctx->boundary_walls[i])
+            if (ctx->initial_walls[i] == WALL_NORMAL && !ctx->boundary_walls[i])
             {
                 uint8_t flag = 0;
                 int wall_x = i % WIDTH;
@@ -354,7 +390,7 @@ static void engine_init(SokobanContext *ctx, const uint8_t *raw_map)
                                 }
                                 else if (flag != r)
                                 {
-                                    ctx->initial_walls[i] = 2;
+                                    ctx->initial_walls[i] = WALL_SEPARATOR;
                                     done = true;
                                     break;
                                 }
@@ -374,15 +410,15 @@ static void engine_init(SokobanContext *ctx, const uint8_t *raw_map)
                 {
                     uint8_t n_idx = ctx->explosion_areas[box_idx][j];
 
-                    if (ctx->initial_walls[n_idx] == 1 && !ctx->boundary_walls[n_idx])
+                    if (ctx->initial_walls[n_idx] != WALL_NONE && !ctx->boundary_walls[n_idx])
                     {
-                        ctx->initial_walls[n_idx] = 2;
+                        ctx->initial_walls[n_idx] = WALL_DEADLOCK;
                     }
                 }
             }
         }
     }
-    get_maze_distances(ctx, ctx->initial_walls);
+    get_maze_distances(ctx, ctx->initial_walls, init_state->bomb_count);
 }
 
 // ==========================================
@@ -434,16 +470,15 @@ static HeapNode heap_pop(MinHeap *h)
     return ret;
 }
 
-static void get_maze_distances(SokobanContext *ctx, const uint8_t *current_walls)
+// 使用反向 Dijkstra 计算“箱子从每格推到各目标”的下界距离。
+// 缓存键包含墙布局和剩余炸弹数；无炸弹时不可穿墙，有炸弹时按墙类型计启发式代价。
+static void get_maze_distances(SokobanContext *ctx, const uint8_t *current_walls, uint8_t bomb_count)
 {
-    // ---------------------------------------------------------
-
-    if (ctx->cache_valid && memcmp(ctx->cached_walls, current_walls, MAP_SIZE) == 0)
+    if (ctx->cache_valid && ctx->cached_bomb_count == bomb_count &&
+        memcmp(ctx->cached_walls, current_walls, MAP_SIZE) == 0)
     {
         return;
     }
-    // ---------------------------------------------------------
-
     for (int g = 0; g < ctx->goal_count; g++)
     {
         for (int i = 0; i < MAP_SIZE; i++)
@@ -451,11 +486,9 @@ static void get_maze_distances(SokobanContext *ctx, const uint8_t *current_walls
             ctx->cached_dist_table[g][i] = INF_DIST;
         }
     }
-    bool has_bombs = (ctx->initial_state.bomb_count > 0);
+    bool has_bombs = (bomb_count > 0);
     int dx_arr[4] = {0, 0, -1, 1};
     int dy_arr[4] = {-1, 1, 0, 0};
-    // --------------------------------------------------------
-
     for (int g = 0; g < ctx->goal_count; g++)
     {
         uint8_t goal_idx = ctx->goals[g].pos;
@@ -498,10 +531,10 @@ static void get_maze_distances(SokobanContext *ctx, const uint8_t *current_walls
                     if (!has_bombs)
                         continue;
 
-                    if (is_p_wall && current_walls[p_idx] != 2)
-                        step_cost += VIRTUAL_WALL_COST;
-                    if (is_pp_wall && current_walls[pp_idx] != 2)
-                        step_cost += VIRTUAL_WALL_COST;
+                    if (is_p_wall)
+                        step_cost += wall_heuristic_penalty(current_walls[p_idx]);
+                    if (is_pp_wall)
+                        step_cost += wall_heuristic_penalty(current_walls[pp_idx]);
                 }
                 uint16_t new_dist = dist + step_cost;
                 if (new_dist < ctx->cached_dist_table[g][p_idx])
@@ -513,6 +546,7 @@ static void get_maze_distances(SokobanContext *ctx, const uint8_t *current_walls
         }
     }
     memcpy(ctx->cached_walls, current_walls, MAP_SIZE);
+    ctx->cached_bomb_count = bomb_count;
     ctx->cache_valid = true;
 }
 
@@ -621,13 +655,14 @@ static void solve_assignment_km(int cost_matrix[MAX_BOXES][MAX_GOALS], int num_i
     }
 }
 
+// 用 KM 最小权匹配汇总所有箱子到兼容目标的距离下界。
 static int calc_heuristic(SokobanContext *ctx, State *state, const uint8_t *walls)
 {
     // 已经胜利，代价为 0
     if (state->box_count == 0)
         return 0;
 
-    get_maze_distances(ctx, walls);
+    get_maze_distances(ctx, walls, state->bomb_count);
 
     // 2. 构建代价矩阵 (Cost Matrix)
     int cost_matrix[MAX_BOXES][MAX_GOALS];
@@ -788,8 +823,12 @@ static inline void sort_children(const ChildNode *children, uint8_t count, uint8
     }
 }
 
+// 在单个加权 IDA* 阈值内深搜，并返回成功、节点上限或下一最小 f。
 static SearchRes dfs_ida(SokobanContext *ctx, State *current_state, const uint8_t *current_walls, uint16_t current_g, int current_h, float threshold, MacroAction *acts, uint8_t act_len)
 {
+    // 在计入当前节点前检查累计预算，保证计数永不越过上限。
+    if (ctx->total_explored_nodes >= MAX_ALLOWABLE_NODES)
+        return (SearchRes){RES_NODE_LIMIT, 0, 0};
     ctx->total_explored_nodes++;
 
     if (act_len >= MAX_STEPS)
@@ -825,7 +864,7 @@ static SearchRes dfs_ida(SokobanContext *ctx, State *current_state, const uint8_
     ChildNode *children = all_children_pool[act_len];
     uint8_t child_count = 0;
 
-    get_maze_distances(ctx, current_walls);
+    get_maze_distances(ctx, current_walls, current_state->bomb_count);
 
     uint8_t obstacles[MAP_SIZE];
     memcpy(obstacles, current_walls, MAP_SIZE);
@@ -926,10 +965,8 @@ static SearchRes dfs_ida(SokobanContext *ctx, State *current_state, const uint8_
 
             int step_cost = car_dist + 1;
 
-            if (exploded && current_walls[next_item_idx] != 2)
-            {
-                step_cost += BOMB_PENALTY;
-            }
+            if (exploded)
+                step_cost += wall_action_penalty(current_walls[next_item_idx]);
             int next_g = current_g + step_cost;
 
             // 创建新state
@@ -1086,7 +1123,7 @@ static SearchRes dfs_ida(SokobanContext *ctx, State *current_state, const uint8_
         }
         SearchRes res = dfs_ida(ctx, &sorted_child->next_state, walls_to_pass, sorted_child->next_g, sorted_child->next_h, threshold, acts, act_len + 1);
 
-        if (res.f == RES_SUCCESS)
+        if (res.f == RES_SUCCESS || res.f == RES_NODE_LIMIT)
             return res;
         if (res.f < min_node_data.f)
         {
@@ -1245,6 +1282,7 @@ static bool get_nearest_path(uint8_t start_pos, const bool *obs_points, const ui
     return true;
 }
 
+// 估计小车到最近可用识别视点的破障/绕行代价。
 static int calc_recon_heuristic(SokobanContext *ctx, State *state, const bool *obs_points, const uint8_t *walls)
 {
     MinHeap pq;
@@ -1287,10 +1325,7 @@ static int calc_recon_heuristic(SokobanContext *ctx, State *state, const bool *o
             {
                 if (state->bomb_count == 0)
                     continue;
-                if (walls[n_idx] != 2)
-                {
-                    step_cost = BOMB_PENALTY;
-                }
+                step_cost += wall_action_penalty(walls[n_idx]);
             }
             else if (movable[n_idx] == 1)
                 step_cost = MOVE_PENALTY; // 移动物体代价
@@ -1305,9 +1340,13 @@ static int calc_recon_heuristic(SokobanContext *ctx, State *state, const bool *o
 }
 // ida*ʶͼѰ·
 
+// 为识别阶段搜索一条可到达视点的破障动作序列。
 static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const uint8_t *current_walls, uint16_t current_g, int current_h,
                                float threshold, MacroAction *acts, uint8_t act_len, const bool *obs_points, const bool *virtual_obs_points)
 {
+    // 识别搜索与正式求解共用同一累计节点预算语义。
+    if (ctx->total_explored_nodes >= MAX_ALLOWABLE_NODES)
+        return (SearchRes){RES_NODE_LIMIT, 0, 0};
     ctx->total_explored_nodes++;
     if (act_len >= MAX_STEPS)
         return (SearchRes){RES_INF, 0, 0};
@@ -1318,7 +1357,7 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
     if (f_score > threshold)
         return (SearchRes){f_score, current_g, current_h};
 
-    get_maze_distances(ctx, current_walls);
+    get_maze_distances(ctx, current_walls, current_state->bomb_count);
     uint8_t obstacles[MAP_SIZE];
     memcpy(obstacles, current_walls, MAP_SIZE);
     for (int i = 0; i < current_state->box_count; i++)
@@ -1440,8 +1479,8 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
             }
 
             int step_cost = car_dist + 1;
-            if (exploded && current_walls[next_item_idx] != 2)
-                step_cost += BOMB_PENALTY;
+            if (exploded)
+                step_cost += wall_action_penalty(current_walls[next_item_idx]);
             int next_g = current_g + step_cost;
 
             State next_state = *current_state;
@@ -1591,7 +1630,7 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
             acts[act_len] = (MacroAction){push_stand_idx, item_idx, exploded, consumed};
             SearchRes res = dfs_ida_recon(ctx, &next_state, walls_for_eval, next_g, next_h, threshold, acts, act_len + 1, obs_points_to_pass, virtual_obs_points);
 
-            if (res.f == RES_SUCCESS)
+            if (res.f == RES_SUCCESS || res.f == RES_NODE_LIMIT)
                 return res;
             if (res.f < min_node_data.f)
                 min_node_data = res;
@@ -1600,6 +1639,7 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
     return min_node_data;
 }
 
+// 迭代提升识别搜索阈值，直到抵达视点、证明失败或达到节点上限。
 static bool solve_recon_ida(SokobanContext *ctx, State *start_state, const bool *obs_points, const bool *virtual_obs_points)
 {
     ctx->total_explored_nodes = 0;
@@ -1622,17 +1662,17 @@ static bool solve_recon_ida(SokobanContext *ctx, State *start_state, const bool 
         SearchRes res = dfs_ida_recon(ctx, start_state, ctx->initial_walls, 0, initial_h, threshold, current_act, 0, obs_points, virtual_obs_points);
         if (res.f == RES_SUCCESS)
             return true;
+        if (res.f == RES_NODE_LIMIT)
+        {
+            printf("Recognition IDA*: reached node limit (%lu).\n", (unsigned long)ctx->total_explored_nodes);
+            return false;
+        }
         if (res.f >= RES_INF)
         {
             printf("识别 IDA*：阈值达到 RES_INF，未找到解。\n");
             return false;
         }
         threshold = res.f;
-        if (ctx->total_explored_nodes > MAX_ALLOWABLE_NODES)
-        {
-            printf("识别 IDA*：超过节点上限，终止搜索。\n");
-            return false;
-        }
     }
 }
 
@@ -1989,6 +2029,11 @@ bool solve(SokobanContext *ctx)
             printf("找到解，共搜索 %lu 个节点；g= %d，h=%d。\n", (unsigned long)ctx->total_explored_nodes, res.g, res.h);
             return true;
         }
+        if (res.f == RES_NODE_LIMIT)
+        {
+            printf("Aborted: Reached node limit (%lu)\n", (unsigned long)ctx->total_explored_nodes);
+            return false;
+        }
         if (res.f >= RES_INF)
         {
             printf("Unsolvable puzzle!\n");
@@ -2015,13 +2060,7 @@ bool solve(SokobanContext *ctx)
             continue;
         }
 
-        threshold = MAX(min_f, threshold + IDA_THRESHOLD_STEP);
-        // 限制搜索节点总数
-        if (ctx->total_explored_nodes > MAX_ALLOWABLE_NODES)
-        {
-            printf("Aborted: Reached node limit (%lu)\n", (unsigned long)ctx->total_explored_nodes);
-            return false;
-        }
+        threshold = min_f;
     }
     return false;
 }

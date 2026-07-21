@@ -13,7 +13,12 @@
 #define MAX_BOMBS 4
 
 #define VIRTUAL_WALL_COST 20
-#define BOMB_PENALTY 10
+#define BOMB_PENALTY 2
+// initial_walls 的内部墙类型：普通墙、连通域隔离墙、死锁消除墙。
+#define WALL_NONE 0
+#define WALL_NORMAL 1
+#define WALL_SEPARATOR 2
+#define WALL_DEADLOCK 3
 #define RES_SUCCESS -1.0f
 #define RES_INF 9999.0f
 #define MAX_STEPS 100
@@ -78,6 +83,7 @@ typedef struct
     int8_t goal_mask_map[MAP_SIZE];
 
     bool cache_valid;
+    uint8_t cached_bomb_count; // 距离表同时依赖墙布局和当前剩余炸弹数。
     uint8_t cached_walls[MAP_SIZE];
     uint8_t initial_walls[MAP_SIZE];
     uint16_t cached_dist_table[MAX_GOALS][MAP_SIZE];
