@@ -1698,8 +1698,8 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
     }
     uint8_t unid_boxes = current_state->box_count;
     uint8_t unid_goals = ctx->goal_count;
-    uint8_t failed[MAP_SIZE];
-    memset(failed, 255, MAP_SIZE);
+    // Each bit records a failed target direction from this viewpoint.
+    uint8_t failed[MAP_SIZE] = {0};
 
     bool is_first = (cls == 2) ? true : false;
     while (unid_boxes > 0 || unid_goals > 0)
@@ -1740,7 +1740,8 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                     for (int d = 0; d < 4; d++)
                     {
                         int n = neighbor_index(g_pos, d);
-                        if (n >= 0 && !the_goals[n])
+                        if (n >= 0 && !the_goals[n] &&
+                            !(failed[n] & (1U << (d ^ 1))))
                         {
                             virtual_obs_points[n] = true; // 虚拟视点, 给IDA*用的
                             if (!obstacles[n])
@@ -1766,7 +1767,8 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                     for (int d = 0; d < 4; d++)
                     {
                         int n = neighbor_index(b_pos, d);
-                        if (n >= 0 && !the_goals[n])
+                        if (n >= 0 && !the_goals[n] &&
+                            !(failed[n] & (1U << (d ^ 1))))
                         {
                             virtual_obs_points[n] = true; // 虚拟视点, 给IDA*用的
                             if (!obstacles[n])
@@ -1804,16 +1806,14 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             }
             printf("\n");
 
-            // 上下左右
-            int8_t dd = entity_pos - final_pos;
-            if (dd == -16)
-                dd = 0;
-            else if (dd == 1)
-                dd = 1;
-            else if (dd == 16)
-                dd = 2;
-            else if (dd == -1)
-                dd = 3;
+            int8_t target_delta = entity_pos - final_pos;
+            uint8_t target_direction = 0;
+            if (target_delta == WIDTH)
+                target_direction = 1;
+            else if (target_delta == -1)
+                target_direction = 2;
+            else if (target_delta == 1)
+                target_direction = 3;
 
             for (int i = 0; i < smooth_path.length; i++)
             {
@@ -1860,7 +1860,7 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
 
             if (recognized_id == UNKNOWN)
             {
-                failed[final_pos] = entity_pos; // 后续不在final_pos识别entity_pos
+                failed[final_pos] |= (uint8_t)(1U << target_direction);
                 continue;
             }
             printf("[识别成功] 坐标 %d 的 ID 为 %d。\n", entity_pos, recognized_id);
