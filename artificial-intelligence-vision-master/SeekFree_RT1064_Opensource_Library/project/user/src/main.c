@@ -76,13 +76,6 @@ static void return_to_start_zone(void)
     first_time_fix = 2;
     vision_angle_switch = 0;
     vision_run_correct_switch = 0;
-    car_move_point(global_x, 1.2, angle, 0);
-    while (navigate_flag)
-    {
-        wifi_task();
-    }
-
-    first_time_fix = 2;
     car_move_point(0.3, 1.2, angle, 0);
     while (navigate_flag)
     {
@@ -190,7 +183,6 @@ static uint8_t run_round(uint8_t round_index)
     car_move_point(global_x + 0.25f, global_y, angle, 0);
     wait_navigation();
     // 测试时加上，防止地图不对
-    system_delay_ms(2000);
     sync_car_angle();
     
     // 获取地图
@@ -202,7 +194,7 @@ static uint8_t run_round(uint8_t round_index)
     // system_delay_ms(ROUND_MAP_SETTLE_MS);   // 有什么用？
 
     vision_run_correct_switch = 1;
-    build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 1U : 1U);
+    build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 0U : 1U);
     if (!engine_ctx.map_valid)
     {
         return 0;
@@ -269,52 +261,21 @@ int main(void)
 
 
     sync_car_position();
-    vision_run_correct_switch = 1;
-     
-    car_move_point(global_x,0.5,angle,0);
-    while (navigate_flag)
+    // 循环跑三关
+    for (uint8_t round_index = 0; round_index < ROUND_COUNT; round_index++)
+    {
+        if (!run_round(round_index))
+        {
+            return_to_start_zone();
+        }
+    }
+    // 第三关完成后保持停车，同时继续处理通信。
+    car_stop();
+    while (1)
     {
         wifi_task();
     }
-    car_move_point(0.5,0.5,angle,0);
-    while (navigate_flag)
-    {
-        wifi_task();
-    }
-    
-    car_move_point(0.5,1.9,angle,0);
-    while (navigate_flag)
-    {
-        wifi_task();
-    }
-    
-    car_move_point(2.7,1.9,angle,0);
-    while (navigate_flag)
-    {
-        wifi_task();
-    }
-    
-    car_move_point(0.5,0.5,angle,0);
-    while (navigate_flag)
-    {
-        wifi_task();
-    }
-    
-    // // 循环跑三关
-    // for (uint8_t round_index = 0; round_index < ROUND_COUNT; round_index++)
-    // {
-    //     if (!run_round(round_index))
-    //     {
-    //         return_to_start_zone();
-    //     }
-    // }
-    // // 第三关完成后保持停车，同时继续处理通信。
-    // car_stop();
-    // while (1)
-    // {
-    //     wifi_task();
-    // }
-    // // NVIC_SystemReset(); // 复位
+    // NVIC_SystemReset(); // 复位
     return 0;
 }
 

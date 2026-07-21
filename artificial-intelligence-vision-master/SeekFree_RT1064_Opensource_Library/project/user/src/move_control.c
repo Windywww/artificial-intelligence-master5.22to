@@ -171,7 +171,7 @@ float local_imu_vx = 0.0f;
 float local_imu_vy = 0.0f;
 
 float vx_encoder_index = 0.925f;
-float vy_encoder_index = 1.0f;
+float vy_encoder_index = 0.928f;
 /**
  * @brief 里程计更新
  *
@@ -247,7 +247,7 @@ uint8_t vision_point_num = 0;
 float speed_angle = 0.0f;           //(弧度制)
 float last_global_target_vx = 0.0f; // 全局坐标系下的目标速度
 float last_global_target_vy = 0.0f; // 全局坐标系下
-float amax = 2.0f;                  // 最大加速度 m/s^2
+float amax = 0.8f;                  // 最大加速度 m/s^2
 
 // 分别在最后一个点与其它节点起到延时作用
 uint8_t count_A = 0;
@@ -286,7 +286,7 @@ void navigation_update(void)
     // float global_target_vx = planner_x.v + kp_position_x * (planner_x.p - global_x);
     // float global_target_vy = planner_y.v + kp_position_y * (planner_y.p - global_y);
 
-    float max_speed = 1.0f;
+    float max_speed = 1.2f;
     if (global_target_vx > max_speed)
         global_target_vx = max_speed;
     if (global_target_vx < -max_speed)
@@ -502,7 +502,7 @@ void navigation_update(void)
         }
         else
         {
-            if (distance <= 0.015f && stop_flag == 0)
+            if (distance <= 0.02f && stop_flag == 0)
             {
                 if (walk_mode != 4)
                 {

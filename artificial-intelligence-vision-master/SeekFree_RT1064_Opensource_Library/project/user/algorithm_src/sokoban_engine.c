@@ -2261,7 +2261,6 @@ static bool pass(uint8_t startpoint, uint8_t endpoint, float error, const uint8_
     }
     return 1;
 }
-
 // 节点平滑
 static void get_smooth_path(SokobanContext *ctx, const WaypointPath *grid_path, const uint8_t *obstacles, WaypointPath *out_smooth_path)
 {
