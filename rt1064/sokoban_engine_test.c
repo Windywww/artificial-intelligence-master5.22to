@@ -112,7 +112,7 @@ static void test_wall_costs_and_bomb_sensitive_cache(void) {
     assert(sokoban_test_wall_action_penalty(WALL_SEPARATOR) == 1);
     assert(sokoban_test_wall_action_penalty(WALL_DEADLOCK) == 0);
     assert(sokoban_test_wall_heuristic_penalty(WALL_NORMAL) == 20);
-    assert(sokoban_test_wall_heuristic_penalty(WALL_SEPARATOR) == 10);
+    assert(sokoban_test_wall_heuristic_penalty(WALL_SEPARATOR) == 0);
     assert(sokoban_test_wall_heuristic_penalty(WALL_DEADLOCK) == 0);
 
     uint8_t map[MAP_SIZE] = {0};

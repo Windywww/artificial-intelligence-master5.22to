@@ -218,13 +218,11 @@ static inline uint16_t wall_action_penalty(uint8_t wall_type)
     return 0;
 }
 
-// 距离启发式中的普通墙、隔离墙、死锁墙代价依次为 20、10、0。
+// 距离启发式中的普通墙、隔离墙、死锁墙代价依次为 20、0、0。
 static inline uint16_t wall_heuristic_penalty(uint8_t wall_type)
 {
     if (wall_type == WALL_NORMAL)
         return VIRTUAL_WALL_COST;
-    if (wall_type == WALL_SEPARATOR)
-        return VIRTUAL_WALL_COST / 2;
     return 0;
 }
 
