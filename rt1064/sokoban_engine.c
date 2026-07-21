@@ -57,6 +57,7 @@ static ChildNode all_children_pool[MAX_STEPS][MAX_BRANCHES];
 // 声明================
 static void get_smooth_path(SokobanContext *ctx, const WaypointPath *grid_path, const uint8_t *obstacles, WaypointPath *out_smooth_path);
 static uint8_t is_deadlock(SokobanContext *ctx, uint8_t idx, State *state, bool is_bomb, const uint8_t *walls);
+// 按当前墙布局和剩余炸弹数，构建各目标点的反向推动距离表。
 static void get_maze_distances(SokobanContext *ctx, const uint8_t *current_walls, uint8_t bomb_count);
 //==================
 
@@ -152,6 +153,7 @@ static void init_zobrist()
         zobrist_goal_mask[i] = xorshift64(&seed);
 }
 
+// 对小车、箱子、炸弹、墙和未完成目标生成完整 Zobrist 状态签名。
 static uint64_t compute_initial_base_hash(const State *state, const uint8_t *walls)
 {
     uint64_t h = 0;
@@ -169,6 +171,7 @@ static uint64_t compute_initial_base_hash(const State *state, const uint8_t *wal
     return h;
 }
 
+// 查询四路组相联置换表；已存在不劣状态时返回 true，否则写入当前 g。
 static bool hash_table_insert_or_check(const State *state, int g_score, int tolerance)
 {
     uint64_t sig = state->base_hash;
@@ -467,17 +470,15 @@ static HeapNode heap_pop(MinHeap *h)
     return ret;
 }
 
+// 使用反向 Dijkstra 计算“箱子从每格推到各目标”的下界距离。
+// 缓存键包含墙布局和剩余炸弹数；无炸弹时不可穿墙，有炸弹时按墙类型计启发式代价。
 static void get_maze_distances(SokobanContext *ctx, const uint8_t *current_walls, uint8_t bomb_count)
 {
-    // ---------------------------------------------------------
-
     if (ctx->cache_valid && ctx->cached_bomb_count == bomb_count &&
         memcmp(ctx->cached_walls, current_walls, MAP_SIZE) == 0)
     {
         return;
     }
-    // ---------------------------------------------------------
-
     for (int g = 0; g < ctx->goal_count; g++)
     {
         for (int i = 0; i < MAP_SIZE; i++)
@@ -488,8 +489,6 @@ static void get_maze_distances(SokobanContext *ctx, const uint8_t *current_walls
     bool has_bombs = (bomb_count > 0);
     int dx_arr[4] = {0, 0, -1, 1};
     int dy_arr[4] = {-1, 1, 0, 0};
-    // --------------------------------------------------------
-
     for (int g = 0; g < ctx->goal_count; g++)
     {
         uint8_t goal_idx = ctx->goals[g].pos;
@@ -550,24 +549,6 @@ static void get_maze_distances(SokobanContext *ctx, const uint8_t *current_walls
     ctx->cached_bomb_count = bomb_count;
     ctx->cache_valid = true;
 }
-
-#ifdef SOKOBAN_ENGINE_TEST
-// 仅供 PC 单元测试校验墙体代价和距离缓存，不进入正式接口。
-uint16_t sokoban_test_wall_action_penalty(uint8_t wall_type)
-{
-    return wall_action_penalty(wall_type);
-}
-
-uint16_t sokoban_test_wall_heuristic_penalty(uint8_t wall_type)
-{
-    return wall_heuristic_penalty(wall_type);
-}
-
-void sokoban_test_refresh_distances(SokobanContext *ctx, const uint8_t *walls, uint8_t bomb_count)
-{
-    get_maze_distances(ctx, walls, bomb_count);
-}
-#endif
 
 static void build_car_dist_map(uint8_t start_pos, const uint8_t *obstacles, uint8_t *dist_map)
 {
@@ -674,6 +655,7 @@ static void solve_assignment_km(int cost_matrix[MAX_BOXES][MAX_GOALS], int num_i
     }
 }
 
+// 用 KM 最小权匹配汇总所有箱子到兼容目标的距离下界。
 static int calc_heuristic(SokobanContext *ctx, State *state, const uint8_t *walls)
 {
     // 已经胜利，代价为 0
@@ -841,6 +823,7 @@ static inline void sort_children(const ChildNode *children, uint8_t count, uint8
     }
 }
 
+// 在单个加权 IDA* 阈值内深搜，并返回成功、节点上限或下一最小 f。
 static SearchRes dfs_ida(SokobanContext *ctx, State *current_state, const uint8_t *current_walls, uint16_t current_g, int current_h, float threshold, MacroAction *acts, uint8_t act_len)
 {
     // 在计入当前节点前检查累计预算，保证计数永不越过上限。
@@ -1299,6 +1282,7 @@ static bool get_nearest_path(uint8_t start_pos, const bool *obs_points, const ui
     return true;
 }
 
+// 估计小车到最近可用识别视点的破障/绕行代价。
 static int calc_recon_heuristic(SokobanContext *ctx, State *state, const bool *obs_points, const uint8_t *walls)
 {
     MinHeap pq;
@@ -1356,6 +1340,7 @@ static int calc_recon_heuristic(SokobanContext *ctx, State *state, const bool *o
 }
 // ida*ʶͼѰ·
 
+// 为识别阶段搜索一条可到达视点的破障动作序列。
 static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const uint8_t *current_walls, uint16_t current_g, int current_h,
                                float threshold, MacroAction *acts, uint8_t act_len, const bool *obs_points, const bool *virtual_obs_points)
 {
@@ -1654,6 +1639,7 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
     return min_node_data;
 }
 
+// 迭代提升识别搜索阈值，直到抵达视点、证明失败或达到节点上限。
 static bool solve_recon_ida(SokobanContext *ctx, State *start_state, const bool *obs_points, const bool *virtual_obs_points)
 {
     ctx->total_explored_nodes = 0;
