@@ -13,7 +13,6 @@ extern float imu_vy;
 seekfree_assistant_oscilloscope_struct SendData;
 extern float time_for_vision_loac;
 extern uint8_t same_time;
-extern uint8_t received_time;
 uint8_t lost = 0;
 /**
  * @brief 连wifi，连一次之后上位机软件不要断联，否则需要小车重新上电
@@ -79,10 +78,10 @@ void wifi_task()
     seekfree_assistant_oscilloscope_data.data[1] = global_y;
     seekfree_assistant_oscilloscope_data.data[2] = target_x;
     seekfree_assistant_oscilloscope_data.data[3] = target_y;
-    seekfree_assistant_oscilloscope_data.data[4] = wrong_over_time;
+    seekfree_assistant_oscilloscope_data.data[4] = actual_yaw;
     seekfree_assistant_oscilloscope_data.data[5] = global_infor_type; // 0: 无效 1: 只要坐标 2: 只要角度 3: 坐标+角度 4: 坐标+角度+地图 5: 坐标+角度+地图+小车状态
-    seekfree_assistant_oscilloscope_data.data[6] = received_time; // 最终目标航向角 单位度
-    seekfree_assistant_oscilloscope_data.data[7] = same_time; 
+    seekfree_assistant_oscilloscope_data.data[6] = final_image_index; // 最终目标航向角 单位度
+    seekfree_assistant_oscilloscope_data.data[7] = wrong_over_time; 
     SendDataToAssistant(&seekfree_assistant_oscilloscope_data, 8);
     // system_delay_ms(13);
 }

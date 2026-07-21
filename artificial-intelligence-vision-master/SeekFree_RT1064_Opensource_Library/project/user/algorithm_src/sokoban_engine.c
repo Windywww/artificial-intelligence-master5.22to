@@ -2424,7 +2424,6 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
     get_final_path(ctx, out_full_path); // 对整条路径进行最终的优化处理
 }
 
-
 // /**
 //  * @brief 实时障碍物检查函数（供运控避�?/侧向补偿调用�?
 //  * @param ctx 引擎上下文指�?

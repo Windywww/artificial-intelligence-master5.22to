@@ -89,6 +89,7 @@ static void return_to_start_zone(void)
         wifi_task();
     }
     first_time_fix = 2;
+    system_delay_ms(3000);
 }
 
 // 等 navigate_flag 变 0
@@ -127,6 +128,8 @@ static void request_round_map(void)
         }
         wifi_task();
     }
+		
+		
 }
 // 矫正一次target_x target_y,阻塞式
 static void sync_car_position(void)
@@ -143,10 +146,9 @@ static void sync_car_position(void)
 // 矫正一次车角度，阻塞式,多次采样
 float main_vision_angle = 999;
 uint8_t same_time = 0;
-uint8_t received_time = 0;
 static void sync_car_angle(void)
 {
-    while (same_time <= 2)
+    while (same_time <= 7)
     {
         wait_global_info();
         want_global_infor(2);
@@ -155,13 +157,13 @@ static void sync_car_angle(void)
             wifi_task();
             uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
         }
-        received_time++;
-        if (fabs(car_angel - main_vision_angle) <= 5)
+        if (fabs(car_angel - main_vision_angle) <= 2)
         {
             same_time++;
         }
         else
         {
+            main_vision_angle = car_angel;
             same_time = 0;
         }
     }
@@ -200,7 +202,7 @@ static uint8_t run_round(uint8_t round_index)
     // system_delay_ms(ROUND_MAP_SETTLE_MS);   // 有什么用？
 
     vision_run_correct_switch = 1;
-    build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 0U : 1U);
+    build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 1U : 1U);
     if (!engine_ctx.map_valid)
     {
         return 0;
@@ -264,22 +266,55 @@ int main(void)
     interrupt_global_enable(0);
 
     system_delay_ms(600);
+
+
     sync_car_position();
-    // 循环跑三关
-    for (uint8_t round_index = 0; round_index < ROUND_COUNT; round_index++)
-    {
-        if (!run_round(round_index))
-        {
-            return_to_start_zone();
-        }
-    }
-    // 第三关完成后保持停车，同时继续处理通信。
-    car_stop();
-    while (1)
+    vision_run_correct_switch = 1;
+     
+    car_move_point(global_x,0.5,angle,0);
+    while (navigate_flag)
     {
         wifi_task();
     }
-    // NVIC_SystemReset(); // 复位
+    car_move_point(0.5,0.5,angle,0);
+    while (navigate_flag)
+    {
+        wifi_task();
+    }
+    
+    car_move_point(0.5,1.9,angle,0);
+    while (navigate_flag)
+    {
+        wifi_task();
+    }
+    
+    car_move_point(2.7,1.9,angle,0);
+    while (navigate_flag)
+    {
+        wifi_task();
+    }
+    
+    car_move_point(0.5,0.5,angle,0);
+    while (navigate_flag)
+    {
+        wifi_task();
+    }
+    
+    // // 循环跑三关
+    // for (uint8_t round_index = 0; round_index < ROUND_COUNT; round_index++)
+    // {
+    //     if (!run_round(round_index))
+    //     {
+    //         return_to_start_zone();
+    //     }
+    // }
+    // // 第三关完成后保持停车，同时继续处理通信。
+    // car_stop();
+    // while (1)
+    // {
+    //     wifi_task();
+    // }
+    // // NVIC_SystemReset(); // 复位
     return 0;
 }
 
@@ -337,7 +372,7 @@ void run_vision_correct()
         if (vision_correct_flag == 0)
         {
             time_for_vision_loac += 0.01f;
-            if (time_for_vision_loac >= 0.5f)
+            if (time_for_vision_loac >= 0.05f)
             {
                 vision_correct_flag = 1;
                 time_for_vision_loac = 0;
@@ -356,7 +391,7 @@ void run_vision_correct()
         else if (vision_correct_flag == 2)
         {
             // 超时判定
-            if (time_line - time_vision_main >= 0.3f)
+            if (time_line - time_vision_main >= 0.1f)
             {
                 wrong_over_time++;
                 vision_correct_flag = 0;

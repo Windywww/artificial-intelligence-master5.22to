@@ -134,7 +134,7 @@ void wheel_speed_calculate(float vx, float vy, float vz)
         encoder_data[i] = encoder_get_count(encoder_ports[i]);
         encoder_clear_count(encoder_ports[i]);
 
-        float raw_v = (float)encoder_data[i] * SPEED_COEFFICIENT * 0.925;
+        float raw_v = (float)encoder_data[i] * SPEED_COEFFICIENT;
         if (i == RF || i == RB)
         {
             raw_v = -raw_v;
@@ -169,6 +169,9 @@ float local_encoder_vx = 0.0f;
 float local_encoder_vy = 0.0f;
 float local_imu_vx = 0.0f;
 float local_imu_vy = 0.0f;
+
+float vx_encoder_index = 0.925f;
+float vy_encoder_index = 1.0f;
 /**
  * @brief 里程计更新
  *
@@ -176,8 +179,8 @@ float local_imu_vy = 0.0f;
 void odometry_update()
 {
     // 车模坐标系下的速度
-    local_encoder_vx = (actual_v[LF] + actual_v[RB] - actual_v[LB] - actual_v[RF]) / 4.0f;
-    local_encoder_vy = (actual_v[LF] + actual_v[LB] + actual_v[RF] + actual_v[RB]) / 4.0f;
+    local_encoder_vx = (actual_v[LF] + actual_v[RB] - actual_v[LB] - actual_v[RF]) / 4.0f*vx_encoder_index;
+    local_encoder_vy = (actual_v[LF] + actual_v[LB] + actual_v[RF] + actual_v[RB]) / 4.0f*vy_encoder_index;
 
     // imu积分推算出的速度
     // static float local_imu_vx = 0.0f;
@@ -386,7 +389,7 @@ void navigation_update(void)
                 target_vy = 0.0f;
                 if (walk_mode == 4)
                 {
-                    if (count_A <= 90)
+                    if (count_A <= 130)
                     {
                         count_A++;
                         return;
@@ -415,7 +418,7 @@ void navigation_update(void)
                         uint8_t if_longtime = 0;
                         if (wait_for_loc == 1)
                         {
-                            if (time_line - time_vision >= 9.0f)
+                            if (time_line - time_vision >= 0.5f)
                             {
                                 wrong_over_time++;
                                 if_longtime = 1;
@@ -514,7 +517,7 @@ void navigation_update(void)
 
                 if (walk_mode == 4)
                 {
-                    if (count <= 90)
+                    if (count <= 130)
                     {
                         count++;
                         return;
@@ -544,7 +547,7 @@ void navigation_update(void)
                             uint8_t if_longtime = 0;
                             if (wait_for_loc == 1)
                             {
-                                if (time_line - time_vision >= 2.6f)
+                                if (time_line - time_vision >= 0.5f)
                                 {
                                     wrong_over_time++;
                                     if_longtime = 1;
@@ -577,7 +580,7 @@ void navigation_update(void)
                                     vision_x = car_location[0];
                                     vision_y = car_location[1];
                                 }
-                                if (loac_test >= 1)
+                                if (loac_test >= 3)
                                 {
                                     float dx = global_x - 3.2f * car_location[0];
                                     float dy = global_y - (2.4f - 2.4f * car_location[1]);
@@ -601,13 +604,49 @@ void navigation_update(void)
                         loac_test = 0;
                         vision_x = -1;
                         vision_y = -1;
-
-
-
-                        
-                        first_time_fix = 0;
-                        stop_flag = 0;
-                        return;
+                        //判定该节点是否需要运动矫正一下再前往下一个点
+                        if (fabs(path_queue_x[current_path + 1] - 3.1) <= 0.001f && fabs(path_queue_y[current_path + 1] + 0.7) <= 0.001f)
+                        {
+                            if (fabs(path_queue_x[current_path + 2] - path_queue_x[current_path]) <= 0.001f)
+                            {
+                                if (fabs(path_queue_x[current_path] - global_x) >= 0.015f)
+                                {
+                                    first_time_fix = 0;
+                                    stop_flag = 0;
+                                    return;
+                                }
+                            }
+                            else if (fabs(path_queue_y[current_path + 2] - path_queue_y[current_path]) <= 0.001f)
+                            {
+                                if (fabs(path_queue_y[current_path] - global_y) >= 0.015f)
+                                {
+                                    first_time_fix = 0;
+                                    stop_flag = 0;
+                                    return;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            if (fabs(path_queue_x[current_path + 1] - path_queue_x[current_path]) <= 0.001f)
+                            {
+                                if (fabs(path_queue_x[current_path] - global_x) >= 0.015f)
+                                {
+                                    first_time_fix = 0;
+                                    stop_flag = 0;
+                                    return;
+                                }
+                            }
+                            else if (fabs(path_queue_y[current_path + 1] - path_queue_y[current_path]) <= 0.001f)
+                            {
+                                if (fabs(path_queue_y[current_path] - global_y) >= 0.015f)
+                                {
+                                    first_time_fix = 0;
+                                    stop_flag = 0;
+                                    return;
+                                }
+                            }
+                        }
                     }
                 }
 
