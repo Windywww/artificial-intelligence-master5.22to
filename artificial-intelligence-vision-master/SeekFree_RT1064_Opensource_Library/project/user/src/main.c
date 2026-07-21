@@ -142,16 +142,21 @@ static void sync_car_position(void)
 }
 // 矫正一次车角度，阻塞式,多次采样
 float main_vision_angle = 999;
-float same_time = 0;
-
+uint8_t same_time = 0;
+uint8_t received_time = 0;
 static void sync_car_angle(void)
 {
     while (same_time <= 2)
     {
         wait_global_info();
         want_global_infor(2);
-        wait_global_info();
-        if (fabs(car_angel - main_vision_angle) <= 0.1)
+        while (global_infor_type!=5)
+        {
+            wifi_task();
+            uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
+        }
+        received_time++;
+        if (fabs(car_angel - main_vision_angle) <= 5)
         {
             same_time++;
         }
@@ -176,14 +181,16 @@ static void sync_car_angle(void)
 static uint8_t run_round(uint8_t round_index)
 {
     WaypointPath path = {0};
+    vision_run_correct_switch = 0;
     reset_round_runtime();
 
     vision_angle_switch = 0;
     car_move_point(global_x + 0.25f, global_y, angle, 0);
     wait_navigation();
-
     // 测试时加上，防止地图不对
     system_delay_ms(2000);
+    sync_car_angle();
+    
     // 获取地图
     request_round_map();
     if (!got_map_flag)
@@ -192,6 +199,7 @@ static uint8_t run_round(uint8_t round_index)
     }
     // system_delay_ms(ROUND_MAP_SETTLE_MS);   // 有什么用？
 
+    vision_run_correct_switch = 1;
     build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 0U : 1U);
     if (!engine_ctx.map_valid)
     {
@@ -257,7 +265,6 @@ int main(void)
 
     system_delay_ms(600);
     sync_car_position();
-    vision_run_correct_switch = 1;
     // 循环跑三关
     for (uint8_t round_index = 0; round_index < ROUND_COUNT; round_index++)
     {

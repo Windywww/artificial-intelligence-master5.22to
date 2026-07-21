@@ -577,7 +577,7 @@ void navigation_update(void)
                                     vision_x = car_location[0];
                                     vision_y = car_location[1];
                                 }
-                                if (loac_test >= 3)
+                                if (loac_test >= 1)
                                 {
                                     float dx = global_x - 3.2f * car_location[0];
                                     float dy = global_y - (2.4f - 2.4f * car_location[1]);
@@ -601,6 +601,10 @@ void navigation_update(void)
                         loac_test = 0;
                         vision_x = -1;
                         vision_y = -1;
+
+
+
+                        
                         first_time_fix = 0;
                         stop_flag = 0;
                         return;
