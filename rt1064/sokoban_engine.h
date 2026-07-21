@@ -13,7 +13,7 @@
 #define MAX_BOMBS 4
 
 #define VIRTUAL_WALL_COST 20
-#define BOMB_PENALTY 10
+#define BOMB_PENALTY 2
 #define RES_SUCCESS -1.0f
 #define RES_INF 9999.0f
 #define MAX_STEPS 100
