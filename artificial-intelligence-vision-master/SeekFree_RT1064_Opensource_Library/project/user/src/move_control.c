@@ -32,7 +32,6 @@ float Kd_yaw = 0.1f;  // 航向角 D 参数
 
 float global_x = 0.3f; // 车模全局 x 坐标 单位 m
 float global_y = 1.2f; // 车模全局 y 坐标 单位 m
-
 uint8_t move_flag = 0;      // 1表示车子在移动 0 表示车子在停止
 uint8_t mode = 0;           // 两种运动模式
 float target_x = 0.3f;      // 目标 x 坐标 单位 m
@@ -243,6 +242,8 @@ uint8_t loac_test = 0;
 uint8_t wait_for_loc = 0;
 // 记录小车跑过的节点个数是否应该让视觉矫正
 uint8_t vision_point_num = 0;
+//记录小车跑过的格子数是否应该让视觉矫正
+uint8_t vision_point_gezi = 0;
 // 从一个节点到另一个节点的角度信息，以及走的状态(横向，纵向，斜向)
 float speed_angle = 0.0f;           //(弧度制)
 float last_global_target_vx = 0.0f; // 全局坐标系下的目标速度
@@ -384,6 +385,7 @@ void navigation_update(void)
 
         if (is_last_point)
         {
+
             // if (stop_flag == 0 && distance <= 0.015f)
             // {
             //     stop_flag = 1; // 开启手刹
@@ -818,7 +820,7 @@ void car_move(WaypointPath *path, float yaw, uint8_t m)
 
     target_x = path_queue_x[0];
     target_y = path_queue_y[0];
-
+    
     // 下面是更改小车从一个节点走到另一个节点走的角度信息
     float d_point_x = target_x - global_x;
     float d_point_y = target_y - global_y;
