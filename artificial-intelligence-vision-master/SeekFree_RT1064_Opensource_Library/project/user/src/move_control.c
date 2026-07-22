@@ -171,7 +171,7 @@ float local_imu_vx = 0.0f;
 float local_imu_vy = 0.0f;
 
 float vx_encoder_index = 0.925f;
-float vy_encoder_index = 0.928f;
+float vy_encoder_index = 1.0f;
 /**
  * @brief 里程计更新
  *
