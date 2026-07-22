@@ -179,8 +179,8 @@ float vy_encoder_index = 1.0f;
 void odometry_update()
 {
     // 车模坐标系下的速度
-    local_encoder_vx = (actual_v[LF] + actual_v[RB] - actual_v[LB] - actual_v[RF]) / 4.0f*vx_encoder_index;
-    local_encoder_vy = (actual_v[LF] + actual_v[LB] + actual_v[RF] + actual_v[RB]) / 4.0f*vy_encoder_index;
+    local_encoder_vx = (actual_v[LF] + actual_v[RB] - actual_v[LB] - actual_v[RF]) / 4.0f * vx_encoder_index;
+    local_encoder_vy = (actual_v[LF] + actual_v[LB] + actual_v[RF] + actual_v[RB]) / 4.0f * vy_encoder_index;
 
     // imu积分推算出的速度
     // static float local_imu_vx = 0.0f;
@@ -296,11 +296,16 @@ void navigation_update(void)
     if (global_target_vy < -max_speed)
         global_target_vy = -max_speed;
     // 加速度限制
+   // 加速度限制
     if (last_global_target_vx >= amax * 0.01f)
     {
         if (global_target_vx >= last_global_target_vx + amax * 0.01f)
         {
             global_target_vx = last_global_target_vx + amax * 0.01f;
+        }
+        else if (global_target_vx <= -amax * 0.01f)
+        {
+            global_target_vx = -amax * 0.01f;
         }
     }
     else if (last_global_target_vx <= -amax * 0.01f)
@@ -308,6 +313,10 @@ void navigation_update(void)
         if (global_target_vx <= last_global_target_vx - amax * 0.01f)
         {
             global_target_vx = last_global_target_vx - amax * 0.01f;
+        }
+        else if (global_target_vx >= amax * 0.01f)
+        {
+            global_target_vx = amax * 0.01f;
         }
     }
     else
@@ -328,12 +337,20 @@ void navigation_update(void)
         {
             global_target_vy = last_global_target_vy + amax * 0.01f;
         }
+        else if (global_target_vy <= -amax * 0.01f)
+        {
+            global_target_vy = -amax * 0.01f;
+        }
     }
     else if (last_global_target_vy <= -amax * 0.01f)
     {
         if (global_target_vy <= last_global_target_vy - amax * 0.01f)
         {
             global_target_vy = last_global_target_vy - amax * 0.01f;
+        }
+        else if (global_target_vy >= amax * 0.01f)
+        {
+            global_target_vy = amax * 0.01f;
         }
     }
     else
@@ -604,7 +621,7 @@ void navigation_update(void)
                         loac_test = 0;
                         vision_x = -1;
                         vision_y = -1;
-                        //判定该节点是否需要运动矫正一下再前往下一个点
+                        // 判定该节点是否需要运动矫正一下再前往下一个点
                         if (fabs(path_queue_x[current_path + 1] - 3.1) <= 0.001f && fabs(path_queue_y[current_path + 1] + 0.7) <= 0.001f)
                         {
                             if (fabs(path_queue_x[current_path + 2] - path_queue_x[current_path]) <= 0.001f)
@@ -722,19 +739,38 @@ void move_control_task(void)
         final_target_yaw -= 360.0f;
     while (final_target_yaw < -180.0f)
         final_target_yaw += 360.0f;
+
     if (target_yaw < final_target_yaw - max_yaw_step)
     {
-        target_yaw += max_yaw_step;
+        if (final_target_yaw - target_yaw > 180)
+        {
+            target_yaw -= max_yaw_step;
+        }
+        else
+        {
+            target_yaw += max_yaw_step;
+        }
     }
     else if (target_yaw > final_target_yaw + max_yaw_step)
     {
-        target_yaw -= max_yaw_step;
+        if (target_yaw - final_target_yaw > 180)
+        {
+            target_yaw += max_yaw_step;
+        }
+        else
+        {
+            target_yaw -= max_yaw_step;
+        }
     }
     else
     {
         target_yaw = final_target_yaw; // 误差极小时，直接锁定目标
     }
 
+    while (target_yaw > 180.0f)
+        target_yaw -= 360.0f;
+    while (target_yaw < -180.0f)
+        target_yaw += 360.0f;
     float vz = yaw_pid_calculate();                  // 计算航向角控制输出
     wheel_speed_calculate(target_vx, target_vy, vz); // 计算轮子速度并输出
 }

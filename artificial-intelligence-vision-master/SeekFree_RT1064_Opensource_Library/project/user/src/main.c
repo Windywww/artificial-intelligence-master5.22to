@@ -44,7 +44,7 @@
 #include <math.h>
 #include "sokoban_engine.h"
 
-#define ROUND_COUNT 3U
+#define ROUND_COUNT 5U
 #define ROUND_CLEAR_WAIT_MS 600U
 #define ROUND_MAP_SETTLE_MS 1200U
 #define START_ZONE_GRID_INDEX (0U + 6U * WIDTH)
@@ -183,7 +183,9 @@ static uint8_t run_round(uint8_t round_index)
     car_move_point(global_x + 0.25f, global_y, angle, 0);
     wait_navigation();
     // 测试时加上，防止地图不对
-    sync_car_angle();
+    if(round_index>=1){
+        sync_car_angle();
+    }
     
     // 获取地图
     request_round_map();

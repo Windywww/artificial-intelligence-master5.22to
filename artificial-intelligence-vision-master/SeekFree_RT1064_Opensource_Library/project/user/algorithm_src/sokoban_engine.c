@@ -1862,7 +1862,6 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                     wifi_task();
             }
             // ��ʶ������Ȼδ֪�����������ʶ�𣨿����ǵ�һ�ζ�׼����׼ȷ��
-
             // ʶ��ʱ����carmove�����Ӿ��Ƕ�У��
             vision_angle_switch = 0;
             // system_delay_ms(700);
@@ -2107,7 +2106,6 @@ static bool get_micro_path(uint8_t start_pos, uint8_t target_pos, const uint8_t 
     queue[tail++] = start_pos;
     visited[start_pos] = true;
     parent[start_pos] = start_pos;
-
     bool found = false;
 
     while (head < tail)
