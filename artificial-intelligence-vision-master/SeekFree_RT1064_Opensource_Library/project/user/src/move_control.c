@@ -243,7 +243,7 @@ uint8_t wait_for_loc = 0;
 // 记录小车跑过的节点个数是否应该让视觉矫正
 uint8_t vision_point_num = 0;
 //记录小车跑过的格子数是否应该让视觉矫正
-uint8_t vision_point_gezi = 0;
+uint8_t vision_distance_num = 0;
 // 从一个节点到另一个节点的角度信息，以及走的状态(横向，纵向，斜向)
 float speed_angle = 0.0f;           //(弧度制)
 float last_global_target_vx = 0.0f; // 全局坐标系下的目标速度
@@ -689,14 +689,18 @@ void navigation_update(void)
                     if (d_point_x != 0 && d_point_y != 0)
                     {
                         walk_mode = 2;
+                        vision_distance_num+=99;
                     }
                     else if (d_point_x != 0 && d_point_y == 0)
                     {
                         walk_mode = 0;
+                        vision_distance_num+=fabs(d_point_x);
+                        
                     }
                     else if (d_point_x == 0 && d_point_y != 0)
                     {
                         walk_mode = 1;
+                        vision_distance_num+=fabs(d_point_y);
                     }
                     else
                     {
