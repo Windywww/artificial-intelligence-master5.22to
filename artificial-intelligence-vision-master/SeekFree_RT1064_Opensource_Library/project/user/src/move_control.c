@@ -551,8 +551,12 @@ void navigation_update(void)
                     }
                     if (first_time_fix == 1)
                     {
-                        if (vision_point_num == 0)
+                        if (vision_point_num == 0||vision_distance_num>=VISION_CORRECT_DISTANCE)
                         {
+                            //节点是否视觉矫正判定的相关参数归零
+                            vision_point_num = 0;
+                            vision_distance_num = 0;
+                            
                             if (wait_for_loc == 0)
                             {
                                 if (global_infor_type != 5)
