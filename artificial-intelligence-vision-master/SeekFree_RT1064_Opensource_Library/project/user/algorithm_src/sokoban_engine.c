@@ -7,6 +7,7 @@
 #include "myUart.h"
 #include "move_control.h"
 #include "WIFI2SPI.h"
+#include "motion_plan.h"
 
 #define SOKOBAN_EMBEDDED 1
 
@@ -2358,12 +2359,85 @@ static void get_final_path(SokobanContext *ctx, WaypointPath *path)
     }
 }
 
-void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
+/* 判断三个求解器节点是否沿同一方向共线，仅用于删除无动作中间点。 */
+static bool generated_points_are_straight(uint8_t previous, uint8_t current, uint8_t next)
 {
+    int px = previous % WIDTH;
+    int py = previous / WIDTH;
+    int cx = current % WIDTH;
+    int cy = current / WIDTH;
+    int nx = next % WIDTH;
+    int ny = next / WIDTH;
+    int dx1 = cx - px;
+    int dy1 = cy - py;
+    int dx2 = nx - cx;
+    int dy2 = ny - cy;
+
+    return (dy1 == 0 && dy2 == 0 && dx1 * dx2 > 0) ||
+           (dx1 == 0 && dx2 == 0 && dy1 * dy2 > 0);
+}
+
+static bool append_generated_node(WaypointPath *path,
+                                  uint8_t *node_flags,
+                                  uint16_t *node_dwell_ms,
+                                  uint8_t point,
+                                  uint8_t flags,
+                                  uint16_t dwell_ms)
+{
+    uint16_t last;
+
+    if (point >= MAP_SIZE)
+        return false;
+
+    if (path->length > 0U && path->points[path->length - 1U] == point)
+    {
+        /* 连续重复点合并，但新动作标志必须附着到已有节点。 */
+        last = path->length - 1U;
+        node_flags[last] |= flags;
+        if (dwell_ms > node_dwell_ms[last])
+            node_dwell_ms[last] = dwell_ms;
+        return true;
+    }
+
+    if (path->length >= 2U)
+    {
+        last = path->length - 1U;
+        if (node_flags[last] == 0U &&
+            generated_points_are_straight(path->points[last - 1U],
+                                          path->points[last],
+                                          point))
+        {
+            /* 此处先保留动作节点，最终规划器再根据前后方向决定宏节点是否可删。 */
+            path->points[last] = point;
+            node_flags[last] = flags;
+            node_dwell_ms[last] = dwell_ms;
+            return true;
+        }
+    }
+
+    if (path->length >= MAP_SIZE)
+        return false;
+
+    path->points[path->length] = point;
+    node_flags[path->length] = flags;
+    node_dwell_ms[path->length] = dwell_ms;
+    path->length++;
+    return true;
+}
+
+static bool generate_annotated_path(SokobanContext *ctx,
+                                    WaypointPath *out_full_path,
+                                    uint8_t *node_flags,
+                                    uint16_t *node_dwell_ms,
+                                    const MotionPlanConfig *config)
+{
+    /* 在求解结果副本上逐个回放宏动作，同时生成几何路径和并行动作数组。 */
     State sim_state = ctx->initial_state;
     uint8_t sim_walls[MAP_SIZE];
     memcpy(sim_walls, ctx->initial_walls, MAP_SIZE);
-    out_full_path->length = 0;
+    out_full_path->length = 0U;
+    memset(node_flags, 0, MAP_SIZE * sizeof(node_flags[0]));
+    memset(node_dwell_ms, 0, MAP_SIZE * sizeof(node_dwell_ms[0]));
     uint8_t obstacles[MAP_SIZE];
     WaypointPath micro_path;
     WaypointPath smooth_path;
@@ -2391,18 +2465,41 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
 
         if (!get_micro_path(sim_state.car_pos, act.move_to, obstacles, &micro_path))
         {
-            return;
+            out_full_path->length = 0U;
+            return false;
         }
         get_smooth_path(ctx, &micro_path, obstacles, &smooth_path);
-        out_full_path->length += smooth_path.length;
         for (int p = 0; p < smooth_path.length; p++)
         {
-            out_full_path->points[out_full_path->length - smooth_path.length + p] = smooth_path.points[p];
+            if (!append_generated_node(out_full_path,
+                                       node_flags,
+                                       node_dwell_ms,
+                                       smooth_path.points[p],
+                                       0U,
+                                       0U))
+            {
+                out_full_path->length = 0U;
+                return false;
+            }
         }
-        out_full_path->points[out_full_path->length++] = act.push_to;
+
+        /* 先标记宏动作停车；最终规划时会删除无需转向的普通共线宏节点。 */
+        uint8_t action_flags = MOTION_STOP | MOTION_MACRO_END;
+        uint16_t action_dwell_ms = 0U;
         if (act.is_explode)
         {
-            out_full_path->points[out_full_path->length++] = 255;   //延时特殊标记符号
+            action_flags |= MOTION_VISION_FIX | MOTION_DWELL;
+            action_dwell_ms = config->explosion_dwell_ms;
+        }
+        if (!append_generated_node(out_full_path,
+                                   node_flags,
+                                   node_dwell_ms,
+                                   act.push_to,
+                                   action_flags,
+                                   action_dwell_ms))
+        {
+            out_full_path->length = 0U;
+            return false;
         }
         // ===========================================
 
@@ -2463,9 +2560,145 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
         sim_state.car_pos = act.push_to;
     }
     // 更新初始状态为最终状�?
+    /* 路径完整生成后再提交求解器状态，失败时不提交部分回放结果。 */
     ctx->initial_state = sim_state;
     memcpy(ctx->initial_walls, sim_walls, MAP_SIZE);
-    get_final_path(ctx, out_full_path); // 对整条路径进行最终的优化处理
+    return out_full_path->length > 0U;
+}
+
+bool generate_motion_plan(SokobanContext *ctx,
+                          const MotionPlanConfig *config,
+                          MotionPlan *out_plan)
+{
+    /* 新接口保留动作数组，随后统一执行几何校验、风险锚点和速度规划。 */
+    WaypointPath path;
+    uint8_t node_flags[MAP_SIZE];
+    uint16_t node_dwell_ms[MAP_SIZE];
+
+    if (ctx == NULL || config == NULL || out_plan == NULL)
+        return false;
+
+    if (!generate_annotated_path(ctx,
+                                 &path,
+                                 node_flags,
+                                 node_dwell_ms,
+                                 config))
+    {
+        out_plan->length = 0U;
+        return false;
+    }
+
+    return motion_plan_build_annotated(&path,
+                                       node_flags,
+                                       node_dwell_ms,
+                                       config,
+                                       out_plan);
+}
+
+void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
+{
+    /*
+     * 旧版路径生成独立保留，继续输出 255 并调用 get_final_path()，
+     * 使 car_move() 的实车 A/B 数据仍可与 720 基线直接比较。
+     */
+    State sim_state;
+    uint8_t sim_walls[MAP_SIZE];
+    uint8_t obstacles[MAP_SIZE];
+    WaypointPath micro_path;
+    WaypointPath smooth_path;
+
+    if (ctx == NULL || out_full_path == NULL)
+        return;
+
+    sim_state = ctx->initial_state;
+    memcpy(sim_walls, ctx->initial_walls, MAP_SIZE);
+    out_full_path->length = 0U;
+    for (int i = 0; i < ctx->solution_actions_len; i++)
+    {
+        MacroAction act = ctx->solution_actions[i];
+
+        memset(obstacles, 0, sizeof(obstacles));
+        for (int k = 0; k < MAP_SIZE; k++)
+        {
+            if (sim_walls[k])
+                obstacles[k] = 1U;
+        }
+        for (int k = 0; k < sim_state.box_count; k++)
+            obstacles[sim_state.boxes[k].pos] = 1U;
+        for (int k = 0; k < sim_state.bomb_count; k++)
+            obstacles[sim_state.bombs[k]] = 1U;
+
+        if (!get_micro_path(sim_state.car_pos, act.move_to, obstacles, &micro_path))
+        {
+            out_full_path->length = 0U;
+            return;
+        }
+        get_smooth_path(ctx, &micro_path, obstacles, &smooth_path);
+        /* 旧接口没有错误返回值，容量不足时以空路径表示失败。 */
+        if ((uint32_t)out_full_path->length + smooth_path.length + 1U +
+                (act.is_explode ? 1U : 0U) >
+            MAP_SIZE)
+        {
+            out_full_path->length = 0U;
+            return;
+        }
+        for (int p = 0; p < smooth_path.length; p++)
+            out_full_path->points[out_full_path->length++] = smooth_path.points[p];
+        out_full_path->points[out_full_path->length++] = act.push_to;
+        if (act.is_explode)
+            out_full_path->points[out_full_path->length++] = 255U;
+
+        int push_dir = act.push_to - act.move_to;
+        uint8_t next_pos = act.push_to + push_dir;
+        int entity_idx = -1;
+        bool is_bomb_entity = false;
+
+        for (int k = 0; k < sim_state.bomb_count; k++)
+        {
+            if (sim_state.bombs[k] == act.push_to)
+            {
+                is_bomb_entity = true;
+                entity_idx = k;
+                break;
+            }
+        }
+        if (!is_bomb_entity)
+        {
+            for (int k = 0; k < sim_state.box_count; k++)
+            {
+                if (sim_state.boxes[k].pos == act.push_to)
+                {
+                    entity_idx = k;
+                    break;
+                }
+            }
+        }
+
+        if (act.is_explode)
+        {
+            sim_state.bombs[entity_idx] = sim_state.bombs[--sim_state.bomb_count];
+            int exp_count = ctx->explosion_area_count[next_pos];
+            for (int e = 0; e < exp_count; e++)
+                sim_walls[ctx->explosion_areas[next_pos][e]] = 0U;
+        }
+        else if (act.is_consume)
+        {
+            sim_state.boxes[entity_idx] = sim_state.boxes[--sim_state.box_count];
+        }
+        else if (is_bomb_entity)
+        {
+            sim_state.bombs[entity_idx] = next_pos;
+        }
+        else
+        {
+            sim_state.boxes[entity_idx].pos = next_pos;
+        }
+        sim_state.car_pos = act.push_to;
+    }
+
+    ctx->initial_state = sim_state;
+    memcpy(ctx->initial_walls, sim_walls, MAP_SIZE);
+    get_final_path(ctx, out_full_path);
 }
 
 // /**

@@ -43,6 +43,7 @@
 #include "WIFI2SPI.h"
 #include <math.h>
 #include "sokoban_engine.h"
+#include "motion_plan.h"
 
 #define ROUND_COUNT 3U
 #define ROUND_CLEAR_WAIT_MS 600U
@@ -182,7 +183,8 @@ static void sync_car_angle(void)
  */
 static uint8_t run_round(uint8_t round_index)
 {
-    WaypointPath path = {0};
+    /* 一局只保留一份完整计划，car_move_plan() 启动时会复制到中断侧。 */
+    MotionPlan plan = {0};
     vision_run_correct_switch = 0;
     reset_round_runtime();
 
@@ -215,15 +217,27 @@ static uint8_t run_round(uint8_t round_index)
         return 0;
     }
 
-    generate_path(&engine_ctx, &path);
-    if (path.length == 0)
+    /* 非法几何、标记或容量溢出均拒绝启动，并显式保持停车。 */
+    if (!generate_motion_plan(&engine_ctx, &motion_plan_default_config, &plan))
     {
+        car_stop();
         return 0;
     }
 
     lost = 66;
-    car_move(&path, angle, 0);
+    /* 新运控与原 50 ms 行进中视觉纠偏并行，旧接口仍保留作 A/B 回退。 */
+    if (!car_move_plan(&plan, angle, 0))
+    {
+        car_stop();
+        return 0;
+    }
     wait_navigation();
+    /* 500 ms 停稳失败等安全中止由中断侧记录，主流程不得继续下一动作。 */
+    if (motion_plan_stats()->aborted)
+    {
+        car_stop();
+        return 0;
+    }
 
     return_to_start_zone();
     return 1;

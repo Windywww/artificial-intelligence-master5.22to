@@ -61,7 +61,8 @@ void car_move_point(float x, float y, float yaw, uint8_t m);
 extern uint8_t check_obstacle(SokobanContext *ctx, uint8_t grid_index);
 
 extern uint8_t yaw_arrived_flag; // 航向角到达标志位：1表示已到达目标航向角，0表示未到达
-extern uint8_t navigate_flag; // 1: 正在追路径 0: 没有路径需要追
+/* PIT 中断写、主循环轮询，必须保持 volatile。 */
+extern volatile uint8_t navigate_flag; // 1: 正在追路径 0: 没有路径需要追
 extern uint8_t vision_xy_update_flag;  // 视觉数据更新标志位：1表示有新数据，0表示已处理
 extern uint8_t vision_yaw_update_flag; // 视觉航向角更新标志位：1表示有新数据，0表示已处理
 

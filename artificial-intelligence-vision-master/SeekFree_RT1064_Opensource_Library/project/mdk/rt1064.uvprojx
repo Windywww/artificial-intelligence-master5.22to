@@ -414,6 +414,12 @@
               <FileType>1</FileType>
               <FilePath>..\user\src\move_control.c</FilePath>
             </File>
+            <!-- fast 路径感知规划与速度规划实现 -->
+            <File>
+              <FileName>motion_plan.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\src\motion_plan.c</FilePath>
+            </File>
             <File>
               <FileName>myUart.c</FileName>
               <FileType>1</FileType>
@@ -483,6 +489,12 @@
               <FileName>move_control.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\user\inc\move_control.h</FilePath>
+            </File>
+            <!-- fast 运动计划数据结构与公开接口 -->
+            <File>
+              <FileName>motion_plan.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\inc\motion_plan.h</FilePath>
             </File>
             <File>
               <FileName>myUart.h</FileName>
