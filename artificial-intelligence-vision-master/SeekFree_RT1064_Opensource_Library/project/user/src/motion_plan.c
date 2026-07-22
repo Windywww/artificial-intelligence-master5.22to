@@ -16,8 +16,8 @@ const MotionPlanConfig motion_plan_default_config = {
     0.08f,
     1.00f,
     1.20f,
-    0.80f,
-    4U,
+    1.00f,
+    3U,
     1310U};
 
 /* 浮点速度只在规划阶段使用，执行阶段使用定点化后的 mm/s。 */
