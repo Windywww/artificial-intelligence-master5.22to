@@ -79,7 +79,6 @@ static void return_to_start_zone(void)
     car_move_point(0.3, 1.2, angle, 0);
     while (navigate_flag)
     {
-        wifi_task();
     }
     first_time_fix = 2;
     system_delay_ms(3000);
@@ -90,7 +89,6 @@ static void wait_navigation(void)
 {
     while (navigate_flag)
     {
-        wifi_task();
     }
 }
 // 等 global_infor_type 变 5
@@ -98,7 +96,6 @@ static void wait_global_info(void)
 {
     while (global_infor_type != 5)
     {
-        wifi_task();
     }
 }
 // 要一次地图
@@ -119,7 +116,6 @@ static void request_round_map(void)
             uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
             break;
         }
-        wifi_task();
     }
 		
 		
@@ -147,7 +143,6 @@ static void sync_car_angle(void)
         want_global_infor(2);
         while (global_infor_type!=5)
         {
-            wifi_task();
             uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
         }
         if (fabs(car_angel - main_vision_angle) <= 2)
@@ -203,7 +198,6 @@ static uint8_t run_round(uint8_t round_index)
     }
 
     lost = 1;
-    wifi_task();
     if (!solve(&engine_ctx))
     {
         return 0;
@@ -228,7 +222,6 @@ static void fault_stop(void)
     car_stop();
     while (1)
     {
-        wifi_task();
     }
 }
 
@@ -238,7 +231,7 @@ int main(void)
     // debug_init();                  // 调试端口初始化
     // 此处编写用户代码 例如外设初始化代码等
     system_delay_ms(600); // 等待主板其他外设上电完成
-    myWIFI2SPI_Init();
+    // myWIFI2SPI_Init();
     encoder_init();
     // key_init(5);
     // uart1_init();
@@ -275,7 +268,6 @@ int main(void)
     car_stop();
     while (1)
     {
-        wifi_task();
     }
     // NVIC_SystemReset(); // 复位
     return 0;
