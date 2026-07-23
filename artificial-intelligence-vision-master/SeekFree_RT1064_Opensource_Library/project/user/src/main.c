@@ -81,7 +81,15 @@ static void return_to_start_zone(void)
     {
     }
     first_time_fix = 2;
-    system_delay_ms(3000);
+    system_delay_ms(50);
+    wait_global_info();
+    want_global_infor(1);
+    wait_global_info();
+    if(final_map_data[0] == 0&&final_map_data[1] == 0&&final_map_data[2] == 0&&final_map_data[3] == 0
+    &&final_map_data[191] == 0&&final_map_data[190] == 0){
+    }else{
+        system_delay_ms(3000);
+    }
 }
 
 // 等 navigate_flag 变 0
