@@ -17,8 +17,10 @@
 #define TURN_DELAY_TIME_MS 400
 //是否斜线
 #define IF_PASS 0
-//速度，加速度252,291
+//是否行进视觉矫正
 #define IF_RUN_CORRECT 1
+//速度，加速度252,291
+//编码器系数 173
 typedef enum
 {
     RF = 0,

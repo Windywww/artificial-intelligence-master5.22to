@@ -171,7 +171,7 @@ float local_imu_vy = 0.0f;
 
 //比赛版本0.925,0.97
 float vx_encoder_index = 0.925f;
-float vy_encoder_index = 1.05f;
+float vy_encoder_index = 0.97f;
 /**
  * @brief 里程计更新
  *
@@ -604,7 +604,7 @@ void navigation_update(void)
                                     vision_x = car_location[0];
                                     vision_y = car_location[1];
                                 }
-                                if (loac_test >= 1)
+                                if (loac_test >= 2)
                                 {
                                     float dx = global_x - 3.2f * car_location[0];
                                     float dy = global_y - (2.4f - 2.4f * car_location[1]);
