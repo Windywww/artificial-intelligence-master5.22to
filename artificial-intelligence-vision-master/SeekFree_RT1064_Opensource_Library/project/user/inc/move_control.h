@@ -10,9 +10,9 @@
 // 系数 = (1/1024) * (1/0.02秒) * (3/7减速比) * (2 * PI * 0.0315米)
 #define SPEED_COEFFICIENT ((1.0f / 1024.0f) * (1.0f / 0.01f) * (3.0f / 7.0f) * (2.0f * 3.1415926f * 0.0315f))
 //视觉几个节点一校正
-#define VISION_CORRECT_T 1
+#define VISION_CORRECT_T 5
 //视觉几米矫正
-#define VISION_CORRECT_DISTANCE 1.5f
+#define VISION_CORRECT_DISTANCE 3.0f
 //旋转延时时间
 #define TURN_DELAY_TIME_MS 400
 //是否斜线

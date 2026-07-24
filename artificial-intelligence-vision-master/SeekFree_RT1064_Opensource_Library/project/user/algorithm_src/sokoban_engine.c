@@ -1816,7 +1816,7 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             check_image(3 - is_box, 1);
             float thistime_Inso = time_line;
 
-            while (time_line - thistime_Inso <= 0.5f)
+            while (time_line - thistime_Inso <= 0.7f)
             {
                 if (final_image_index != UINT8_MAX)
                 {
