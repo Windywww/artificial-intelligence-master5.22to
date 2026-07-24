@@ -1401,7 +1401,6 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
             if (next_item_idx < 0 || push_stand_idx < 0)
                 continue;
 
-
             bool exploded = false, consumed = false;
 
             if (obstacles[next_item_idx] && !current_walls[next_item_idx])
@@ -1783,20 +1782,19 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
 
             float final_actual_x = final_pos_X * 0.2 + 0.1;
             float final_actual_y = 2.4f - final_pos_Y * 0.2 - 0.1;
-            // back_error��С������ʶ����ľ���
-            float back_error = 0.025;
-            // ȷ�����һ��λ������
-            if (dx > 0)
-                final_actual_x -= back_error;
-            else if (dx < 0)
-                final_actual_x += back_error;
-            else if (dy > 0)
-                final_actual_y += back_error;
-            else if (dy < 0)
-                final_actual_y -= back_error;
-
+            float back_error = 0.025f;
+            // if (dx > 0)
+            //     final_actual_x -= 0.01f;
+            // else if (dx < 0)
+            //     final_actual_x += 0.01f;
+            // else if (dy > 0)
+            //     final_actual_y += 0.01f;
+            // else if (dy < 0)
+            //     final_actual_y -= 0.01f;
             car_move_point(final_actual_x, final_actual_y, angle, 0);
             while (navigate_flag)
+            {
+            }
 
             if (dx > 0)
                 angle = -90;
@@ -1807,14 +1805,36 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             else if (dy < 0)
                 angle = 0;
 
-            system_delay_ms(200);
             car_turn(angle);
             while (!yaw_arrived_flag)
+            {
+            }
+            system_delay_ms(TURN_DELAY_TIME_MS);
 
             // UNKNOWN is a valid result; UINT8_MAX means the request is pending.
             final_image_index = UINT8_MAX;
             check_image(3 - is_box, 1);
-            vision_angle_switch = 0;
+            float thistime_Inso = time_line;
+
+            while (time_line - thistime_Inso <= 0.5f)
+            {
+                if (final_image_index != UINT8_MAX)
+                {
+                    break;
+                }
+                else
+                {
+                    if (image_rx_state == 0)
+                    {
+                        check_image(3 - is_box, 1);
+                    }
+                    else
+                    {
+                        check_image(3 - is_box, 0);
+                    }
+                }
+            }
+
             while (final_image_index == UINT8_MAX)
             {
                 if (image_rx_state == 0)
@@ -1827,41 +1847,41 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                 }
                 if (dx > 0)
                 {
-                    if (final_actual_x <= final_pos_X * 0.2 + 0.1)
+                    if (final_actual_x - 0.01f >= final_pos_X * 0.2 + 0.1 - back_error)
                     {
-                        final_actual_x += 0.005f;
+                        final_actual_x -= 0.01f;
                     }
                 }
                 else if (dx < 0)
                 {
-                    if (final_actual_x >= final_pos_X * 0.2 + 0.1)
+                    if (final_actual_x + 0.01f <= final_pos_X * 0.2 + 0.1 + back_error)
                     {
-                        final_actual_x -= 0.005f;
+                        final_actual_x += 0.01f;
                     }
                 }
                 else if (dy > 0)
                 {
-                    if (final_actual_y >= 2.4f - final_pos_Y * 0.2 - 0.1)
+                    if (final_actual_y + 0.01f <= 2.4f - final_pos_Y * 0.2 - 0.1 + back_error)
                     {
-                        final_actual_y -= 0.005f;
+                        final_actual_y += 0.01f;
                     }
                 }
                 else if (dy < 0)
                 {
-                    if (final_actual_y <= 2.4f - final_pos_Y * 0.2 - 0.1)
+                    if (final_actual_y - 0.01f >= 2.4f - final_pos_Y * 0.2 - 0.1 - back_error)
                     {
-                        final_actual_y += 0.005f;
+                        final_actual_y -= 0.01f;
                     }
                 }
 
                 car_move_point(final_actual_x, final_actual_y, angle, 0);
-                while (navigate_flag){}
+                while (navigate_flag)
+                {
+                }
             }
             // ��ʶ������Ȼδ֪�����������ʶ�𣨿����ǵ�һ�ζ�׼����׼ȷ��
             // ʶ��ʱ����carmove�����Ӿ��Ƕ�У��
             vision_angle_switch = 0;
-            // system_delay_ms(700);
-            system_delay_ms(200);
             uint8_t recognized_id = final_image_index;
 
             if (recognized_id == NO_CLS)
@@ -1927,7 +1947,7 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                 current_state = &ctx->initial_state;
                 car_move(&smooth_path, angle, 0);
                 while (navigate_flag)
-                continue;
+                    continue;
             }
             else
             {
@@ -2127,7 +2147,7 @@ static bool get_micro_path(uint8_t start_pos, uint8_t target_pos, const uint8_t 
             }
         }
     }
- 
+
     if (!found)
         return false;
 
@@ -2180,7 +2200,9 @@ static bool pass(uint8_t startpoint, uint8_t endpoint, float error, const uint8_
         }
         return 1;
     }
-    return 0;
+    if(!IF_PASS){
+        return 0;
+    }
     float start_xf = start_x * 0.2f + 0.1f;
     float start_yf = start_y * 0.2f + 0.1f;
     float end_xf = end_x * 0.2f + 0.1f;
@@ -2284,7 +2306,6 @@ static void get_smooth_path(SokobanContext *ctx, const WaypointPath *grid_path, 
         out_smooth_path->points[out_smooth_path->length++] = grid_path->points[furthest_visible];
         current_idx = furthest_visible;
     }
-    
 }
 
 static void get_final_path(SokobanContext *ctx, WaypointPath *path)
@@ -2394,7 +2415,7 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
         out_full_path->points[out_full_path->length++] = act.push_to;
         if (act.is_explode)
         {
-            out_full_path->points[out_full_path->length++] = 255;   //延时特殊标记符号
+            out_full_path->points[out_full_path->length++] = 255; // 延时特殊标记符号
         }
         // ===========================================
 
@@ -2412,7 +2433,7 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
                 entity_idx = k;
                 break;
             }
-        } 
+        }
         if (!is_bomb_entity)
         {
             for (int k = 0; k < sim_state.box_count; k++)

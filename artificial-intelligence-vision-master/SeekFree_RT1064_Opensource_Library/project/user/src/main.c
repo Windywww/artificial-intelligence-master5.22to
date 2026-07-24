@@ -51,7 +51,7 @@
 extern uint8_t vision_run_correct_switch;
 extern void imu_calibrate(void);
 
-float time_line = 0.0f;
+volatile float time_line = 0.0f;
 SokobanContext engine_ctx;
 
 static void reset_round_runtime(void)
@@ -76,7 +76,7 @@ static void return_to_start_zone(void)
     first_time_fix = 2;
     vision_angle_switch = 0;
     vision_run_correct_switch = 0;
-    car_move_point(0.3, 1.2, angle, 0);
+    car_move_point(0.30, 1.2, angle, 0);
     while (navigate_flag)
     {
     }
@@ -99,14 +99,26 @@ static void return_to_start_zone(void)
             break;
         }
     }
-    if (final_map_data[0] == 0 && final_map_data[1] == 0 && final_map_data[2] == 0 && final_map_data[3] == 0 && final_map_data[191] == 0 && final_map_data[190] == 0)
+
+    uint8_t if_whitemap = 1;
+    for (int i = 0; i < 192; i++)
     {
+        if (final_map_data[i] == 2 || final_map_data[i] == 3)
+        {
+            if_whitemap = 0;
+            break;
+        }
     }
-    else
+    if (!if_whitemap)
     {
         system_delay_ms(3000);
     }
 }
+
+
+
+
+
 
 // 等 navigate_flag 变 0
 static void wait_navigation(void)
@@ -199,25 +211,36 @@ static uint8_t run_round(uint8_t round_index)
     vision_angle_switch = 0;
     car_move_point(global_x + 0.25f, global_y, angle, 0);
     wait_navigation();
-    // 测试时加上，防止地图不对
     if (round_index >= 1)
     {
         sync_car_angle();
     }
 
     // 获取地图
-    request_round_map();
-    while(final_map_data[0] == 0&&final_map_data[1] == 0&&final_map_data[190] == 0&&final_map_data[191] == 0){
+    while (1)
+    {
         request_round_map();
+        uint8_t map_ok = 0;
+        for (int i = 0; i < 192; i++)
+        {
+            if (final_map_data[i] == 2 || final_map_data[i] == 3)
+            {
+                map_ok = 1;
+                break;
+            }
+        }
+        if(map_ok){
+            break;
+        }
     }
+
     if (!got_map_flag)
     {
         return 0;
     }
-    // system_delay_ms(ROUND_MAP_SETTLE_MS);   // 有什么用？
 
     vision_run_correct_switch = 1;
-    build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 0U : 1U);
+    build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 1U : 1U);
     if (!engine_ctx.map_valid)
     {
         return 0;
@@ -415,5 +438,7 @@ void pit_ch0_handler(void)
     // 不要删，统计时间点用
     time_line += 0.01f; // 每10ms增加0.01s
     move_control_task();
-    run_vision_correct();
+    if(IF_RUN_CORRECT){
+        run_vision_correct();
+    }
 }

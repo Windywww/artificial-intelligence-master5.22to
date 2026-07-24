@@ -96,10 +96,10 @@ float yaw_pid_calculate(void)
     // 计算外环 PD 输出
     float vz = Kp_yaw * error1_yaw + Kd_yaw * (error1_yaw - error0_yaw);
 
-    if (vz > 0.9f)
-        vz = 0.9f;
-    if (vz < -0.9f)
-        vz = -0.9f;
+    if (vz > 1.1f)
+        vz = 1.1f;
+    if (vz < -1.1f)
+        vz = -1.1f;
 
     if (error1_yaw < 1.0f && error1_yaw > -1.0f)
     {
@@ -169,8 +169,9 @@ float local_encoder_vy = 0.0f;
 float local_imu_vx = 0.0f;
 float local_imu_vy = 0.0f;
 
+//比赛版本0.925,0.97
 float vx_encoder_index = 0.925f;
-float vy_encoder_index = 0.97f;
+float vy_encoder_index = 1.05f;
 /**
  * @brief 里程计更新
  *
@@ -248,7 +249,7 @@ uint8_t vision_distance_num = 0;
 float speed_angle = 0.0f;           //(弧度制)
 float last_global_target_vx = 0.0f; // 全局坐标系下的目标速度
 float last_global_target_vy = 0.0f; // 全局坐标系下
-float amax = 1.3f;                  // 最大加速度 m/s^2
+float amax = 1.0f;                  // 最大加速度 m/s^2
 
 // 分别在最后一个点与其它节点起到延时作用
 uint8_t count_A = 0;
