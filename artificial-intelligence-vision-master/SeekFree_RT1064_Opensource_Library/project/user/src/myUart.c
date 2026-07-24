@@ -123,7 +123,6 @@ void myuart_rx_error_handler(void)
  */
 void want_global_infor(char infor_type)
 {
-
     if (global_infor_type != 5)
     {
         return;

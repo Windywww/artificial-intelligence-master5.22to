@@ -82,12 +82,28 @@ static void return_to_start_zone(void)
     }
     first_time_fix = 2;
     system_delay_ms(50);
-    wait_global_info();
+    while (global_infor_type != 5)
+    {
+    }
     want_global_infor(1);
-    wait_global_info();
-    if(final_map_data[0] == 0&&final_map_data[1] == 0&&final_map_data[2] == 0&&final_map_data[3] == 0
-    &&final_map_data[191] == 0&&final_map_data[190] == 0){
-    }else{
+    while (global_infor_type != 5)
+    {
+        switch (global_infor_type)
+        {
+        case 1:
+            uart_write_byte(UART_GLOBAL_INDEX, 0xBB);
+            break;
+
+        case 2:
+            uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
+            break;
+        }
+    }
+    if (final_map_data[0] == 0 && final_map_data[1] == 0 && final_map_data[2] == 0 && final_map_data[3] == 0 && final_map_data[191] == 0 && final_map_data[190] == 0)
+    {
+    }
+    else
+    {
         system_delay_ms(3000);
     }
 }
@@ -125,8 +141,6 @@ static void request_round_map(void)
             break;
         }
     }
-		
-		
 }
 // 矫正一次target_x target_y,阻塞式
 static void sync_car_position(void)
@@ -149,7 +163,7 @@ static void sync_car_angle(void)
     {
         wait_global_info();
         want_global_infor(2);
-        while (global_infor_type!=5)
+        while (global_infor_type != 5)
         {
             uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
         }
@@ -165,7 +179,7 @@ static void sync_car_angle(void)
     }
     same_time = 0;
     main_vision_angle = 999;
-    actual_yaw = car_angel-90;
+    actual_yaw = car_angel - 90;
     while (actual_yaw > 180.0f)
         actual_yaw -= 360.0f;
     while (actual_yaw < -180.0f)
@@ -186,12 +200,16 @@ static uint8_t run_round(uint8_t round_index)
     car_move_point(global_x + 0.25f, global_y, angle, 0);
     wait_navigation();
     // 测试时加上，防止地图不对
-    if(round_index>=1){
+    if (round_index >= 1)
+    {
         sync_car_angle();
     }
-    
+
     // 获取地图
     request_round_map();
+    while(final_map_data[0] == 0&&final_map_data[1] == 0&&final_map_data[190] == 0&&final_map_data[191] == 0){
+        request_round_map();
+    }
     if (!got_map_flag)
     {
         return 0;
@@ -261,7 +279,6 @@ int main(void)
     interrupt_global_enable(0);
 
     system_delay_ms(600);
-
 
     sync_car_position();
     // 循环跑三关

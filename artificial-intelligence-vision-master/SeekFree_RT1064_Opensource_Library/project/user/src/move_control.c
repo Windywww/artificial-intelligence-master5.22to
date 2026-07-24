@@ -96,10 +96,10 @@ float yaw_pid_calculate(void)
     // 计算外环 PD 输出
     float vz = Kp_yaw * error1_yaw + Kd_yaw * (error1_yaw - error0_yaw);
 
-    if (vz > 0.6f)
-        vz = 0.6f;
-    if (vz < -0.6f)
-        vz = -0.6f;
+    if (vz > 0.9f)
+        vz = 0.9f;
+    if (vz < -0.9f)
+        vz = -0.9f;
 
     if (error1_yaw < 1.0f && error1_yaw > -1.0f)
     {
@@ -170,7 +170,7 @@ float local_imu_vx = 0.0f;
 float local_imu_vy = 0.0f;
 
 float vx_encoder_index = 0.925f;
-float vy_encoder_index = 1.0f;
+float vy_encoder_index = 0.97f;
 /**
  * @brief 里程计更新
  *
