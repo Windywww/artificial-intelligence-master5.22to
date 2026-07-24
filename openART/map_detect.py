@@ -869,7 +869,7 @@ def generate_mappoints(empty):
 
 generate_mappoints(True)
 while True:
-    flag = 0xFE
+    flag = 0xBB
     if uart.any():
         alls = uart.read(uart.any())
         flag = alls[-1]
@@ -888,9 +888,6 @@ while True:
     maps = build_map_from_colors(colors)
     car_info = get_and_update_car_info(img, maps, grid_spacing, inv_coeffs)
     if car_info == -1:
-        R.on()
-        time.sleep_ms(200)
-        R.off()
         grid_spacing = 0
         generate_mappoints(False)
         #重新初始化
@@ -917,6 +914,9 @@ while True:
         last_spacemap = [1] * LENS
         wrong = 1
         send_2f_packet(car_info[2])
+        if flag == 0xBB and maps.count(2) == 0:
+            send_map_packet(maps)
+            print("send map")
         continue
     # 修正5产生1的错误：若小车位于两格中间附近一小段，其中一格置为空地
     u, v = car_info[2]

@@ -32,7 +32,6 @@ float Kd_yaw = 0.1f;  // 航向角 D 参数
 
 float global_x = 0.3f; // 车模全局 x 坐标 单位 m
 float global_y = 1.2f; // 车模全局 y 坐标 单位 m
-
 uint8_t move_flag = 0;      // 1表示车子在移动 0 表示车子在停止
 uint8_t mode = 0;           // 两种运动模式
 float target_x = 0.3f;      // 目标 x 坐标 单位 m
@@ -97,10 +96,10 @@ float yaw_pid_calculate(void)
     // 计算外环 PD 输出
     float vz = Kp_yaw * error1_yaw + Kd_yaw * (error1_yaw - error0_yaw);
 
-    if (vz > 0.6f)
-        vz = 0.6f;
-    if (vz < -0.6f)
-        vz = -0.6f;
+    if (vz > 0.9f)
+        vz = 0.9f;
+    if (vz < -0.9f)
+        vz = -0.9f;
 
     if (error1_yaw < 1.0f && error1_yaw > -1.0f)
     {
@@ -171,7 +170,7 @@ float local_imu_vx = 0.0f;
 float local_imu_vy = 0.0f;
 
 float vx_encoder_index = 0.925f;
-float vy_encoder_index = 1.0f;
+float vy_encoder_index = 0.97f;
 /**
  * @brief 里程计更新
  *
@@ -243,11 +242,13 @@ uint8_t loac_test = 0;
 uint8_t wait_for_loc = 0;
 // 记录小车跑过的节点个数是否应该让视觉矫正
 uint8_t vision_point_num = 0;
+//记录小车跑过的格子数是否应该让视觉矫正
+uint8_t vision_distance_num = 0;
 // 从一个节点到另一个节点的角度信息，以及走的状态(横向，纵向，斜向)
 float speed_angle = 0.0f;           //(弧度制)
 float last_global_target_vx = 0.0f; // 全局坐标系下的目标速度
 float last_global_target_vy = 0.0f; // 全局坐标系下
-float amax = 0.8f;                  // 最大加速度 m/s^2
+float amax = 1.3f;                  // 最大加速度 m/s^2
 
 // 分别在最后一个点与其它节点起到延时作用
 uint8_t count_A = 0;
@@ -384,6 +385,7 @@ void navigation_update(void)
 
         if (is_last_point)
         {
+
             // if (stop_flag == 0 && distance <= 0.015f)
             // {
             //     stop_flag = 1; // 开启手刹
@@ -549,8 +551,12 @@ void navigation_update(void)
                     }
                     if (first_time_fix == 1)
                     {
-                        if (vision_point_num == 0)
+                        if (vision_point_num == 0||vision_distance_num>=VISION_CORRECT_DISTANCE)
                         {
+                            //节点是否视觉矫正判定的相关参数归零
+                            vision_point_num = 0;
+                            vision_distance_num = 0;
+                            
                             if (wait_for_loc == 0)
                             {
                                 if (global_infor_type != 5)
@@ -597,7 +603,7 @@ void navigation_update(void)
                                     vision_x = car_location[0];
                                     vision_y = car_location[1];
                                 }
-                                if (loac_test >= 3)
+                                if (loac_test >= 1)
                                 {
                                     float dx = global_x - 3.2f * car_location[0];
                                     float dy = global_y - (2.4f - 2.4f * car_location[1]);
@@ -687,14 +693,18 @@ void navigation_update(void)
                     if (d_point_x != 0 && d_point_y != 0)
                     {
                         walk_mode = 2;
+                        vision_distance_num+=99;
                     }
                     else if (d_point_x != 0 && d_point_y == 0)
                     {
                         walk_mode = 0;
+                        vision_distance_num+=fabs(d_point_x);
+                        
                     }
                     else if (d_point_x == 0 && d_point_y != 0)
                     {
                         walk_mode = 1;
+                        vision_distance_num+=fabs(d_point_y);
                     }
                     else
                     {
@@ -818,7 +828,7 @@ void car_move(WaypointPath *path, float yaw, uint8_t m)
 
     target_x = path_queue_x[0];
     target_y = path_queue_y[0];
-
+    
     // 下面是更改小车从一个节点走到另一个节点走的角度信息
     float d_point_x = target_x - global_x;
     float d_point_y = target_y - global_y;
