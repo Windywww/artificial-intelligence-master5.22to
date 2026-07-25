@@ -1782,19 +1782,21 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
 
             float final_actual_x = final_pos_X * 0.2 + 0.1;
             float final_actual_y = 2.4f - final_pos_Y * 0.2 - 0.1;
-            float back_error = 0.025f;
-            // if (dx > 0)
-            //     final_actual_x -= 0.01f;
-            // else if (dx < 0)
-            //     final_actual_x += 0.01f;
-            // else if (dy > 0)
-            //     final_actual_y += 0.01f;
-            // else if (dy < 0)
-            //     final_actual_y -= 0.01f;
+            // back_error��С������ʶ����ľ���
+            float back_error = 0.025;
+            // ȷ�����һ��λ������
+            if (dx > 0)
+                final_actual_x -= back_error;
+            else if (dx < 0)
+                final_actual_x += back_error;
+            else if (dy > 0)
+                final_actual_y += back_error;
+            else if (dy < 0)
+                final_actual_y -= back_error;
+
             car_move_point(final_actual_x, final_actual_y, angle, 0);
             while (navigate_flag)
-            {
-            }
+                wifi_task();
 
             if (dx > 0)
                 angle = -90;
@@ -1807,34 +1809,13 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
 
             car_turn(angle);
             while (!yaw_arrived_flag)
-            {
-            }
-            system_delay_ms(TURN_DELAY_TIME_MS);
+                wifi_task();
 
+            system_delay_ms(200);
             // UNKNOWN is a valid result; UINT8_MAX means the request is pending.
             final_image_index = UINT8_MAX;
             check_image(3 - is_box, 1);
-            float thistime_Inso = time_line;
-
-            while (time_line - thistime_Inso <= 0.7f)
-            {
-                if (final_image_index != UINT8_MAX)
-                {
-                    break;
-                }
-                else
-                {
-                    if (image_rx_state == 0)
-                    {
-                        check_image(3 - is_box, 1);
-                    }
-                    else
-                    {
-                        check_image(3 - is_box, 0);
-                    }
-                }
-            }
-
+            vision_angle_switch = 0;
             while (final_image_index == UINT8_MAX)
             {
                 if (image_rx_state == 0)
@@ -1847,41 +1828,41 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                 }
                 if (dx > 0)
                 {
-                    if (final_actual_x - 0.01f >= final_pos_X * 0.2 + 0.1 - back_error)
+                    if (final_actual_x <= final_pos_X * 0.2 + 0.1)
                     {
-                        final_actual_x -= 0.01f;
+                        final_actual_x += 0.005f;
                     }
                 }
                 else if (dx < 0)
                 {
-                    if (final_actual_x + 0.01f <= final_pos_X * 0.2 + 0.1 + back_error)
+                    if (final_actual_x >= final_pos_X * 0.2 + 0.1)
                     {
-                        final_actual_x += 0.01f;
+                        final_actual_x -= 0.005f;
                     }
                 }
                 else if (dy > 0)
                 {
-                    if (final_actual_y + 0.01f <= 2.4f - final_pos_Y * 0.2 - 0.1 + back_error)
+                    if (final_actual_y >= 2.4f - final_pos_Y * 0.2 - 0.1)
                     {
-                        final_actual_y += 0.01f;
+                        final_actual_y -= 0.005f;
                     }
                 }
                 else if (dy < 0)
                 {
-                    if (final_actual_y - 0.01f >= 2.4f - final_pos_Y * 0.2 - 0.1 - back_error)
+                    if (final_actual_y <= 2.4f - final_pos_Y * 0.2 - 0.1)
                     {
-                        final_actual_y -= 0.01f;
+                        final_actual_y += 0.005f;
                     }
                 }
 
                 car_move_point(final_actual_x, final_actual_y, angle, 0);
                 while (navigate_flag)
-                {
-                }
+                    wifi_task();
             }
             // ��ʶ������Ȼδ֪�����������ʶ�𣨿����ǵ�һ�ζ�׼����׼ȷ��
             // ʶ��ʱ����carmove�����Ӿ��Ƕ�У��
             vision_angle_switch = 0;
+            // system_delay_ms(700);
             uint8_t recognized_id = final_image_index;
 
             if (recognized_id == NO_CLS)
@@ -2200,7 +2181,8 @@ static bool pass(uint8_t startpoint, uint8_t endpoint, float error, const uint8_
         }
         return 1;
     }
-    if(!IF_PASS){
+    if (!IF_PASS)
+    {
         return 0;
     }
     float start_xf = start_x * 0.2f + 0.1f;

@@ -139,6 +139,9 @@ static void request_round_map(void)
 {
     got_map_flag = 0;
     wait_global_info();
+	
+	
+	
     want_global_infor(1);
     while (global_infor_type != 5)
     {
@@ -240,7 +243,7 @@ static uint8_t run_round(uint8_t round_index)
     }
 
     vision_run_correct_switch = 1;
-    build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 1U : 1U);
+    build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 0U : 1U);
     if (!engine_ctx.map_valid)
     {
         return 0;

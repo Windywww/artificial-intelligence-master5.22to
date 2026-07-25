@@ -288,7 +288,7 @@ void navigation_update(void)
     // float global_target_vx = planner_x.v + kp_position_x * (planner_x.p - global_x);
     // float global_target_vy = planner_y.v + kp_position_y * (planner_y.p - global_y);
 
-    float max_speed = 1.2f;
+    float max_speed = 0.8f;
     if (global_target_vx > max_speed)
         global_target_vx = max_speed;
     if (global_target_vx < -max_speed)
