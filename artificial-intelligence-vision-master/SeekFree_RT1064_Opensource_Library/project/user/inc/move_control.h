@@ -11,6 +11,8 @@
 #define SPEED_COEFFICIENT ((1.0f / 1024.0f) * (1.0f / 0.01f) * (3.0f / 7.0f) * (2.0f * 3.1415926f * 0.0315f))
 //视觉几个节点一校正
 #define VISION_CORRECT_T 2
+
+
 //视觉几米矫正
 #define VISION_CORRECT_DISTANCE 3.0f
 //旋转延时时间

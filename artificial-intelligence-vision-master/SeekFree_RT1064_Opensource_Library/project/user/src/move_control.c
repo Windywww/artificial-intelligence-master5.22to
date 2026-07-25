@@ -251,6 +251,9 @@ float last_global_target_vx = 0.0f; // 全局坐标系下的目标速度
 float last_global_target_vy = 0.0f; // 全局坐标系下
 float amax = 0.8f;                  // 最大加速度 m/s^2
 
+
+
+
 // 分别在最后一个点与其它节点起到延时作用
 uint8_t count_A = 0;
 volatile uint8_t count = 0;
