@@ -12,6 +12,7 @@
 //视觉几个节点一校正
 #define VISION_CORRECT_T 2
 
+extern uint8_t vision_run_correct_switch;
 
 //视觉几米矫正
 #define VISION_CORRECT_DISTANCE 3.0f

@@ -1747,8 +1747,10 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             }
         }
         bool all_zero = true;
-        for (int i = 0; i < MAP_SIZE; i++) {
-            if (observation_points[i]) {
+        for (int i = 0; i < MAP_SIZE; i++)
+        {
+            if (observation_points[i])
+            {
                 all_zero = false;
             }
         }
@@ -1780,6 +1782,7 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             car_move(&smooth_path, angle, 0);
             while (navigate_flag)
             {
+                wifi_task();
             }
             uint8_t final_pos_X = final_pos % 16;
             uint8_t final_pos_Y = final_pos / 16;
@@ -1805,7 +1808,9 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
 
             car_move_point(final_actual_x, final_actual_y, angle, 0);
             while (navigate_flag)
+            {
                 wifi_task();
+            }
 
             if (dx > 0)
                 angle = -90;
@@ -1818,13 +1823,16 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
 
             car_turn(angle);
             while (!yaw_arrived_flag)
+            {
                 wifi_task();
-
-            system_delay_ms(200);
+            }
+            system_delay_ms(1000);
             // UNKNOWN is a valid result; UINT8_MAX means the request is pending.
             final_image_index = UINT8_MAX;
             check_image(3 - is_box, 1);
-            vision_angle_switch = 0;
+            float thistime_soko = time_line;
+            vision_run_correct_switch = 0;
+
             while (final_image_index == UINT8_MAX)
             {
                 if (image_rx_state == 0)
@@ -1866,11 +1874,27 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
 
                 car_move_point(final_actual_x, final_actual_y, angle, 0);
                 while (navigate_flag)
+                {
                     wifi_task();
+                }
+
+                if (time_line - thistime_soko >= 9)
+                {
+                    for (uint8_t j = 0; j < current_state->box_count; j++)
+                    {
+                        current_state->boxes[j].id = NO_CLS;
+                    }
+                    for (uint8_t j = 0; j < ctx->goal_count; j++)
+                    {
+                        ctx->goals[j].id = NO_CLS;
+                        ctx->goal_type_map[ctx->goals[j].pos] = NO_CLS;
+                    }
+                    return true;
+                }
             }
+            vision_run_correct_switch = 1;
             // ��ʶ������Ȼδ֪�����������ʶ�𣨿����ǵ�һ�ζ�׼����׼ȷ��
             // ʶ��ʱ����carmove�����Ӿ��Ƕ�У��
-            vision_angle_switch = 0;
             // system_delay_ms(700);
             uint8_t recognized_id = final_image_index;
 
