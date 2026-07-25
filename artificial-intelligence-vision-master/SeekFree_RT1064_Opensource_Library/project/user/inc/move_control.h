@@ -17,11 +17,11 @@ extern uint8_t vision_run_correct_switch;
 //视觉几米矫正
 #define VISION_CORRECT_DISTANCE 3.0f
 //旋转延时时间
-#define TURN_DELAY_TIME_MS 400
+#define TURN_DELAY_TIME_MS 1000
 //是否斜线
 #define IF_PASS 0
 //是否行进视觉矫正
-#define IF_RUN_CORRECT 0
+#define IF_RUN_CORRECT 1
 //速度，加速度252,291
 
 //编码器系数 173
@@ -73,7 +73,6 @@ void car_stop();
 void car_turn(float yaw);
 void car_move_point(float x, float y, float yaw, uint8_t m);
 
-extern uint8_t check_obstacle(SokobanContext *ctx, uint8_t grid_index);
 
 extern uint8_t yaw_arrived_flag; // 航向角到达标志位：1表示已到达目标航向角，0表示未到达
 extern uint8_t navigate_flag; // 1: 正在追路径 0: 没有路径需要追

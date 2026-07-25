@@ -1782,7 +1782,7 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             car_move(&smooth_path, angle, 0);
             while (navigate_flag)
             {
-                wifi_task();
+                // wifi_task();
             }
             uint8_t final_pos_X = final_pos % 16;
             uint8_t final_pos_Y = final_pos / 16;
@@ -1809,7 +1809,7 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             car_move_point(final_actual_x, final_actual_y, angle, 0);
             while (navigate_flag)
             {
-                wifi_task();
+                // wifi_task();
             }
 
             if (dx > 0)
@@ -1824,9 +1824,9 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             car_turn(angle);
             while (!yaw_arrived_flag)
             {
-                wifi_task();
+                // wifi_task();
             }
-            system_delay_ms(1000);
+            system_delay_ms(TURN_DELAY_TIME_MS);
             // UNKNOWN is a valid result; UINT8_MAX means the request is pending.
             final_image_index = UINT8_MAX;
             check_image(3 - is_box, 1);
@@ -1875,7 +1875,7 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                 car_move_point(final_actual_x, final_actual_y, angle, 0);
                 while (navigate_flag)
                 {
-                    wifi_task();
+                    // wifi_task();
                 }
 
                 if (time_line - thistime_soko >= 9)

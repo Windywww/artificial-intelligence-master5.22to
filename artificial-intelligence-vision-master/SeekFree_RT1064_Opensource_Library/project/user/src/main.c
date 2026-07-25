@@ -78,13 +78,13 @@ static void return_to_start_zone(void)
     car_move_point(0.30, 1.2, angle, 0);
     while (navigate_flag)
     {
-        wifi_task();
+        // wifi_task();
     }
     first_time_fix = 2;
     system_delay_ms(50);
     while (global_infor_type != 5)
     {
-        wifi_task();
+        // wifi_task();
     }
     want_global_infor(1);
     while (global_infor_type != 5)
@@ -99,7 +99,7 @@ static void return_to_start_zone(void)
             uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
             break;
         }
-        wifi_task();
+        // wifi_task();
     }
 
     uint8_t if_whitemap = 1;
@@ -127,7 +127,7 @@ static void wait_navigation(void)
 {
     while (navigate_flag)
     {
-        wifi_task();
+        // wifi_task();
     }
 }
 // 等 global_infor_type 变 5
@@ -135,7 +135,7 @@ static void wait_global_info(void)
 {
     while (global_infor_type != 5)
     {
-        wifi_task();
+        // wifi_task();
     }
 }
 // 要一次地图
@@ -159,7 +159,7 @@ static void request_round_map(void)
             uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
             break;
         }
-        wifi_task();
+        // wifi_task();
     }
 }
 // 矫正一次target_x target_y,阻塞式
@@ -185,7 +185,7 @@ static void sync_car_angle(void)
         want_global_infor(2);
         while (global_infor_type != 5)
         {
-            wifi_task();
+            // wifi_task();
             uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
         }
         if (fabs(car_angel - main_vision_angle) <= 2)
@@ -291,7 +291,7 @@ int main(void)
     // debug_init();                  // 调试端口初始化
     // 此处编写用户代码 例如外设初始化代码等
     system_delay_ms(600); // 等待主板其他外设上电完成
-    myWIFI2SPI_Init();
+    // myWIFI2SPI_Init();
     encoder_init();
     // key_init(5);
     // uart1_init();
