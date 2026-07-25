@@ -1641,12 +1641,12 @@ static bool solve_recon_ida(SokobanContext *ctx, State *start_state, const bool 
     }
 }
 
-void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
+bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
 {
     hash_table_clear();
     engine_init(ctx, raw_map);
     if (!ctx->map_valid)
-        return;
+        return false;
     State *current_state = &ctx->initial_state;
     if (cls == 0)
     {
@@ -1659,7 +1659,7 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             ctx->goals[j].id = NO_CLS;
             ctx->goal_type_map[ctx->goals[j].pos] = NO_CLS;
         }
-        return;
+        return true;
     }
     uint8_t unid_boxes = current_state->box_count;
     uint8_t unid_goals = ctx->goal_count;
@@ -1746,7 +1746,16 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                 }
             }
         }
-
+        bool all_zero = true;
+        for (int i = 0; i < MAP_SIZE; i++) {
+            if (observation_points[i]) {
+                all_zero = false;
+            }
+        }
+        if (all_zero)
+        {
+            return false;
+        }
         if (get_nearest_path(current_state->car_pos, observation_points, obstacles, &path))
         {
             uint8_t final_pos = path.points[path.length - 1];
@@ -1876,7 +1885,7 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                     ctx->goals[j].id = NO_CLS;
                     ctx->goal_type_map[ctx->goals[j].pos] = NO_CLS;
                 }
-                return;
+                return true;
             }
 
             if (recognized_id == UNKNOWN)
@@ -1932,7 +1941,7 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             }
             else
             {
-                return;
+                return false;
             }
         }
     }
@@ -1998,6 +2007,7 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             }
         }
     }
+    return true;
 }
 // 引擎主入口：执行加权 IDA* 搜索。
 // 返回 true 表示找到可行解；返回 false 表示地图无效、无解或达到节点上限。
