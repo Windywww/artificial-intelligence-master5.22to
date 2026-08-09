@@ -78,13 +78,13 @@ static void return_to_start_zone(void)
     car_move_point(0.30, 1.2, angle, 0);
     while (navigate_flag)
     {
-        // wifi_task();
+        wifi_task();
     }
     first_time_fix = 2;
     system_delay_ms(50);
     while (global_infor_type != 5)
     {
-        // wifi_task();
+        wifi_task();
     }
     want_global_infor(1);
     while (global_infor_type != 5)
@@ -99,7 +99,7 @@ static void return_to_start_zone(void)
             uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
             break;
         }
-        // wifi_task();
+        wifi_task();
     }
 
     uint8_t if_whitemap = 1;
@@ -117,17 +117,12 @@ static void return_to_start_zone(void)
     }
 }
 
-
-
-
-
-
 // 等 navigate_flag 变 0
 static void wait_navigation(void)
 {
     while (navigate_flag)
     {
-        // wifi_task();
+        wifi_task();
     }
 }
 // 等 global_infor_type 变 5
@@ -135,7 +130,7 @@ static void wait_global_info(void)
 {
     while (global_infor_type != 5)
     {
-        // wifi_task();
+        wifi_task();
     }
 }
 // 要一次地图
@@ -143,9 +138,7 @@ static void request_round_map(void)
 {
     got_map_flag = 0;
     wait_global_info();
-	
-	
-	
+
     want_global_infor(1);
     while (global_infor_type != 5)
     {
@@ -159,7 +152,7 @@ static void request_round_map(void)
             uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
             break;
         }
-        // wifi_task();
+        wifi_task();
     }
 }
 // 矫正一次target_x target_y,阻塞式
@@ -185,7 +178,7 @@ static void sync_car_angle(void)
         want_global_infor(2);
         while (global_infor_type != 5)
         {
-            // wifi_task();
+            wifi_task();
             uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
         }
         if (fabs(car_angel - main_vision_angle) <= 2)
@@ -238,7 +231,8 @@ static uint8_t run_round(uint8_t round_index)
                 break;
             }
         }
-        if(map_ok){
+        if (map_ok)
+        {
             break;
         }
     }
@@ -249,7 +243,8 @@ static uint8_t run_round(uint8_t round_index)
     }
 
     vision_run_correct_switch = 1;
-    if(!build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 1U : 1U)){
+    if (!build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 0U : 1U))
+    {
         return 0;
     }
     if (!engine_ctx.map_valid)
@@ -260,7 +255,11 @@ static uint8_t run_round(uint8_t round_index)
     lost = 1;
     if (!solve(&engine_ctx))
     {
-        return 0;
+        build_map_info(&engine_ctx, final_map_data, 0);
+        if (!solve(&engine_ctx))
+        {
+            return 0;
+        }
     }
 
     generate_path(&engine_ctx, &path);
@@ -449,7 +448,8 @@ void pit_ch0_handler(void)
     // 不要删，统计时间点用
     time_line += 0.01f; // 每10ms增加0.01s
     move_control_task();
-    if(IF_RUN_CORRECT){
+    if (IF_RUN_CORRECT)
+    {
         run_vision_correct();
     }
 }
