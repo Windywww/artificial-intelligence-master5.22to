@@ -9,7 +9,9 @@
 #include "WIFI2SPI.h"
 
 #define SOKOBAN_EMBEDDED 1
-
+#ifndef ENTER_GOAL
+#define  ENTER_GOAL 1   // 识别时能否进入目标点 1=能
+#endif
 #define DEBUG_RECON 0
 #define MAX_ID 12 // id 可能的取值个数
 #ifndef MAX_ALLOWABLE_NODES
@@ -1707,11 +1709,14 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                     for (int d = 0; d < 4; d++)
                     {
                         int n = neighbor_index(g_pos, d);
-                        if (n >= 0 && !the_goals[n] &&
-                            !(failed[n] & (1U << (d ^ 1))))
+                        if (n >= 0 && !(failed[n] & (1U << (d ^ 1))))
                         {
-                            virtual_obs_points[n] = true; // �����ӵ�, ��IDA*�õ�
-                            if (!obstacles[n])
+                            virtual_obs_points[n] = true; // used for IDA*
+                            if(the_goals[n] && ENTER_GOAL == 0)
+                            {
+                                virtual_obs_points[n] = false;
+                            }
+                            if (!obstacles[n] && (ENTER_GOAL || !the_goals[n]))
                             {
                                 observation_points[n] = true;
                                 target_map[n] = (0 << 7) | i; // Type 0: Goal
@@ -1734,11 +1739,14 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                     for (int d = 0; d < 4; d++)
                     {
                         int n = neighbor_index(b_pos, d);
-                        if (n >= 0 && !the_goals[n] &&
-                            !(failed[n] & (1U << (d ^ 1))))
+                        if (n >= 0 && !(failed[n] & (1U << (d ^ 1))))
                         {
-                            virtual_obs_points[n] = true; // �����ӵ�, ��IDA*�õ�
-                            if (!obstacles[n])
+                            virtual_obs_points[n] = true; // used for IDA*
+                            if(the_goals[n] && ENTER_GOAL == 0)
+                            {
+                                virtual_obs_points[n] = false;
+                            }
+                            if (!obstacles[n] && (ENTER_GOAL || !the_goals[n]))
                             {
                                 observation_points[n] = true;
                                 target_map[n] = (1 << 7) | i; // Type 1: Box
@@ -1754,6 +1762,7 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             if (observation_points[i])
             {
                 all_zero = false;
+                break;
             }
         }
         if (all_zero)
