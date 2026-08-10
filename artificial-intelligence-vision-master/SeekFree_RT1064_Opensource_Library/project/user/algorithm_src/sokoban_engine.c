@@ -1671,7 +1671,6 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
     bool is_first = (cls == 2) ? true : false;
     while (unid_boxes > 0 || unid_goals > 0)
     {
-
         uint8_t obstacles[MAP_SIZE];
         uint8_t the_goals[MAP_SIZE];
         memcpy(obstacles, ctx->cached_walls, MAP_SIZE);
@@ -1875,11 +1874,21 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                 }
 
                 car_move_point(final_actual_x, final_actual_y, angle, 0);
+                uint8_t wait_ok = 0;
                 while (navigate_flag)
                 {
+                    if(final_image_index != UINT8_MAX)
+                    {
+                        wait_ok = 1;
+                        break;
+                    }
                     wifi_task();
                 }
-
+                if(wait_ok)
+                {
+                    break;
+                }
+                
                 if (time_line - thistime_soko >= 9)
                 {
                     for (uint8_t j = 0; j < current_state->box_count; j++)
@@ -2301,7 +2310,6 @@ static void get_smooth_path(SokobanContext *ctx, const WaypointPath *grid_path, 
 {
     if (grid_path->length <= 2)
     {
-
         *out_smooth_path = *grid_path;
         return;
     }

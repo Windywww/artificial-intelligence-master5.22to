@@ -215,7 +215,7 @@ static uint8_t run_round(uint8_t round_index)
     wait_navigation();
     if (round_index >= 1)
     {
-        sync_car_angle();
+        // sync_car_angle();
     }
 
     // 获取地图
@@ -243,7 +243,7 @@ static uint8_t run_round(uint8_t round_index)
     }
 
     vision_run_correct_switch = 1;
-    if (!build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 0U : 1U))
+    if (!build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 1U : 1U))
     {
         return 0;
     }
@@ -290,7 +290,7 @@ int main(void)
     // debug_init();                  // 调试端口初始化
     // 此处编写用户代码 例如外设初始化代码等
     system_delay_ms(600); // 等待主板其他外设上电完成
-    // myWIFI2SPI_Init();
+    myWIFI2SPI_Init();
     encoder_init();
     // key_init(5);
     // uart1_init();
@@ -326,6 +326,7 @@ int main(void)
     car_stop();
     while (1)
     {
+        wifi_task();
     }
     // NVIC_SystemReset(); // 复位
     return 0;
