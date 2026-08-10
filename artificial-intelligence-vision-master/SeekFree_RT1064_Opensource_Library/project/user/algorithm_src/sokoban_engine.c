@@ -2070,7 +2070,6 @@ bool solve(SokobanContext *ctx)
     {
         iteration += 1;
         hash_table_clear();
-        // ����ʼ״̬�����ϣ��
         hash_table_insert_or_check(&ctx->initial_state, 0, 0);
 
         SearchRes res = dfs_ida(ctx, &ctx->initial_state, ctx->initial_walls, 0, initial_h, threshold, acts, 0);
@@ -2127,61 +2126,146 @@ static bool get_micro_path(uint8_t start_pos, uint8_t target_pos, const uint8_t 
         return false;
     }
 
-    uint8_t queue[MAP_SIZE];
-    uint8_t parent[MAP_SIZE];
-    bool visited[MAP_SIZE];
-    memset(visited, 0, sizeof(visited));
+    // distance 保存起点到各格子的最短步数，UINT8_MAX 表示尚未到达。
+    // best_turns[pos][dir] 保存以 dir 方向到达 pos 时的最少转折数。
+    // previous_direction 保存最优状态的上一段方向，用于最终回溯。
+    uint8_t distance[MAP_SIZE];
+    uint8_t best_turns[MAP_SIZE][4];
+    uint8_t previous_direction[MAP_SIZE][4];
+    memset(distance, UINT8_MAX, sizeof(distance));
+    memset(best_turns, UINT8_MAX, sizeof(best_turns));
+    memset(previous_direction, UINT8_MAX, sizeof(previous_direction));
 
+    // 复用输出缓冲区作为 BFS 队列，搜索结束后再覆盖为最终路径。
+    uint8_t *queue = out_path->points;
     int head = 0;
     int tail = 0;
-    // ������
+    uint8_t target_distance = UINT8_MAX;
     queue[tail++] = start_pos;
-    visited[start_pos] = true;
-    parent[start_pos] = start_pos;
-    bool found = false;
+    distance[start_pos] = 0;
 
     while (head < tail)
     {
         uint8_t curr = queue[head++];
-        if (curr == target_pos)
-        {
-            found = true;
+        uint8_t curr_distance = distance[curr];
+        // 找到终点后，只需处理完终点前一层，不再扩展更远的格子。
+        if (target_distance != UINT8_MAX && curr_distance >= target_distance)
             break;
+
+        // 对当前格子只保留最小和次小进入代价，使每个离开方向可 O(1) 求值。
+        uint8_t minimum_turns = UINT8_MAX;
+        uint8_t second_minimum_turns = UINT8_MAX;
+        uint8_t minimum_direction = UINT8_MAX;
+        uint8_t second_minimum_direction = UINT8_MAX;
+
+        if (curr != start_pos)
+        {
+            for (uint8_t i = 0; i < 4; i++)
+            {
+                uint8_t incoming = i;
+                uint8_t turns = best_turns[curr][incoming];
+                if (turns < minimum_turns)
+                {
+                    second_minimum_turns = minimum_turns;
+                    second_minimum_direction = minimum_direction;
+                    minimum_turns = turns;
+                    minimum_direction = incoming;
+                }
+                else if (turns < second_minimum_turns)
+                {
+                    second_minimum_turns = turns;
+                    second_minimum_direction = incoming;
+                }
+            }
         }
 
-        for (int i = 0; i < 4; i++)
+        for (uint8_t i = 0; i < 4; i++)
         {
-
-            int n_idx = neighbor_index(curr, i);
-            if (n_idx < 0 || n_idx >= MAP_SIZE)
+            uint8_t outgoing = i;
+            int next = neighbor_index(curr, outgoing);
+            if (next < 0 || obstacles[next])
                 continue;
 
-            if (!obstacles[n_idx] && !visited[n_idx])
+            uint8_t next_distance = (uint8_t)(curr_distance + 1);
+            if (distance[next] == UINT8_MAX)
             {
-                visited[n_idx] = true;
-                parent[n_idx] = curr;
-                queue[tail++] = n_idx;
+                distance[next] = next_distance;
+                queue[tail++] = (uint8_t)next;
+                if (next == target_pos)
+                    target_distance = next_distance;
+            }
+            if (distance[next] != next_distance)
+                continue;
+
+            uint8_t candidate = 0;
+            uint8_t predecessor = UINT8_MAX;
+            if (curr != start_pos)
+            {
+                // 沿相同方向前进不增加转折，改变方向则增加一个转折。
+                uint8_t straight_turns = best_turns[curr][outgoing];
+                uint8_t changed_turns = UINT8_MAX;
+                uint8_t changed_direction = UINT8_MAX;
+
+                if (minimum_direction != UINT8_MAX && minimum_direction != outgoing)
+                {
+                    changed_turns = (uint8_t)(minimum_turns + 1);
+                    changed_direction = minimum_direction;
+                }
+                else if (second_minimum_direction != UINT8_MAX)
+                {
+                    changed_turns = (uint8_t)(second_minimum_turns + 1);
+                    changed_direction = second_minimum_direction;
+                }
+
+                candidate = straight_turns;
+                predecessor = outgoing;
+                if (changed_turns < candidate ||
+                    (changed_turns == candidate && changed_direction < predecessor))
+                {
+                    candidate = changed_turns;
+                    predecessor = changed_direction;
+                }
+            }
+
+            if (candidate < best_turns[next][outgoing])
+            {
+                best_turns[next][outgoing] = candidate;
+                previous_direction[next][outgoing] = predecessor;
             }
         }
     }
 
-    if (!found)
+    if (target_distance == UINT8_MAX)
         return false;
 
-    uint8_t temp_path[MAP_SIZE];
-    int count = 0;
-    uint8_t curr = target_pos;
-    while (curr != start_pos)
+    // 终点可能从四个方向到达，选择转折数最少的状态。
+    uint8_t final_direction = UINT8_MAX;
+    uint8_t minimum_turns = UINT8_MAX;
+    for (uint8_t i = 0; i < 4; i++)
     {
-        temp_path[count++] = curr;
-        curr = parent[curr];
+        uint8_t direction = i;
+        if (best_turns[target_pos][direction] < minimum_turns)
+        {
+            minimum_turns = best_turns[target_pos][direction];
+            final_direction = direction;
+        }
     }
-    temp_path[count++] = start_pos;
+    if (final_direction == UINT8_MAX)
+        return false;
 
-    out_path->length = count;
-    for (int i = 0; i < count; i++)
+    // 从终点按到达方向反向寻找前驱，直接写回输出路径。
+    out_path->length = (uint16_t)distance[target_pos] + 1U;
+    uint8_t curr = target_pos;
+    uint8_t direction = final_direction;
+    for (int index = (int)out_path->length - 1; index >= 0; index--)
     {
-        out_path->points[i] = temp_path[count - 1 - i];
+        out_path->points[index] = curr;
+        if (curr == start_pos)
+            break;
+
+        uint8_t incoming = previous_direction[curr][direction];
+        curr = (uint8_t)neighbor_index(curr, direction ^ 1U);
+        direction = incoming;
     }
     return true;
 }
