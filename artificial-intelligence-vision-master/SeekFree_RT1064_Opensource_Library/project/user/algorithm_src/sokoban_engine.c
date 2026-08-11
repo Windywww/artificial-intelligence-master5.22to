@@ -1804,9 +1804,8 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
 
             float final_actual_x = final_pos_X * 0.2 + 0.1;
             float final_actual_y = 2.4f - final_pos_Y * 0.2 - 0.1;
-            // back_error��С������ʶ����ľ���
-            float back_error = 0.025;
-            // ȷ�����һ��λ������
+            //如果要用直接到视点而非逼近式的，赋值为-0.001f即可，逼近式的步长为0.005f，避免过冲
+            float back_error = 0.02f;
             if (dx > 0)
                 final_actual_x -= back_error;
             else if (dx < 0)
@@ -1855,28 +1854,28 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                 }
                 if (dx > 0)
                 {
-                    if (final_actual_x <= final_pos_X * 0.2 + 0.1)
+                    if (final_actual_x < final_pos_X * 0.2 + 0.1)
                     {
                         final_actual_x += 0.005f;
                     }
                 }
                 else if (dx < 0)
                 {
-                    if (final_actual_x >= final_pos_X * 0.2 + 0.1)
+                    if (final_actual_x > final_pos_X * 0.2 + 0.1)
                     {
                         final_actual_x -= 0.005f;
                     }
                 }
                 else if (dy > 0)
                 {
-                    if (final_actual_y >= 2.4f - final_pos_Y * 0.2 - 0.1)
+                    if (final_actual_y > 2.4f - final_pos_Y * 0.2 - 0.1)
                     {
                         final_actual_y -= 0.005f;
                     }
                 }
                 else if (dy < 0)
                 {
-                    if (final_actual_y <= 2.4f - final_pos_Y * 0.2 - 0.1)
+                    if (final_actual_y < 2.4f - final_pos_Y * 0.2 - 0.1)
                     {
                         final_actual_y += 0.005f;
                     }
@@ -2599,6 +2598,13 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
     memcpy(ctx->initial_walls, sim_walls, MAP_SIZE);
     get_final_path(ctx, out_full_path); // 对整条路径进行最终的优化处理
 }
+
+//在侦查函数结束后存储目标与箱子的位置，以及其id，length是长度
+EntityData mapin_goals[MAX_GOALS];
+uint8_t length_mapin_goals;
+EntityData mapin_boxes[MAX_BOXES];
+uint8_t length_mapin_boxes;
+
 
 // /**
 //  * @brief 实时障碍物检查函数（供运控避�?/侧向补偿调用�?

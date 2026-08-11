@@ -278,7 +278,7 @@ void navigation_update(void)
     float dy = target_y - global_y;
     float distance = sqrtf(dx * dx + dy * dy);
 
-    if (distance <= 0.015f && stop_flag == 0)
+    if (distance <= 0.01f && stop_flag == 0)
     {
         stop_flag = 1; // 开启手刹
         if (walk_mode != 4)
@@ -316,77 +316,77 @@ void navigation_update(void)
                 return;
             }
 
-            // if (first_time_fix == 1)
-            // {
-            //     if (wait_for_loc == 0)
-            //     {
-            //         if (global_infor_type != 5)
-            //         {
-            //             return;
-            //         }
-            //         want_global_infor(0);
-            //         time_vision = time_line;
-            //         wait_for_loc = 1;
-            //     }
-            //     uint8_t if_longtime = 0;
-            //     if (wait_for_loc == 1)
-            //     {
-            //         if (time_line - time_vision >= 0.5f)
-            //         {
-            //             wrong_over_time++;
-            //             if_longtime = 1;
-            //             wait_for_loc = 0;
-            //             global_infor_type = 5;
-            //             want_global_infor(5);
-            //         }
-            //         else
-            //         {
-            //             if (global_infor_type == 5)
-            //             {
-            //                 wait_for_loc = 0;
-            //             }
-            //             else
-            //             {
-            //                 return;
-            //             }
-            //         }
-            //     }
+            if (first_time_fix == 1)
+            {
+                if (wait_for_loc == 0)
+                {
+                    if (global_infor_type != 5)
+                    {
+                        return;
+                    }
+                    want_global_infor(0);
+                    time_vision = time_line;
+                    wait_for_loc = 1;
+                }
+                uint8_t if_longtime = 0;
+                if (wait_for_loc == 1)
+                {
+                    if (time_line - time_vision >= 0.5f)
+                    {
+                        wrong_over_time++;
+                        if_longtime = 1;
+                        wait_for_loc = 0;
+                        global_infor_type = 5;
+                        want_global_infor(5);
+                    }
+                    else
+                    {
+                        if (global_infor_type == 5)
+                        {
+                            wait_for_loc = 0;
+                        }
+                        else
+                        {
+                            return;
+                        }
+                    }
+                }
 
-            //     if (!if_longtime)
-            //     {
-            //         if (car_location[0] - vision_x >= -0.002f && car_location[0] - vision_x <= 0.002f &&
-            //             car_location[1] - vision_y >= -0.002f &&
-            //             car_location[1] - vision_y <= 0.002f)
-            //         {
-            //             loac_test++;
-            //         }
-            //         else
-            //         {
-            //             loac_test = 0;
-            //             vision_x = car_location[0];
-            //             vision_y = car_location[1];
-            //         }
+                if (!if_longtime)
+                {
+                    if (car_location[0] - vision_x >= -0.002f && car_location[0] - vision_x <= 0.002f &&
+                        car_location[1] - vision_y >= -0.002f &&
+                        car_location[1] - vision_y <= 0.002f)
+                    {
+                        loac_test++;
+                    }
+                    else
+                    {
+                        loac_test = 0;
+                        vision_x = car_location[0];
+                        vision_y = car_location[1];
+                    }
 
-            //         if (loac_test >= 4)
-            //         {
-            //             float dx = global_x - 3.2f * car_location[0];
-            //             float dy = global_y - (2.4f - 2.4f * car_location[1]);
+                    if (loac_test >= 4)
+                    {
+                        float dx = global_x - 3.2f * car_location[0];
+                        float dy = global_y - (2.4f - 2.4f * car_location[1]);
 
-            //             global_x = 3.2f * (car_location[0] + vision_x) * 0.5f;
-            //             global_y = 2.4f - 2.4f * (car_location[1] + vision_y) * 0.5f;
-            //         }
-            //         else
-            //         {
-            //             return;
-            //         }
-            //     }
-            //     vision_x = -1;
-            //     vision_y = -1;
-            //     loac_test = 0;
-            //     first_time_fix = 0;
-            //     stop_flag = 0;
-            //     return;
-            // }
+                        global_x = 3.2f * (car_location[0] + vision_x) * 0.5f;
+                        global_y = 2.4f - 2.4f * (car_location[1] + vision_y) * 0.5f;
+                    }
+                    else
+                    {
+                        return;
+                    }
+                }
+                vision_x = -1;
+                vision_y = -1;
+                loac_test = 0;
+                first_time_fix = 0;
+                stop_flag = 0;
+                return;
+            }
         }
 
         navigate_flag = 0;
@@ -479,9 +479,9 @@ void navigation_update(void)
                             // }
                             // else
                             // {
-                                global_x = 3.2f * (car_location[0] + vision_x) * 0.5f;
-                                global_y = 2.4f - 2.4f * (car_location[1] + vision_y) * 0.5f;
-                                // actual_yaw = car_angel - 90;
+                            global_x = 3.2f * (car_location[0] + vision_x) * 0.5f;
+                            global_y = 2.4f - 2.4f * (car_location[1] + vision_y) * 0.5f;
+                            // actual_yaw = car_angel - 90;
                             // }
                         }
                         else
@@ -509,7 +509,7 @@ void navigation_update(void)
         return; // 如果到达了当前目标点了 就不继续往下算了 等下个周期再算新的目标点
     }
 }
-//速度，加速度限制
+// 速度，加速度限制
 void speed_limit()
 {
     if (global_target_vx > max_speed)
@@ -681,7 +681,7 @@ uint8_t check_correctOn_vision()
     return 0;
 }
 
-//计算目标转速
+// 计算目标转速
 float get_target_vz()
 {
     float max_yaw_step = 10.0f;
@@ -732,8 +732,8 @@ float get_target_vz()
  */
 void move_control_task(void)
 {
-    odometry_update();   // 更新里程计
-    navigation_update(); // 更新导航
+    odometry_update();                                            // 更新里程计
+    navigation_update();                                          // 更新导航
     wheel_speed_calculate(target_vx, target_vy, get_target_vz()); // 计算轮子速度并输出
 }
 
@@ -811,6 +811,196 @@ void car_stop()
     navigate_flag = 0;
 }
 
+
+// 此函数根据tnt_loc坐标炸掉以坐标为中心3*3的墙壁，边界墙炸不到
+void boom_wall(uint8_t *map, uint8_t tnt_loc)
+{
+
+    uint8_t x = tnt_loc % 16;
+    uint8_t y = tnt_loc / 16;
+    for (int i = -1; i <= 1; i++)
+    {
+        for (int j = -1; j <= 1; j++)
+        {
+            if (x + i > 0 && x + i < 15 && y + j > 0 && y + j < 11)
+            {
+                if (map[(y + j) * 16 + (x + i)] == 1)
+                {
+                    map[(y + j) * 16 + (x + i)] = 0;
+                }
+            }
+        }
+    }
+}
+// 注意：(此函数目的地0与空地3无区分),用来更新地图，并判断car_to这个点是否需要获取视觉坐标
+// 每次到达某个节点时用car_to,而car_to_to表示下一个节点，用来判断car_to这个点是否需要获取视觉坐标,
+// 仅当从car_to到car_to_to的路径两侧有箱子时才需要获取视觉坐标
+uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to)
+{
+    // 首先更新地图状态
+    uint8_t car_from = 0;
+    for (int i = 0; i < MAP_SIZE; i++)
+    {
+        if (map[i] == 5)
+        {
+            car_from = i;
+            break;
+        }
+    }
+    if ((car_from / 16 == car_to / 16))
+    {
+        if (car_from < car_to)
+        {
+            for (int i = car_from + 1; i <= car_to; i++)
+            {
+                if (map[i] == 2)
+                {
+                    map[car_to] = 5;
+                    map[car_from] = 0;
+                    map[car_to + 1] = 2;
+                    map[i] = 0;
+                    break;
+                }
+                else if (map[i] == 4)
+                {
+                    map[i] = 0;
+                    if (map[car_to + 1] == 2)
+                    {
+                        boom_wall(map, car_to + 1);
+                    }
+                    else
+                    {
+                        map[car_to + 1] = 4;
+                    }
+                }
+            }
+        }
+        else
+        {
+            for (int i = car_from - 1; i >= car_to; i--)
+            {
+                if (map[i] == 2)
+                {
+                    map[car_to - 1] = 2;
+                    map[i] = 0;
+                    break;
+                }
+                else if (map[i] == 4)
+                {
+                    map[i] = 0;
+                    if (map[car_to - 1] == 2)
+                    {
+                        boom_wall(map, car_to - 1);
+                    }
+                    else
+                    {
+                        map[car_to - 1] = 4;
+                    }
+                }
+            }
+        }
+    }
+    else if ((car_from % 16 == car_to % 16))
+    {
+        if (car_from < car_to)
+        {
+            for (int i = car_from + 16; i <= car_to; i += 16)
+            {
+                if (map[i] == 2)
+                {
+                    map[car_to + 16] = 2;
+                    map[i] = 0;
+                    break;
+                }
+                else if (map[i] == 4)
+                {
+                    map[i] = 0;
+                    if (map[car_to + 16] == 2)
+                    {
+                        boom_wall(map, car_to + 16);
+                    }
+                    else
+                    {
+                        map[car_to + 16] = 4;
+                    }
+                }
+            }
+        }
+        else
+        {
+            for (int i = car_from - 16; i >= car_to; i -= 16)
+            {
+                if (map[i] == 2)
+                {
+                    map[car_to - 16] = 2;
+                    map[i] = 0;
+                    break;
+                }
+                else if (map[i] == 4)
+                {
+                    map[i] = 0;
+                    if (map[car_to - 16] == 2)
+                    {
+                        boom_wall(map, car_to - 16);
+                    }
+                    else
+                    {
+                        map[car_to - 16] = 4;
+                    }
+                }
+            }
+        }
+    }
+
+    // 其次判断car_to这个点是否需要获取视觉坐标
+    if ((car_to_to / 16 == car_to / 16))
+    {
+        if (car_to < car_to_to)
+        {
+            for (int i = car_to + 1; i <= car_to_to; i++)
+            {
+                if (i - 16 > 0)
+                {
+                    if (map[i - 16] == 2)
+                    {
+                        return 1;
+                    }
+                }
+                if (i + 16 < 192)
+                {
+                    if (map[i + 16] == 2)
+                    {
+                        return 1;
+                    }
+                }
+            }
+        }
+    }
+    else if ((car_to_to % 16 == car_to % 16))
+    {
+        if (car_to < car_to_to)
+        {
+            for (int i = car_to + 16; i <= car_to_to; i += 16)
+            {
+                if (i - 1 > 0)
+                {
+                    if (map[i - 1] == 2)
+                    {
+                        return 1;
+                    }
+                }
+                if (i + 1 < 192)
+                {
+                    if (map[i + 1] == 2)
+                    {
+                        return 1;
+                    }
+                }
+            }
+        }
+    }
+    return 0;
+}
 // if (vision_angle_switch)
 // {
 //     if (got_angle == 0)

@@ -75,7 +75,7 @@ static void return_to_start_zone(void)
     first_time_fix = 2;
     vision_angle_switch = 0;
     vision_run_correct_switch = 0;
-    car_move_point(0.30, 1.2, angle, 0);
+    car_move_point(0.3, 1.2, angle, 0);
     while (navigate_flag)
     {
         wifi_task();
