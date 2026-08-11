@@ -34,6 +34,9 @@
 #define HASH_WAYS 4
 #define HASH_SET_COUNT (HASH_TABLE_SIZE / HASH_WAYS)
 #define HASH_SET_MASK (HASH_SET_COUNT - 1)
+// 识别选点允许比最近可达视点最多多走的网格数。
+#define RECON_PATH_SLACK 2
+#define MAX_RECON_CANDIDATES ((MAX_BOXES + MAX_GOALS) * 4)
 
 int angle = 0;
 
@@ -52,6 +55,14 @@ typedef struct
     uint16_t h;
 } SearchRes;
 
+typedef struct
+{
+    // pos 是观察位置；target_info 高位区分箱子/目标点，低位保存索引；direction 是识别时需要朝向目标的方向。
+    uint8_t pos;
+    uint8_t target_info;
+    uint8_t direction;
+} ReconCandidate;
+
 // 哈希表结构与全局内存分配
 static uint8_t current_hash_version = 0;
 
@@ -66,6 +77,7 @@ __attribute__((section(".bss.sdram"))) static ChildNode all_children_pool[MAX_ST
 
 // 关键内部接口。
 static void get_smooth_path(SokobanContext *ctx, const WaypointPath *grid_path, const uint8_t *obstacles, WaypointPath *out_smooth_path);
+static bool get_micro_path(uint8_t start_pos, uint8_t target_pos, const uint8_t *obstacles, WaypointPath *out_path);
 static uint8_t is_deadlock(SokobanContext *ctx, uint8_t idx, State *state, bool is_bomb, const uint8_t *walls);
 // 按当前墙布局和剩余炸弹数，构建各目标点的反向推动距离表。
 static void get_maze_distances(SokobanContext *ctx, const uint8_t *current_walls, uint8_t bomb_count);
@@ -1289,6 +1301,148 @@ static bool get_nearest_path(uint8_t start_pos, const bool *obs_points, const ui
     return true;
 }
 
+static int recon_direction_to_angle(uint8_t direction)
+{
+    // 与 neighbor_index() 的方向编号保持一致：上、下、左、右分别对应 0、180、90、-90 度。
+    static const int direction_angles[4] = {0, 180, 90, -90};
+    return direction_angles[direction];
+}
+
+static uint8_t recon_angle_to_direction(int current_angle)
+{
+    // angle 可能经过多次累加，先规整到 [-180, 180] 再转成识别方向编号。
+    while (current_angle > 180)
+        current_angle -= 360;
+    while (current_angle <= -180)
+        current_angle += 360;
+
+    if (current_angle == 180)
+        return 1;
+    if (current_angle == 90)
+        return 2;
+    if (current_angle == -90)
+        return 3;
+    return 0;
+}
+
+static bool select_recon_candidate(uint8_t start_pos, uint8_t current_direction,
+                                   const ReconCandidate *candidates, uint8_t candidate_count,
+                                   const uint8_t *obstacles, ReconCandidate *selected)
+{
+    // 第一层先用 BFS 求当前到每个观察候选的最短距离，只保留相对最近视点至多多走两格的候选。
+    uint8_t current_distances[MAP_SIZE];
+    build_car_dist_map(start_pos, obstacles, current_distances);
+
+    uint8_t minimum_distance = UINT8_MAX;
+    for (uint8_t i = 0; i < candidate_count; i++)
+    {
+        uint8_t distance = current_distances[candidates[i].pos];
+        if (distance < minimum_distance)
+            minimum_distance = distance;
+    }
+    if (minimum_distance == UINT8_MAX)
+        return false;
+
+    uint8_t best_rotations = UINT8_MAX;
+    uint16_t best_total_distance = UINT16_MAX;
+    uint8_t best_current_distance = UINT8_MAX;
+    uint8_t best_index = UINT8_MAX;
+
+    for (uint8_t i = 0; i < candidate_count; i++)
+    {
+        const ReconCandidate *candidate = &candidates[i];
+        uint8_t current_distance = current_distances[candidate->pos];
+        if (current_distance == UINT8_MAX ||
+            current_distance > (uint8_t)(minimum_distance + RECON_PATH_SLACK))
+        {
+            continue;
+        }
+
+        uint8_t next_distances[MAP_SIZE];
+        build_car_dist_map(candidate->pos, obstacles, next_distances);
+
+        // 两步前瞻只假设当前目标识别成功；真实识别失败、推断或 UNKNOWN 后会回到外层重新规划。
+        uint8_t next_minimum_distance = UINT8_MAX;
+        for (uint8_t j = 0; j < candidate_count; j++)
+        {
+            if (candidates[j].target_info == candidate->target_info)
+                continue;
+            uint8_t distance = next_distances[candidates[j].pos];
+            if (distance < next_minimum_distance)
+                next_minimum_distance = distance;
+        }
+
+        uint8_t next_rotations = 0;
+        uint8_t next_distance = 0;
+        if (next_minimum_distance != UINT8_MAX)
+        {
+            // 下一步同样限定在最近距离 + RECON_PATH_SLACK 内，再挑转向次数最少的候选。
+            next_rotations = UINT8_MAX;
+            next_distance = UINT8_MAX;
+            uint8_t next_position = UINT8_MAX;
+            uint8_t next_target_info = UINT8_MAX;
+            uint8_t next_direction = UINT8_MAX;
+
+            for (uint8_t j = 0; j < candidate_count; j++)
+            {
+                const ReconCandidate *next_candidate = &candidates[j];
+                if (next_candidate->target_info == candidate->target_info)
+                    continue;
+
+                uint8_t distance = next_distances[next_candidate->pos];
+                if (distance == UINT8_MAX ||
+                    distance > (uint8_t)(next_minimum_distance + RECON_PATH_SLACK))
+                {
+                    continue;
+                }
+
+                uint8_t rotations = (next_candidate->direction != candidate->direction) ? 1U : 0U;
+                if (rotations < next_rotations ||
+                    (rotations == next_rotations && distance < next_distance) ||
+                    (rotations == next_rotations && distance == next_distance && next_candidate->pos < next_position) ||
+                    (rotations == next_rotations && distance == next_distance && next_candidate->pos == next_position &&
+                     next_candidate->target_info < next_target_info) ||
+                    (rotations == next_rotations && distance == next_distance && next_candidate->pos == next_position &&
+                     next_candidate->target_info == next_target_info && next_candidate->direction < next_direction))
+                {
+                    next_rotations = rotations;
+                    next_distance = distance;
+                    next_position = next_candidate->pos;
+                    next_target_info = next_candidate->target_info;
+                    next_direction = next_candidate->direction;
+                }
+            }
+        }
+
+        uint8_t total_rotations = (candidate->direction != current_direction ? 1U : 0U) + next_rotations;
+        uint16_t total_distance = (uint16_t)current_distance + next_distance;
+        // 排序优先级：两次识别的原地旋转次数、两段预测距离、当前距离、观察位置、目标索引、方向。
+        if (total_rotations < best_rotations ||
+            (total_rotations == best_rotations && total_distance < best_total_distance) ||
+            (total_rotations == best_rotations && total_distance == best_total_distance && current_distance < best_current_distance) ||
+            (total_rotations == best_rotations && total_distance == best_total_distance && current_distance == best_current_distance &&
+             (best_index == UINT8_MAX || candidate->pos < candidates[best_index].pos)) ||
+            (total_rotations == best_rotations && total_distance == best_total_distance && current_distance == best_current_distance &&
+             best_index != UINT8_MAX && candidate->pos == candidates[best_index].pos &&
+             candidate->target_info < candidates[best_index].target_info) ||
+            (total_rotations == best_rotations && total_distance == best_total_distance && current_distance == best_current_distance &&
+             best_index != UINT8_MAX && candidate->pos == candidates[best_index].pos &&
+             candidate->target_info == candidates[best_index].target_info && candidate->direction < candidates[best_index].direction))
+        {
+            best_rotations = total_rotations;
+            best_total_distance = total_distance;
+            best_current_distance = current_distance;
+            best_index = i;
+        }
+    }
+
+    if (best_index == UINT8_MAX)
+        return false;
+
+    *selected = candidates[best_index];
+    return true;
+}
+
 // 估计小车到最近可用识别视点的破障/绕行代价。
 static int calc_recon_heuristic(SokobanContext *ctx, State *state, const bool *obs_points, const uint8_t *walls)
 {
@@ -1691,8 +1845,9 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
 
         bool observation_points[MAP_SIZE] = {false};
         bool virtual_obs_points[MAP_SIZE] = {false}; // 虚拟视点, 给IDA*用的
-        uint8_t target_map[MAP_SIZE];
-        memset(target_map, 0, sizeof(target_map));
+        // 候选列表保留“视点 + 目标 + 朝向”，避免多个目标共用同一视点时互相覆盖。
+        ReconCandidate candidates[MAX_RECON_CANDIDATES];
+        uint8_t candidate_count = 0;
         WaypointPath path;
         WaypointPath smooth_path;
 
@@ -1718,7 +1873,8 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                             if (!obstacles[n] && (ENTER_GOAL || !the_goals[n]))
                             {
                                 observation_points[n] = true;
-                                target_map[n] = (0 << 7) | i; // Type 0: Goal
+                                // d ^ 1 是从观察点看向目标点的方向。
+                                candidates[candidate_count++] = (ReconCandidate){(uint8_t)n, (uint8_t)i, (uint8_t)(d ^ 1)};
                             }
                         }
                     }
@@ -1748,44 +1904,33 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                             if (!obstacles[n] && (ENTER_GOAL || !the_goals[n]))
                             {
                                 observation_points[n] = true;
-                                target_map[n] = (1 << 7) | i; // Type 1: Box
+                                // 箱子候选在 target_info 最高位标记类型，低 7 位保留箱子索引。
+                                candidates[candidate_count++] = (ReconCandidate){(uint8_t)n, (uint8_t)((1U << 7) | i), (uint8_t)(d ^ 1)};
                             }
                         }
                     }
                 }
             }
         }
-        bool all_zero = true;
-        for (int i = 0; i < MAP_SIZE; i++)
-        {
-            if (observation_points[i])
-            {
-                all_zero = false;
-                break;
-            }
-        }
-        if (all_zero)
+        if (candidate_count == 0)
         {
             return false;
         }
-        if (get_nearest_path(current_state->car_pos, observation_points, obstacles, &path))
+        ReconCandidate selected_candidate;
+        // 在线选点负责降低识别阶段原地旋转；实际移动仍由 get_micro_path() 生成严格最短单段路径。
+        if (select_recon_candidate(current_state->car_pos, recon_angle_to_direction(angle),
+                                   candidates, candidate_count, obstacles, &selected_candidate) &&
+            get_micro_path(current_state->car_pos, selected_candidate.pos, obstacles, &path))
         {
-            uint8_t final_pos = path.points[path.length - 1];
-            uint8_t target_info = target_map[final_pos];
+            uint8_t final_pos = selected_candidate.pos;
+            uint8_t target_info = selected_candidate.target_info;
             bool is_box = (target_info >> 7) == 1;
             uint8_t index = target_info & 0b01111111;
             uint8_t entity_pos = is_box ? current_state->boxes[index].pos : ctx->goals[index].pos;
             get_smooth_path(ctx, &path, obstacles, &smooth_path);
             current_state->car_pos = final_pos;
 
-            int8_t target_delta = entity_pos - final_pos;
-            uint8_t target_direction = 0;
-            if (target_delta == WIDTH)
-                target_direction = 1;
-            else if (target_delta == -1)
-                target_direction = 2;
-            else if (target_delta == 1)
-                target_direction = 3;
+            uint8_t target_direction = selected_candidate.direction;
 
             //--��Ϊ�˲��ߵ����һ���㣬���һ������������
             smooth_path.length--;
@@ -1822,21 +1967,19 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                 wifi_task();
             }
 
-            if (dx > 0)
-                angle = -90;
-            else if (dx < 0)
-                angle = 90;
-            else if (dy > 0)
-                angle = 180;
-            else if (dy < 0)
-                angle = 0;
-
-            car_turn(angle);
-            while (!yaw_arrived_flag)
+            int target_angle = recon_direction_to_angle(target_direction);
+            bool direction_changed = recon_angle_to_direction(angle) != target_direction;
+            angle = target_angle;
+            // 同方向连续识别不调用 car_turn()，避免产生空转和额外等待。
+            if (direction_changed)
             {
-                wifi_task();
+                car_turn(angle);
+                while (!yaw_arrived_flag)
+                {
+                    wifi_task();
+                }
+                system_delay_ms(TURN_DELAY_TIME_MS);
             }
-            system_delay_ms(TURN_DELAY_TIME_MS);
             // UNKNOWN is a valid result; UINT8_MAX means the request is pending.
             final_image_index = UINT8_MAX;
             check_image(3 - is_box, 1);
