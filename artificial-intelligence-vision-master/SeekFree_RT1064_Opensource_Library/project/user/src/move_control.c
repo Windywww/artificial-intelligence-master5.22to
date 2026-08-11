@@ -56,12 +56,19 @@ uint8_t wrong_time = 0;
 uint8_t walk_mode = 3;
 extern uint8_t vision_correct_flag;
 uint8_t wrong_over_time = 0;
+
+uint8_t ban_map_check_ifgetVisionLoc = 1;
 void move_control_init()
 {
     for (int i = 0; i < 4; i++)
     {
         pid_init(&pid[i], 40.0f, 2.0f, 0.0f);
     }
+}
+// 浮点数转整数四舍五入，返回int类型结果
+int round_int(float num)
+{
+    return (int)(num + 0.5f);
 }
 /**
  * @brief 航向角 PID 计算函数
@@ -300,6 +307,14 @@ void navigation_update(void)
     {
         target_vx = 0.0f;
         target_vy = 0.0f;
+
+        if (!ban_map_check_ifgetVisionLoc)
+        {
+            uint8_t path_X = round_int((target_x - 0.1f) / 0.2f);
+            uint8_t path_Y = round_int((2.3f - target_y) / 0.2f);
+            map_check_ifgetVisionLoc(final_map_data, 16 * path_Y + path_X, 16 * path_Y + path_X);
+        }
+
         if (walk_mode == 4)
         {
             if (count_A <= 100)
@@ -380,6 +395,8 @@ void navigation_update(void)
                         return;
                     }
                 }
+
+                
                 vision_x = -1;
                 vision_y = -1;
                 loac_test = 0;
@@ -402,7 +419,7 @@ void navigation_update(void)
 
         if (walk_mode == 4)
         {
-            if (count <= 100)
+            if (count <= 130)
             {
                 count++;
                 return;
@@ -417,7 +434,21 @@ void navigation_update(void)
             }
             if (first_time_fix == 1)
             {
-                if (vision_point_num == 0 || vision_distance_num >= VISION_CORRECT_DISTANCE)
+                //   path_queue_x[i] = (path->points[i] % 16) * 0.2f + 0.1f;
+                // path_queue_y[i] = 2.4 - (path->points[i] / 16) * 0.2f - 0.1f;
+                uint8_t path_X = round_int((target_x - 0.1f) / 0.2f);
+                uint8_t path_Y = round_int((2.3f - target_y) / 0.2f);
+                uint8_t car_to = path_X + path_Y * 16;
+                uint8_t path_X_to = round_int((path_queue_x[current_path + 1] - 0.1f) / 0.2f);
+                uint8_t path_Y_to = round_int((2.3f - path_queue_y[current_path + 1]) / 0.2f);
+                uint8_t car_to_to = path_X_to + path_Y_to * 16;
+                if (car_to_to > 191 || car_to_to < 0)
+                { // 说明是炸弹延时特殊点
+                    car_to_to
+
+                        = round_int((path_queue_x[current_path + 2] - 0.1f) / 0.2f) + round_int((2.3f - path_queue_y[current_path + 2]) / 0.2f) * 16;
+                }
+                if (map_check_ifgetVisionLoc(final_map_data, car_to, car_to_to))
                 {
                     // 节点是否视觉矫正判定的相关参数归零
                     vision_point_num = 0;
@@ -811,196 +842,6 @@ void car_stop()
     navigate_flag = 0;
 }
 
-
-// 此函数根据tnt_loc坐标炸掉以坐标为中心3*3的墙壁，边界墙炸不到
-void boom_wall(uint8_t *map, uint8_t tnt_loc)
-{
-
-    uint8_t x = tnt_loc % 16;
-    uint8_t y = tnt_loc / 16;
-    for (int i = -1; i <= 1; i++)
-    {
-        for (int j = -1; j <= 1; j++)
-        {
-            if (x + i > 0 && x + i < 15 && y + j > 0 && y + j < 11)
-            {
-                if (map[(y + j) * 16 + (x + i)] == 1)
-                {
-                    map[(y + j) * 16 + (x + i)] = 0;
-                }
-            }
-        }
-    }
-}
-// 注意：(此函数目的地0与空地3无区分),用来更新地图，并判断car_to这个点是否需要获取视觉坐标
-// 每次到达某个节点时用car_to,而car_to_to表示下一个节点，用来判断car_to这个点是否需要获取视觉坐标,
-// 仅当从car_to到car_to_to的路径两侧有箱子时才需要获取视觉坐标
-uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to)
-{
-    // 首先更新地图状态
-    uint8_t car_from = 0;
-    for (int i = 0; i < MAP_SIZE; i++)
-    {
-        if (map[i] == 5)
-        {
-            car_from = i;
-            break;
-        }
-    }
-    if ((car_from / 16 == car_to / 16))
-    {
-        if (car_from < car_to)
-        {
-            for (int i = car_from + 1; i <= car_to; i++)
-            {
-                if (map[i] == 2)
-                {
-                    map[car_to] = 5;
-                    map[car_from] = 0;
-                    map[car_to + 1] = 2;
-                    map[i] = 0;
-                    break;
-                }
-                else if (map[i] == 4)
-                {
-                    map[i] = 0;
-                    if (map[car_to + 1] == 2)
-                    {
-                        boom_wall(map, car_to + 1);
-                    }
-                    else
-                    {
-                        map[car_to + 1] = 4;
-                    }
-                }
-            }
-        }
-        else
-        {
-            for (int i = car_from - 1; i >= car_to; i--)
-            {
-                if (map[i] == 2)
-                {
-                    map[car_to - 1] = 2;
-                    map[i] = 0;
-                    break;
-                }
-                else if (map[i] == 4)
-                {
-                    map[i] = 0;
-                    if (map[car_to - 1] == 2)
-                    {
-                        boom_wall(map, car_to - 1);
-                    }
-                    else
-                    {
-                        map[car_to - 1] = 4;
-                    }
-                }
-            }
-        }
-    }
-    else if ((car_from % 16 == car_to % 16))
-    {
-        if (car_from < car_to)
-        {
-            for (int i = car_from + 16; i <= car_to; i += 16)
-            {
-                if (map[i] == 2)
-                {
-                    map[car_to + 16] = 2;
-                    map[i] = 0;
-                    break;
-                }
-                else if (map[i] == 4)
-                {
-                    map[i] = 0;
-                    if (map[car_to + 16] == 2)
-                    {
-                        boom_wall(map, car_to + 16);
-                    }
-                    else
-                    {
-                        map[car_to + 16] = 4;
-                    }
-                }
-            }
-        }
-        else
-        {
-            for (int i = car_from - 16; i >= car_to; i -= 16)
-            {
-                if (map[i] == 2)
-                {
-                    map[car_to - 16] = 2;
-                    map[i] = 0;
-                    break;
-                }
-                else if (map[i] == 4)
-                {
-                    map[i] = 0;
-                    if (map[car_to - 16] == 2)
-                    {
-                        boom_wall(map, car_to - 16);
-                    }
-                    else
-                    {
-                        map[car_to - 16] = 4;
-                    }
-                }
-            }
-        }
-    }
-
-    // 其次判断car_to这个点是否需要获取视觉坐标
-    if ((car_to_to / 16 == car_to / 16))
-    {
-        if (car_to < car_to_to)
-        {
-            for (int i = car_to + 1; i <= car_to_to; i++)
-            {
-                if (i - 16 > 0)
-                {
-                    if (map[i - 16] == 2)
-                    {
-                        return 1;
-                    }
-                }
-                if (i + 16 < 192)
-                {
-                    if (map[i + 16] == 2)
-                    {
-                        return 1;
-                    }
-                }
-            }
-        }
-    }
-    else if ((car_to_to % 16 == car_to % 16))
-    {
-        if (car_to < car_to_to)
-        {
-            for (int i = car_to + 16; i <= car_to_to; i += 16)
-            {
-                if (i - 1 > 0)
-                {
-                    if (map[i - 1] == 2)
-                    {
-                        return 1;
-                    }
-                }
-                if (i + 1 < 192)
-                {
-                    if (map[i + 1] == 2)
-                    {
-                        return 1;
-                    }
-                }
-            }
-        }
-    }
-    return 0;
-}
 // if (vision_angle_switch)
 // {
 //     if (got_angle == 0)

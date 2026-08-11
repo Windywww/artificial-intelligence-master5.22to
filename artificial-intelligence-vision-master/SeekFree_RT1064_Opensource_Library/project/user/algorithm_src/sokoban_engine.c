@@ -10,7 +10,7 @@
 
 #define SOKOBAN_EMBEDDED 1
 #ifndef ENTER_GOAL
-#define  ENTER_GOAL 1   // 识别时能否进入目标点 1=能
+#define ENTER_GOAL 1 // 识别时能否进入目标点 1=能
 #endif
 #define DEBUG_RECON 0
 #define MAX_ID 12 // id 可能的取值个数
@@ -81,6 +81,9 @@ static bool get_micro_path(uint8_t start_pos, uint8_t target_pos, const uint8_t 
 static uint8_t is_deadlock(SokobanContext *ctx, uint8_t idx, State *state, bool is_bomb, const uint8_t *walls);
 // 按当前墙布局和剩余炸弹数，构建各目标点的反向推动距离表。
 static void get_maze_distances(SokobanContext *ctx, const uint8_t *current_walls, uint8_t bomb_count);
+
+// 目标和箱子对应关系赋值
+void goal_box_giveRelation(SokobanContext *ctx);
 
 static inline int neighbor_index(int idx, int direction)
 {
@@ -465,9 +468,8 @@ static void heap_push(MinHeap *h, uint16_t dist, uint8_t pos)
     }
     h->nodes[i].dist = dist;
     h->nodes[i].pos = pos;
-
 }
- 
+
 static HeapNode heap_pop(MinHeap *h)
 {
     HeapNode ret = h->nodes[0];
@@ -1808,6 +1810,7 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
     State *current_state = &ctx->initial_state;
     if (cls == 0)
     {
+        run_type_state = 0;
         for (uint8_t j = 0; j < current_state->box_count; j++)
         {
             current_state->boxes[j].id = NO_CLS;
@@ -1819,6 +1822,7 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
         }
         return true;
     }
+    run_type_state = 1;
     uint8_t unid_boxes = current_state->box_count;
     uint8_t unid_goals = ctx->goal_count;
     // Each bit records a failed target direction from this viewpoint.
@@ -1866,7 +1870,7 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                         if (n >= 0 && !(failed[n] & (1U << (d ^ 1))))
                         {
                             virtual_obs_points[n] = true; // used for IDA*
-                            if(the_goals[n] && ENTER_GOAL == 0)
+                            if (the_goals[n] && ENTER_GOAL == 0)
                             {
                                 virtual_obs_points[n] = false;
                             }
@@ -1897,7 +1901,7 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                         if (n >= 0 && !(failed[n] & (1U << (d ^ 1))))
                         {
                             virtual_obs_points[n] = true; // used for IDA*
-                            if(the_goals[n] && ENTER_GOAL == 0)
+                            if (the_goals[n] && ENTER_GOAL == 0)
                             {
                                 virtual_obs_points[n] = false;
                             }
@@ -1949,7 +1953,7 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
 
             float final_actual_x = final_pos_X * 0.2 + 0.1;
             float final_actual_y = 2.4f - final_pos_Y * 0.2 - 0.1;
-            //如果要用直接到视点而非逼近式的，赋值为-0.001f即可，逼近式的步长为0.005f，避免过冲
+            // 如果要用直接到视点而非逼近式的，赋值为-0.001f即可，逼近式的步长为0.005f，避免过冲
             float back_error = 0.02f;
             if (dx > 0)
                 final_actual_x -= back_error;
@@ -1985,6 +1989,19 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             float thistime_soko = time_line;
             vision_run_correct_switch = 0;
 
+            while(time_line-thistime_soko<=1.2f){
+                if (image_rx_state == 0)
+                {
+                    check_image(3 - is_box, 1);
+                }
+                else
+                {
+                    check_image(3 - is_box, 0);
+                }
+                if(final_image_index!=UINT8_MAX){
+                    break;
+                }
+            }
             while (final_image_index == UINT8_MAX)
             {
                 if (image_rx_state == 0)
@@ -2028,18 +2045,18 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                 uint8_t wait_ok = 0;
                 while (navigate_flag)
                 {
-                    if(final_image_index != UINT8_MAX)
+                    if (final_image_index != UINT8_MAX)
                     {
                         wait_ok = 1;
                         break;
                     }
                     wifi_task();
                 }
-                if(wait_ok)
+                if (wait_ok)
                 {
                     break;
                 }
-                
+
                 if (time_line - thistime_soko >= 9)
                 {
                     for (uint8_t j = 0; j < current_state->box_count; j++)
@@ -2054,7 +2071,7 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                     return true;
                 }
             }
-            vision_run_correct_switch = 1;
+            vision_run_correct_switch = 0;
             // ��ʶ������Ȼδ֪�����������ʶ�𣨿����ǵ�һ�ζ�׼����׼ȷ��
             // ʶ��ʱ����carmove�����Ӿ��Ƕ�У��
             // system_delay_ms(700);
@@ -2193,6 +2210,7 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             }
         }
     }
+    goal_box_giveRelation(ctx);
     return true;
 }
 // 引擎主入口：执行加权 IDA* 搜索。
@@ -2742,12 +2760,612 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
     get_final_path(ctx, out_full_path); // 对整条路径进行最终的优化处理
 }
 
-//在侦查函数结束后存储目标与箱子的位置，以及其id，length是长度
+// 此函数根据tnt_loc坐标炸掉以坐标为中心3*3的墙壁，边界墙炸不到
+static void boom_wall(uint8_t *map, uint8_t tnt_loc)
+{
+
+    uint8_t x = tnt_loc % 16;
+    uint8_t y = tnt_loc / 16;
+    for (int i = -1; i <= 1; i++)
+    {
+        for (int j = -1; j <= 1; j++)
+        {
+            if (x + i > 0 && x + i < 15 && y + j > 0 && y + j < 11)
+            {
+                if (map[(y + j) * 16 + (x + i)] == 1)
+                {
+                    map[(y + j) * 16 + (x + i)] = 0;
+                }
+            }
+        }
+    }
+}
+
+// 在侦查函数结束后存储目标与箱子的位置，以及其id，length是长度
 EntityData mapin_goals[MAX_GOALS];
 uint8_t length_mapin_goals;
 EntityData mapin_boxes[MAX_BOXES];
 uint8_t length_mapin_boxes;
+void goal_box_giveRelation(SokobanContext *ctx)
+{
+    length_mapin_goals = ctx->goal_count;
+    for (int i = 0; i < length_mapin_goals; i++)
+    {
+        mapin_goals[i] = ctx->goals[i];
+    }
+    length_mapin_boxes = ctx->initial_state.box_count;
+    for (int i = 0; i < length_mapin_boxes; i++)
+    {
+        mapin_boxes[i] = ctx->initial_state.boxes[i];
+    }
+    run_type_state = 2;
+}
+// 任务状态定义：0=无分类关卡，1=有分类侦查阶段，2=有分类推送阶段
+uint8_t run_type_state = 0;
 
+// 6	箱子+目的地	箱子推入目的地，ID不匹配时生成的混合体，小车可把箱子重新推出来
+// 7	炸弹+目的地	炸弹被推到目的地生成的混合体，保留炸弹爆炸属性
+// 8	小车+目的地	小车停靠在目的地上生成的混合体，小车可以正常驶离该点位
+// 此函数用来更新地图，并判断car_to这个点是否需要获取视觉坐标
+// 每次到达某个节点时用car_to,而car_to_to表示下一个节点，用来判断car_to这个点是否需要获取视觉坐标,
+// 仅当从car_to到car_to_to的路径两侧有箱子，炸弹时才需要获取视觉坐标
+uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to)
+{
+    uint8_t car_from = 0;
+    // 扫描获取小车当前位置，兼容5和8两种状态
+    for (uint8_t i = 0; i < MAP_SIZE; i++)
+    {
+        if (map[i] == 5 || map[i] == 8)
+        {
+            car_from = i;
+            break;
+        }
+    }
+    
+
+    // -------------------------- 水平方向处理 --------------------------
+    if ((car_from / 16) == (car_to / 16)&&car_from!=car_to)
+    {
+        // 水平向右移动
+        if (car_from < car_to)
+        {
+            for (int i = car_from + 1; i <= car_to; i++)
+            {
+                if (map[i] == 2 || map[i] == 6)
+                {
+
+                    // 箱子挪地方
+                    if (map[i] == 2)
+                    {
+                        map[i] = 0;
+                    }
+                    else
+                    {
+                        map[i] = 3;
+                    }
+
+                    if (map[car_to + 1] == 0)
+                    {
+                        map[car_to + 1] = 2;
+                    }
+                    else if (map[car_to + 1] == 3)
+                    {
+                        if (run_type_state == 0)
+                        {
+                            map[car_to + 1] = 0;
+                        }
+                        else if (run_type_state == 1)
+                        {
+                            map[car_to + 1] = 6;
+                        }
+                        else if (run_type_state == 2)
+                        {
+                            // mapin_boxes状态更新，直接在循环里拿到box_index
+                            uint8_t box_index = 0;
+                            for (int j = 0; j < length_mapin_boxes; j++)
+                            {
+                                if (mapin_boxes[j].pos == i)
+                                {
+                                    mapin_boxes[j].pos = car_to + 1;
+                                    box_index = j;
+                                    break;
+                                }
+                            }
+                            for (int j = 0; j < length_mapin_goals; j++)
+                            {
+                                if (mapin_goals[j].pos == car_to + 1)
+                                {
+                                    if (mapin_boxes[box_index].id == mapin_goals[j].id)
+                                    {
+                                        map[car_to + 1] = 0;
+                                    }
+                                    else
+                                    {
+                                        map[car_to + 1] = 6;
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    break;
+                }
+                else if (map[i] == 4 || map[i] == 7)
+                {
+                    // 炸弹挪地方
+                    if (map[i] == 4)
+                    {
+                        map[i] = 0;
+                    }
+                    else
+                    {
+                        map[i] = 3;
+                    }
+                    if (map[car_to + 1] == 0)
+                    {
+                        map[car_to + 1] = 4;
+                    }
+                    else if (map[car_to + 1] == 3)
+                    {
+                        map[car_to + 1] = 7;
+                    }
+                    else if (map[car_to + 1] == 1)
+                    {
+                        boom_wall(map, car_to + 1);
+                    }
+                    break;
+                }
+            }
+            // 车挪地方
+            if (map[car_from] == 5)
+            {
+                map[car_from] = 0;
+            }
+            else if (map[car_from] == 8)
+            {
+                map[car_from] = 3;
+            }
+            if (map[car_to] == 0)
+            {
+                map[car_to] = 5;
+            }
+            else if (map[car_to] == 3)
+            {
+                map[car_to] = 8;
+            }
+        }
+        // 水平向左移动
+        else
+        {
+            for (int i = car_from - 1; i >= car_to; i--)
+            {
+                if (map[i] == 2 || map[i] == 6)
+                {
+
+                    // 箱子挪地方
+                    if (map[i] == 2)
+                    {
+                        map[i] = 0;
+                    }
+                    else
+                    {
+                        map[i] = 3;
+                    }
+
+                    if (map[car_to - 1] == 0)
+                    {
+                        map[car_to - 1] = 2;
+                    }
+                    else if (map[car_to - 1] == 3)
+                    {
+                        if (run_type_state == 0)
+                        {
+                            map[car_to - 1] = 0;
+                        }
+                        else if (run_type_state == 1)
+                        {
+                            map[car_to - 1] = 6;
+                        }
+                        else if (run_type_state == 2)
+                        {
+                            // mapin_boxes状态更新，直接在循环里拿到box_index
+                            uint8_t box_index = 0;
+                            for (int j = 0; j < length_mapin_boxes; j++)
+                            {
+                                if (mapin_boxes[j].pos == i)
+                                {
+                                    mapin_boxes[j].pos = car_to - 1;
+                                    box_index = j;
+                                    break;
+                                }
+                            }
+                            for (int j = 0; j < length_mapin_goals; j++)
+                            {
+                                if (mapin_goals[j].pos == car_to - 1)
+                                {
+                                    if (mapin_boxes[box_index].id == mapin_goals[j].id)
+                                    {
+                                        map[car_to - 1] = 0;
+                                    }
+                                    else
+                                    {
+                                        map[car_to - 1] = 6;
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    break;
+                }
+                else if (map[i] == 4 || map[i] == 7)
+                {
+                    // 炸弹挪地方
+                    if (map[i] == 4)
+                    {
+                        map[i] = 0;
+                    }
+                    else
+                    {
+                        map[i] = 3;
+                    }
+                    if (map[car_to - 1] == 0)
+                    {
+                        map[car_to - 1] = 4;
+                    }
+                    else if (map[car_to - 1] == 3)
+                    {
+                        map[car_to - 1] = 7;
+                    }
+                    else if (map[car_to - 1] == 1)
+                    {
+                        boom_wall(map, car_to - 1);
+                    }
+                    break;
+                }
+            }
+            // 车挪地方
+            if (map[car_from] == 5)
+            {
+                map[car_from] = 0;
+            }
+            else if (map[car_from] == 8)
+            {
+                map[car_from] = 3;
+            }
+            if (map[car_to] == 0)
+            {
+                map[car_to] = 5;
+            }
+            else if (map[car_to] == 3)
+            {
+                map[car_to] = 8;
+            }
+        }
+    }
+    // -------------------------- 垂直方向处理 --------------------------
+    else if ((car_from % 16) == (car_to % 16)&&car_from!=car_to)
+    {
+        // 垂直向下移动
+        if (car_from < car_to)
+        {
+            for (int i = car_from + 16; i <= car_to; i += 16)
+            {
+                if (map[i] == 2 || map[i] == 6)
+                {
+
+                    // 箱子挪地方
+                    if (map[i] == 2)
+                    {
+                        map[i] = 0;
+                    }
+                    else
+                    {
+                        map[i] = 3;
+                    }
+
+                    if (map[car_to + 16] == 0)
+                    {
+                        map[car_to + 16] = 2;
+                    }
+                    else if (map[car_to + 16] == 3)
+                    {
+                        if (run_type_state == 0)
+                        {
+                            map[car_to + 16] = 0;
+                        }
+                        else if (run_type_state == 1)
+                        {
+                            map[car_to + 16] = 6;
+                        }
+                        else if (run_type_state == 2)
+                        {
+                            // mapin_boxes状态更新，直接在循环里拿到box_index
+                            uint8_t box_index = 0;
+                            for (int j = 0; j < length_mapin_boxes; j++)
+                            {
+                                if (mapin_boxes[j].pos == i)
+                                {
+                                    mapin_boxes[j].pos = car_to + 16;
+                                    box_index = j;
+                                    break;
+                                }
+                            }
+                            for (int j = 0; j < length_mapin_goals; j++)
+                            {
+                                if (mapin_goals[j].pos == car_to + 16)
+                                {
+                                    if (mapin_boxes[box_index].id == mapin_goals[j].id)
+                                    {
+                                        map[car_to + 16] = 0;
+                                    }
+                                    else
+                                    {
+                                        map[car_to + 16] = 6;
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    break;
+                }
+                else if (map[i] == 4 || map[i] == 7)
+                {
+                    // 炸弹挪地方
+                    if (map[i] == 4)
+                    {
+                        map[i] = 0;
+                    }
+                    else
+                    {
+                        map[i] = 3;
+                    }
+                    if (map[car_to + 16] == 0)
+                    {
+                        map[car_to + 16] = 4;
+                    }
+                    else if (map[car_to + 16] == 3)
+                    {
+                        map[car_to + 16] = 7;
+                    }
+                    else if (map[car_to + 16] == 1)
+                    {
+                        boom_wall(map, car_to + 16);
+                    }
+                    break;
+                }
+            }
+            // 车挪地方
+            if (map[car_from] == 5)
+            {
+                map[car_from] = 0;
+            }
+            else if (map[car_from] == 8)
+            {
+                map[car_from] = 3;
+            }
+            if (map[car_to] == 0)
+            {
+                map[car_to] = 5;
+            }
+            else if (map[car_to] == 3)
+            {
+                map[car_to] = 8;
+            }
+        }
+        // 垂直向上移动
+        else
+        {
+            for (int i = car_from - 16; i >= car_to; i -= 16)
+            {
+                if (map[i] == 2 || map[i] == 6)
+                {
+
+                    // 箱子挪地方
+                    if (map[i] == 2)
+                    {
+                        map[i] = 0;
+                    }
+                    else
+                    {
+                        map[i] = 3;
+                    }
+
+                    if (map[car_to - 16] == 0)
+                    {
+                        map[car_to - 16] = 2;
+                    }
+                    else if (map[car_to - 16] == 3)
+                    {
+                        if (run_type_state == 0)
+                        {
+                            map[car_to - 16] = 0;
+                        }
+                        else if (run_type_state == 1)
+                        {
+                            map[car_to - 16] = 6;
+                        }
+                        else if (run_type_state == 2)
+                        {
+                            // mapin_boxes状态更新，直接在循环里拿到box_index
+                            uint8_t box_index = 0;
+                            for (int j = 0; j < length_mapin_boxes; j++)
+                            {
+                                if (mapin_boxes[j].pos == i)
+                                {
+                                    mapin_boxes[j].pos = car_to - 16;
+                                    box_index = j;
+                                    break;
+                                }
+                            }
+                            for (int j = 0; j < length_mapin_goals; j++)
+                            {
+                                if (mapin_goals[j].pos == car_to - 16)
+                                {
+                                    if (mapin_boxes[box_index].id == mapin_goals[j].id)
+                                    {
+                                        map[car_to - 16] = 0;
+                                    }
+                                    else
+                                    {
+                                        map[car_to - 16] = 6;
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    break;
+                }
+                else if (map[i] == 4 || map[i] == 7)
+                {
+                    // 炸弹挪地方
+                    if (map[i] == 4)
+                    {
+                        map[i] = 0;
+                    }
+                    else
+                    {
+                        map[i] = 3;
+                    }
+                    if (map[car_to - 16] == 0)
+                    {
+                        map[car_to - 16] = 4;
+                    }
+                    else if (map[car_to - 16] == 3)
+                    {
+                        map[car_to - 16] = 7;
+                    }
+                    else if (map[car_to - 16] == 1)
+                    {
+                        boom_wall(map, car_to - 16);
+                    }
+                    break;
+                }
+            }
+            // 车挪地方
+            if (map[car_from] == 5)
+            {
+                map[car_from] = 0;
+            }
+            else if (map[car_from] == 8)
+            {
+                map[car_from] = 3;
+            }
+            if (map[car_to] == 0)
+            {
+                map[car_to] = 5;
+            }
+            else if (map[car_to] == 3)
+            {
+                map[car_to] = 8;
+            }
+        }
+    }
+    else
+    {
+        // 车挪地方
+        if (map[car_from] == 5)
+        {
+            map[car_from] = 0;
+        }
+        else if (map[car_from] == 8)
+        {
+            map[car_from] = 3;
+        }
+        if (map[car_to] == 0)
+        {
+            map[car_to] = 5;
+        }
+        else if (map[car_to] == 3)
+        {
+            map[car_to] = 8;
+        }
+    }
+
+    // -------------------------- 视觉定位触发判断 --------------------------
+    if ((car_to_to / 16) == (car_to / 16))
+    {
+        if (car_to < car_to_to)
+        {
+            for (uint8_t i = car_to + 1; i <= car_to_to; i++)
+            {
+                if (i - 16 > 0)
+                {
+                    uint8_t type = map[i - 16];
+                    if (type == 2 || type == 4 || type == 6 || type == 7)
+                        return 1;
+                }
+                if (i + 16 < 192)
+                {
+                    uint8_t type = map[i + 16];
+                    if (type == 2 || type == 4 || type == 6 || type == 7)
+                        return 1;
+                }
+            }
+        }
+        else
+        {
+            for (uint8_t i = car_to - 1; i >= car_to_to; i--)
+            {
+                if (i - 16 > 0)
+                {
+                    uint8_t type = map[i - 16];
+                    if (type == 2 || type == 4 || type == 6 || type == 7)
+                        return 1;
+                }
+                if (i + 16 < 192)
+                {
+                    uint8_t type = map[i + 16];
+                    if (type == 2 || type == 4 || type == 6 || type == 7)
+                        return 1;
+                }
+            }
+        }
+    }
+    else if ((car_to_to % 16) == (car_to % 16))
+    {
+        if (car_to < car_to_to)
+        {
+            for (uint8_t i = car_to + 16; i <= car_to_to; i += 16)
+            {
+                if (i - 1 > 0)
+                {
+                    uint8_t type = map[i - 1];
+                    if (type == 2 || type == 4 || type == 6 || type == 7)
+                        return 1;
+                }
+                if (i + 1 < 192)
+                {
+                    uint8_t type = map[i + 1];
+                    if (type == 2 || type == 4 || type == 6 || type == 7)
+                        return 1;
+                }
+            }
+        }
+        else
+        {
+            for (uint8_t i = car_to - 16; i >= car_to_to; i -= 16)
+            {
+                if (i - 1 > 0)
+                {
+                    uint8_t type = map[i - 1];
+                    if (type == 2 || type == 4 || type == 6 || type == 7)
+                        return 1;
+                }
+                if (i + 1 < 192)
+                {
+                    uint8_t type = map[i + 1];
+                    if (type == 2 || type == 4 || type == 6 || type == 7)
+                        return 1;
+                }
+            }
+        }
+    }
+
+    return 0;
+}
 
 // /**
 //  * @brief 实时障碍物检查函数（供运控避�?/侧向补偿调用�?

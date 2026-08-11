@@ -76,6 +76,7 @@ static void return_to_start_zone(void)
     vision_angle_switch = 0;
     vision_run_correct_switch = 0;
     car_move_point(0.3, 1.2, angle, 0);
+    ban_map_check_ifgetVisionLoc = 1;
     while (navigate_flag)
     {
         wifi_task();
@@ -212,12 +213,15 @@ static uint8_t run_round(uint8_t round_index)
 
     vision_angle_switch = 0;
     car_move_point(global_x + 0.25f, global_y, angle, 0);
+    uint8_t ban_map_check_ifgetVisionLoc = 1;
+
     wait_navigation();
     if (round_index >= 1)
     {
         // sync_car_angle();
     }
 
+    ban_map_check_ifgetVisionLoc = 0;
     // 获取地图
     while (1)
     {
@@ -242,7 +246,7 @@ static uint8_t run_round(uint8_t round_index)
         return 0;
     }
 
-    vision_run_correct_switch = 1;
+    vision_run_correct_switch = 0;
     if (!build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 1U : 1U))
     {
         return 0;
@@ -377,7 +381,7 @@ void pit_ch1_handler(void)
 
 float time_for_vision_loac = 0;
 uint8_t vision_correct_flag = 0;
-uint8_t vision_run_correct_switch = 1;
+uint8_t vision_run_correct_switch = 0;
 float time_vision_main = 0;
 void run_vision_correct()
 {

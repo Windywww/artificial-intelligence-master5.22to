@@ -76,7 +76,7 @@ static uint8_t global_packet_crc_valid(void)
 uint8_t test_rx_local = 0;
 uint8_t test_rx_local_same_time = 0;
 uint8_t image_rx_state = 0;
-uint8_t final_image_index = 0;
+volatile uint8_t final_image_index = 0;
 uint8_t image_id = 0; // 2箱子，3目的地
 
 void myuart_init(void)

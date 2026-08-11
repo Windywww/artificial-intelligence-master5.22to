@@ -20,7 +20,7 @@
 
 extern volatile uint8_t global_infor_type;     
 extern uint8_t image_rx_state;
-extern uint8_t final_image_index;
+extern volatile uint8_t final_image_index;
 extern uint8_t final_map_data[MAP_LENS]; // 解压后的 192 个地图数据
 extern float car_location[2];
 extern float car_angel;
