@@ -79,7 +79,7 @@ def log_sent_int(value):
 
 def send_int_packet(cls):
     uart.write(bytes([cls]))
-    log_sent_int(cls)
+    #log_sent_int(cls)
 
 black = (0, 31, -62, 43, -64, 44)
 purple = (35, 88, 71, 127, -95, -45)
@@ -91,7 +91,7 @@ num_path = '/sd/num_cls.tflite'
 num_net = tf.load(num_path, load_to_fb=uos.stat(num_path)[6] > (gc.mem_free() - (64*1024)))
 box_path = '/sd/box_cls.tflite'
 box_net = tf.load(box_path, load_to_fb=uos.stat(box_path)[6] > (gc.mem_free() - (64*1024)))
-init_classification_log()
+#init_classification_log()
 
 while(True):
     flag = parse_uart_packet()
@@ -163,9 +163,8 @@ while(True):
         label = probs.index(max_prob)
         img.draw_string(20, 10, f"{label}|{max_prob:.2f}", color=(255, 0, 0), scale=2)    ##
         if max_prob < 0.50:
-            send_int_packet(11)
-            #send_int_packet(label+1)
+            #send_int_packet(11)
             print('unknown')
         else:
-            #send_int_packet(label+1)
+            send_int_packet(label+1)
             print(label+1)
