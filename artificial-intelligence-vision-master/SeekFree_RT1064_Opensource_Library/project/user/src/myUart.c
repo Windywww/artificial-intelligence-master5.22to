@@ -76,7 +76,7 @@ static uint8_t global_packet_crc_valid(void)
 uint8_t test_rx_local = 0;
 uint8_t test_rx_local_same_time = 0;
 uint8_t image_rx_state = 0;
-uint8_t final_image_index = 0;
+volatile uint8_t final_image_index = 0;
 uint8_t image_id = 0; // 2箱子，3目的地
 
 void myuart_init(void)
@@ -377,7 +377,7 @@ void uart4_rx_interrupt_handler()
         if (get_data == test_rx_local)
         {
             test_rx_local_same_time++;
-            if (test_rx_local_same_time >= 3)
+            if (test_rx_local_same_time >= 2)
             {
                 test_rx_local_same_time = 0;
                 image_rx_state = 0;

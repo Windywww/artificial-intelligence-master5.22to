@@ -56,7 +56,7 @@ void SendDataToAssistant(seekfree_assistant_oscilloscope_struct *sendDataStructu
 {
     sendDataStructure->channel_num = num;
     seekfree_assistant_oscilloscope_send(sendDataStructure);
-    system_delay_ms(20);
+    system_delay_us(10);
 }
 
 /**

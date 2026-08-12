@@ -17,7 +17,7 @@ extern uint8_t vision_run_correct_switch;
 //视觉几米矫正
 #define VISION_CORRECT_DISTANCE 9999.0f
 //旋转延时时间
-#define TURN_DELAY_TIME_MS 300
+#define TURN_DELAY_TIME_MS 400
 //是否斜线
 #define IF_PASS 0
 //是否行进视觉矫正
@@ -122,4 +122,6 @@ extern uint8_t first_time_fix;
 extern uint8_t wrong_time;
 extern float vision_distance_num;
 
+extern uint8_t ban_map_check_ifgetVisionLoc ;
+extern uint8_t ban_last_vision_correct;
 #endif

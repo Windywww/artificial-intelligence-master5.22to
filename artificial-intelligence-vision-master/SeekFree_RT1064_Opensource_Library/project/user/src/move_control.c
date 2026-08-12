@@ -56,12 +56,20 @@ uint8_t wrong_time = 0;
 uint8_t walk_mode = 3;
 extern uint8_t vision_correct_flag;
 uint8_t wrong_over_time = 0;
+
+uint8_t ban_map_check_ifgetVisionLoc = 1;
+uint8_t ban_last_vision_correct = 0;
 void move_control_init()
 {
     for (int i = 0; i < 4; i++)
     {
         pid_init(&pid[i], 40.0f, 2.0f, 0.0f);
     }
+}
+// 浮点数转整数四舍五入，返回int类型结果
+int round_int(float num)
+{
+    return (int)(num + 0.5f);
 }
 /**
  * @brief 航向角 PID 计算函数
@@ -195,6 +203,8 @@ uint8_t vision_point_num = 0;
 // 记录小车跑过的格子数是否应该让视觉矫正
 float vision_distance_num = 0;
 // 从一个节点到另一个节点的角度信息，以及走的状态(横向，纵向，斜向)
+
+float vision_distance_num_plus = 0;
 float speed_angle = 0.0f; //(弧度制)
 
 float global_target_vx = 0.0f;
@@ -300,9 +310,17 @@ void navigation_update(void)
     {
         target_vx = 0.0f;
         target_vy = 0.0f;
+
+        if (!ban_map_check_ifgetVisionLoc)
+        {
+            uint8_t path_X = round_int((target_x - 0.1f) / 0.2f);
+            uint8_t path_Y = round_int((2.3f - target_y) / 0.2f);
+            map_check_ifgetVisionLoc(final_map_data, 16 * path_Y + path_X, 16 * path_Y + path_X);
+        }
+
         if (walk_mode == 4)
         {
-            if (count_A <= 100)
+            if (count_A <= 150)
             {
                 count_A++;
                 return;
@@ -310,83 +328,86 @@ void navigation_update(void)
         }
         else
         {
-            if (count_A <= 5)
+            if (count_A <= 4)
             {
                 count_A++;
                 return;
             }
 
-            // if (first_time_fix == 1)
-            // {
-            //     if (wait_for_loc == 0)
-            //     {
-            //         if (global_infor_type != 5)
-            //         {
-            //             return;
-            //         }
-            //         want_global_infor(0);
-            //         time_vision = time_line;
-            //         wait_for_loc = 1;
-            //     }
-            //     uint8_t if_longtime = 0;
-            //     if (wait_for_loc == 1)
-            //     {
-            //         if (time_line - time_vision >= 0.5f)
-            //         {
-            //             wrong_over_time++;
-            //             if_longtime = 1;
-            //             wait_for_loc = 0;
-            //             global_infor_type = 5;
-            //             want_global_infor(5);
-            //         }
-            //         else
-            //         {
-            //             if (global_infor_type == 5)
-            //             {
-            //                 wait_for_loc = 0;
-            //             }
-            //             else
-            //             {
-            //                 return;
-            //             }
-            //         }
-            //     }
+            if (first_time_fix == 1)
+            {
+                if (!ban_last_vision_correct)
+                {
+                    if (wait_for_loc == 0)
+                    {
+                        if (global_infor_type != 5)
+                        {
+                            return;
+                        }
+                        want_global_infor(0);
+                        time_vision = time_line;
+                        wait_for_loc = 1;
+                    }
+                    uint8_t if_longtime = 0;
+                    if (wait_for_loc == 1)
+                    {
+                        if (time_line - time_vision >= 0.5f)
+                        {
+                            wrong_over_time++;
+                            if_longtime = 1;
+                            wait_for_loc = 0;
+                            global_infor_type = 5;
+                            want_global_infor(5);
+                        }
+                        else
+                        {
+                            if (global_infor_type == 5)
+                            {
+                                wait_for_loc = 0;
+                            }
+                            else
+                            {
+                                return;
+                            }
+                        }
+                    }
 
-            //     if (!if_longtime)
-            //     {
-            //         if (car_location[0] - vision_x >= -0.002f && car_location[0] - vision_x <= 0.002f &&
-            //             car_location[1] - vision_y >= -0.002f &&
-            //             car_location[1] - vision_y <= 0.002f)
-            //         {
-            //             loac_test++;
-            //         }
-            //         else
-            //         {
-            //             loac_test = 0;
-            //             vision_x = car_location[0];
-            //             vision_y = car_location[1];
-            //         }
+                    if (!if_longtime)
+                    {
+                        if (car_location[0] - vision_x >= -0.002f && car_location[0] - vision_x <= 0.002f &&
+                            car_location[1] - vision_y >= -0.002f &&
+                            car_location[1] - vision_y <= 0.002f)
+                        {
+                            loac_test++;
+                        }
+                        else
+                        {
+                            loac_test = 0;
+                            vision_x = car_location[0];
+                            vision_y = car_location[1];
+                        }
 
-            //         if (loac_test >= 4)
-            //         {
-            //             float dx = global_x - 3.2f * car_location[0];
-            //             float dy = global_y - (2.4f - 2.4f * car_location[1]);
+                        if (loac_test >= 4)
+                        {
+                            float dx = global_x - 3.2f * car_location[0];
+                            float dy = global_y - (2.4f - 2.4f * car_location[1]);
 
-            //             global_x = 3.2f * (car_location[0] + vision_x) * 0.5f;
-            //             global_y = 2.4f - 2.4f * (car_location[1] + vision_y) * 0.5f;
-            //         }
-            //         else
-            //         {
-            //             return;
-            //         }
-            //     }
-            //     vision_x = -1;
-            //     vision_y = -1;
-            //     loac_test = 0;
-            //     first_time_fix = 0;
-            //     stop_flag = 0;
-            //     return;
-            // }
+                            global_x = 3.2f * (car_location[0] + vision_x) * 0.5f;
+                            global_y = 2.4f - 2.4f * (car_location[1] + vision_y) * 0.5f;
+                        }
+                        else
+                        {
+                            return;
+                        }
+                    }
+                    vision_x = -1;
+                    vision_y = -1;
+                    loac_test = 0;
+                    first_time_fix = 0;
+                    stop_flag = 0;
+                    return;
+                }
+            }
         }
 
         navigate_flag = 0;
@@ -402,7 +423,7 @@ void navigation_update(void)
 
         if (walk_mode == 4)
         {
-            if (count <= 100)
+            if (count <= 150)
             {
                 count++;
                 return;
@@ -410,19 +431,33 @@ void navigation_update(void)
         }
         else
         {
-            if (count <= 5)
+            if (count <= 3)
             {
                 count++;
                 return;
             }
             if (first_time_fix == 1)
             {
-                if (vision_point_num == 0 || vision_distance_num >= VISION_CORRECT_DISTANCE)
+                //   path_queue_x[i] = (path->points[i] % 16) * 0.2f + 0.1f;
+                // path_queue_y[i] = 2.4 - (path->points[i] / 16) * 0.2f - 0.1f;
+                uint8_t path_X = round_int((target_x - 0.1f) / 0.2f);
+                uint8_t path_Y = round_int((2.3f - target_y) / 0.2f);
+                uint8_t car_to = path_X + path_Y * 16;
+                uint8_t path_X_to = round_int((path_queue_x[current_path + 1] - 0.1f) / 0.2f);
+                uint8_t path_Y_to = round_int((2.3f - path_queue_y[current_path + 1]) / 0.2f);
+                uint8_t car_to_to = path_X_to + path_Y_to * 16;
+                if (car_to_to > 191 || car_to_to < 0)
+                { // 说明是炸弹延时特殊点
+                    car_to_to
+
+                        = round_int((path_queue_x[current_path + 2] - 0.1f) / 0.2f) + round_int((2.3f - path_queue_y[current_path + 2]) / 0.2f) * 16;
+                }
+                if (map_check_ifgetVisionLoc(final_map_data, car_to, car_to_to) && vision_distance_num_plus >= VISION_CORRECT_DISTANCE&&(1==0))
                 {
                     // 节点是否视觉矫正判定的相关参数归零
                     vision_point_num = 0;
                     vision_distance_num = 0;
-
+                    vision_distance_num_plus = 0;
                     if (wait_for_loc == 0)
                     {
                         if (global_infor_type != 5)
@@ -479,9 +514,9 @@ void navigation_update(void)
                             // }
                             // else
                             // {
-                                global_x = 3.2f * (car_location[0] + vision_x) * 0.5f;
-                                global_y = 2.4f - 2.4f * (car_location[1] + vision_y) * 0.5f;
-                                // actual_yaw = car_angel - 90;
+                            global_x = 3.2f * (car_location[0] + vision_x) * 0.5f;
+                            global_y = 2.4f - 2.4f * (car_location[1] + vision_y) * 0.5f;
+                            // actual_yaw = car_angel - 90;
                             // }
                         }
                         else
@@ -489,15 +524,17 @@ void navigation_update(void)
                             return;
                         }
                     }
-                }
-                loac_test = 0;
-                vision_x = -1;
-                vision_y = -1;
-                // 判定该节点 是否在视觉获取坐标之后，根据结果微调小车
-                // 原则是如果在这个点偏离的方向恰好是下一个点的方向,就不需要矫正,如果偏离的方向和下一个点的方向不一致,就需要矫正
-                if (check_correctOn_vision() == 1)
-                {
-                    return;
+                    loac_test = 0;
+                    vision_x = -1;
+                    vision_y = -1;
+                    first_time_fix = 0;
+                    // 判定该节点 是否在视觉获取坐标之后，根据结果微调小车
+                    // 原则是如果在这个点偏离的方向恰好是下一个点的方向,就不需要矫正,如果偏离的方向和下一个点的方向不一致,就需要矫正
+                    if (check_correctOn_vision() == 1)
+                    {
+                        stop_flag = 0;
+                        return;
+                    }
                 }
             }
         }
@@ -509,7 +546,7 @@ void navigation_update(void)
         return; // 如果到达了当前目标点了 就不继续往下算了 等下个周期再算新的目标点
     }
 }
-//速度，加速度限制
+// 速度，加速度限制
 void speed_limit()
 {
     if (global_target_vx > max_speed)
@@ -609,16 +646,19 @@ void walk_mode_set()
         {
             walk_mode = 2;
             vision_distance_num += 99.0f;
+            vision_distance_num_plus += 99.0f;
         }
         else if (d_point_x != 0 && d_point_y == 0)
         {
             walk_mode = 0;
             vision_distance_num += fabs(d_point_x);
+            vision_distance_num_plus += fabs(d_point_x);
         }
         else if (d_point_x == 0 && d_point_y != 0)
         {
             walk_mode = 1;
             vision_distance_num += fabs(d_point_y);
+            vision_distance_num_plus += fabs(d_point_y);
         }
         else
         {
@@ -681,7 +721,7 @@ uint8_t check_correctOn_vision()
     return 0;
 }
 
-//计算目标转速
+// 计算目标转速
 float get_target_vz()
 {
     float max_yaw_step = 10.0f;
@@ -732,8 +772,8 @@ float get_target_vz()
  */
 void move_control_task(void)
 {
-    odometry_update();   // 更新里程计
-    navigation_update(); // 更新导航
+    odometry_update();                                            // 更新里程计
+    navigation_update();                                          // 更新导航
     wheel_speed_calculate(target_vx, target_vy, get_target_vz()); // 计算轮子速度并输出
 }
 
