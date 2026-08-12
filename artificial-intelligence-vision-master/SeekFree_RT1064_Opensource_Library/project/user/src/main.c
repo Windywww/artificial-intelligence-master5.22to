@@ -213,8 +213,6 @@ static uint8_t run_round(uint8_t round_index)
 
     vision_angle_switch = 0;
     car_move_point(global_x + 0.25f, global_y, angle, 0);
-    uint8_t ban_map_check_ifgetVisionLoc = 1;
-
     wait_navigation();
     if (round_index >= 1)
     {

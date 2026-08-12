@@ -288,7 +288,7 @@ void navigation_update(void)
     float dy = target_y - global_y;
     float distance = sqrtf(dx * dx + dy * dy);
 
-    if (distance <= 0.01f && stop_flag == 0)
+    if (distance <= 0.015f && stop_flag == 0)
     {
         stop_flag = 1; // 开启手刹
         if (walk_mode != 4)
@@ -320,7 +320,7 @@ void navigation_update(void)
 
         if (walk_mode == 4)
         {
-            if (count_A <= 100)
+            if (count_A <= 150)
             {
                 count_A++;
                 return;
@@ -328,7 +328,7 @@ void navigation_update(void)
         }
         else
         {
-            if (count_A <= 5)
+            if (count_A <= 4)
             {
                 count_A++;
                 return;
@@ -423,7 +423,7 @@ void navigation_update(void)
 
         if (walk_mode == 4)
         {
-            if (count <= 130)
+            if (count <= 150)
             {
                 count++;
                 return;
@@ -431,7 +431,7 @@ void navigation_update(void)
         }
         else
         {
-            if (count <= 5)
+            if (count <= 3)
             {
                 count++;
                 return;
@@ -452,7 +452,7 @@ void navigation_update(void)
 
                         = round_int((path_queue_x[current_path + 2] - 0.1f) / 0.2f) + round_int((2.3f - path_queue_y[current_path + 2]) / 0.2f) * 16;
                 }
-                if (map_check_ifgetVisionLoc(final_map_data, car_to, car_to_to) && vision_distance_num_plus >= VISION_CORRECT_DISTANCE)
+                if (map_check_ifgetVisionLoc(final_map_data, car_to, car_to_to) && vision_distance_num_plus >= VISION_CORRECT_DISTANCE&&(1==0))
                 {
                     // 节点是否视觉矫正判定的相关参数归零
                     vision_point_num = 0;
@@ -532,6 +532,7 @@ void navigation_update(void)
                     // 原则是如果在这个点偏离的方向恰好是下一个点的方向,就不需要矫正,如果偏离的方向和下一个点的方向不一致,就需要矫正
                     if (check_correctOn_vision() == 1)
                     {
+                        stop_flag = 0;
                         return;
                     }
                 }
