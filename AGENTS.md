@@ -15,3 +15,5 @@ openART\classification.py：第一人称箱子和目的地分类的程序
 不读取 openART\ 中除二者之外的其他文件。
 artificial-intelligence-vision-master\SeekFree_RT1064_Opensource_Library:在小车rt1064核心板运行的版本，其中我们写的代码在SeekFree_RT1064_Opensource_Library\project\user下。
 不读取project\user\algorithm_src\sokoban_lut.c
+
+无特殊说明，默认只修改artificial-intelligence-vision-master下的文件，而不修改rt1064/ 下的。

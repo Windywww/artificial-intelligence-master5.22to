@@ -36,6 +36,7 @@
 #define HASH_SET_MASK (HASH_SET_COUNT - 1)
 // 识别选点允许比最近可达视点最多多走的网格数。
 #define RECON_PATH_SLACK 2
+
 #define MAX_RECON_CANDIDATES ((MAX_BOXES + MAX_GOALS) * 4)
 
 int angle = 0;
@@ -97,6 +98,20 @@ static inline int neighbor_index(int idx, int direction)
     if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT)
         return -1;
     return y * WIDTH + x;
+}
+
+static inline bool can_recon_consume_goal(uint8_t box_type, uint8_t goal_type)
+{
+    return box_type != UNKNOWN && goal_type != UNKNOWN && box_type == goal_type;
+}
+
+static inline bool can_recon_use_goal_for_box(uint8_t box_type, uint8_t goal_type)
+{
+    if (goal_type == UNKNOWN)
+        return false;
+    if (box_type == UNKNOWN)
+        return true;
+    return goal_type == box_type || box_type == NO_CLS || goal_type == NO_CLS;
 }
 
 static void precalc_explosion_masks(SokobanContext *ctx)
@@ -1582,11 +1597,19 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
             else if (!is_bomb)
             {
                 int8_t goal_i = ctx->goal_mask_map[next_item_idx];
-                if (goal_i != -1 && (current_state->active_goals_mask & (1U << goal_i)) && ctx->goal_type_map[next_item_idx] == current_box_type)
+                if (goal_i != -1 && (current_state->active_goals_mask & (1U << goal_i)))
                 {
-                    consumed = true;
+                    uint8_t goal_type = ctx->goal_type_map[next_item_idx];
+                    if (current_box_type == UNKNOWN || goal_type == UNKNOWN)
+                    {
+                        continue;
+                    }
+                    if (can_recon_consume_goal(current_box_type, goal_type))
+                    {
+                        consumed = true;
+                    }
                 }
-                else
+                if (!consumed)
                 {
                     bool is_safe = false;
                     for (int g = 0; g < ctx->goal_count; g++)
@@ -1594,7 +1617,7 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
                         if (current_state->active_goals_mask & (1U << g))
                         {
 
-                            if (ctx->goals[g].id == current_box_type || current_box_type == NO_CLS || current_box_type == UNKNOWN || ctx->goals[g].id == NO_CLS || ctx->goals[g].id == UNKNOWN)
+                            if (can_recon_use_goal_for_box(current_box_type, ctx->goals[g].id))
                             {
                                 if (ctx->cached_dist_table[g][next_item_idx] < INF_DIST)
                                 {
@@ -2133,9 +2156,13 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
         }
     }
 
+    // 最终识别兜底检查：
+    // 统计每个“已知类别”的箱子和目标点数量，用来发现是否只存在一对单点类别错配。
+    // UNKNOWN 表示仍未识别清楚，不能作为确定类别参与数量平衡判断。
     uint8_t final_box_counts[MAX_ID] = {0};
     uint8_t final_goal_counts[MAX_ID] = {0};
 
+    // 统计箱子端各类别数量，跳过 UNKNOWN。
     for (int i = 0; i < current_state->box_count; i++)
     {
         if (current_state->boxes[i].id != UNKNOWN)
@@ -2143,6 +2170,7 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             final_box_counts[current_state->boxes[i].id]++;
         }
     }
+    // 统计目标点端各类别数量，跳过 UNKNOWN。
     for (int i = 0; i < ctx->goal_count; i++)
     {
         if (ctx->goals[i].id != UNKNOWN)
@@ -2155,6 +2183,10 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
     uint8_t err_box_id = 0;
     uint8_t err_goal_id = 0;
 
+    // 查找类别数量差异：
+    // - box_surplus_count：箱子比目标点多出来的已知类别数量；
+    // - goal_surplus_count：目标点比箱子多出来的已知类别数量；
+    // 循环从 1 开始，故意忽略 NO_CLS(0)，只检查实际分类 id。
     for (uint8_t id = 1; id < MAX_ID; id++)
     {
         if (id == UNKNOWN)
@@ -2171,10 +2203,15 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             err_goal_id = id;
         }
     }
+    // 若恰好表现为“一个箱子类别多 1、另一个目标类别多 1”，
+    // 且这两个可疑类别各自只出现一次，则很可能是一次箱子/目标分类错配。
+    // 此时把这一只箱子和这一处目标点降级为 NO_CLS，让后续求解按“无类别约束”处理，
+    // 避免因为单次识别误判直接判定整张图类别不匹配。
     if (box_surplus_count == 1 && goal_surplus_count == 1 &&
         final_box_counts[err_box_id] == 1 && final_goal_counts[err_goal_id] == 1)
     {
 
+        // 将多出来的那个箱子类别降级为 NO_CLS。
         for (int i = 0; i < current_state->box_count; i++)
         {
             if (current_state->boxes[i].id == err_box_id)
@@ -2184,6 +2221,7 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             }
         }
 
+        // 将多出来的那个目标点类别降级为 NO_CLS，并同步 goal_type_map。
         for (int i = 0; i < ctx->goal_count; i++)
         {
             if (ctx->goals[i].id == err_goal_id)
