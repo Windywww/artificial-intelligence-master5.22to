@@ -1954,7 +1954,7 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             float final_actual_x = final_pos_X * 0.2 + 0.1;
             float final_actual_y = 2.4f - final_pos_Y * 0.2 - 0.1;
             // 如果要用直接到视点而非逼近式的，赋值为-0.001f即可，逼近式的步长为0.005f，避免过冲
-            float back_error = 0.02f;
+            float back_error = 0.01f;
             if (dx > 0)
                 final_actual_x -= back_error;
             else if (dx < 0)
@@ -1964,12 +1964,14 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             else if (dy < 0)
                 final_actual_y -= back_error;
 
+            ban_last_vision_correct = 1;
             car_move_point(final_actual_x, final_actual_y, angle, 0);
             while (navigate_flag)
             {
                 wifi_task();
             }
 
+            ban_last_vision_correct = 0;
             int target_angle = recon_direction_to_angle(target_direction);
             bool direction_changed = recon_angle_to_direction(angle) != target_direction;
             angle = target_angle;

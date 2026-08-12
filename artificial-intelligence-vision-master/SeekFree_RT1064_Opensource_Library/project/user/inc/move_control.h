@@ -123,5 +123,5 @@ extern uint8_t wrong_time;
 extern float vision_distance_num;
 
 extern uint8_t ban_map_check_ifgetVisionLoc ;
-
+extern uint8_t ban_last_vision_correct;
 #endif
