@@ -9,7 +9,22 @@
 
 // 系数 = (1/1024) * (1/0.02秒) * (3/7减速比) * (2 * PI * 0.0315米)
 #define SPEED_COEFFICIENT ((1.0f / 1024.0f) * (1.0f / 0.01f) * (3.0f / 7.0f) * (2.0f * 3.1415926f * 0.0315f))
-#define VISION_CORRECT_T 1
+//视觉几个节点一校正
+#define VISION_CORRECT_T 999
+
+extern uint8_t vision_run_correct_switch;
+
+//视觉几米矫正
+#define VISION_CORRECT_DISTANCE 9999.0f
+//旋转延时时间
+#define TURN_DELAY_TIME_MS 400
+//是否斜线
+#define IF_PASS 0
+//是否行进视觉矫正
+#define IF_RUN_CORRECT 0
+//速度，加速度252,291
+
+//编码器系数 173
 typedef enum
 {
     RF = 0,
@@ -51,6 +66,9 @@ void wheel_speed_calculate(float vx, float vy, float vz);
 void odometry_update();
 void navigation_update(void);
 void move_control_task(void);
+void walk_mode_set();
+void speed_limit();
+uint8_t check_correctOn_vision();
 
 
 void car_move(WaypointPath *path, float yaw, uint8_t m);
@@ -58,7 +76,6 @@ void car_stop();
 void car_turn(float yaw);
 void car_move_point(float x, float y, float yaw, uint8_t m);
 
-extern uint8_t check_obstacle(SokobanContext *ctx, uint8_t grid_index);
 
 extern uint8_t yaw_arrived_flag; // 航向角到达标志位：1表示已到达目标航向角，0表示未到达
 extern uint8_t navigate_flag; // 1: 正在追路径 0: 没有路径需要追
@@ -101,5 +118,10 @@ extern uint8_t wait_for_loc;
 extern uint8_t got_angle;
 
 extern uint8_t walk_mode;
+extern uint8_t first_time_fix;
+extern uint8_t wrong_time;
+extern float vision_distance_num;
 
+extern uint8_t ban_map_check_ifgetVisionLoc ;
+extern uint8_t ban_last_vision_correct;
 #endif

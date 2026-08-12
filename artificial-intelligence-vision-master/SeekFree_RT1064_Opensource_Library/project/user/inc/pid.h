@@ -10,7 +10,7 @@ typedef struct
     float Kd; // 微分系数
 
     float error_last; // 上一次的误差 e(k-1)
-    float error_prev; // 上上次的误差 e(k-2)
+    float error_acc; // 累积误差
 
     float duty_out; // 累计输出的占空比值
     float duty_max; // 最大占空比值

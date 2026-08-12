@@ -46,8 +46,40 @@ def parse_uart_packet():
             uart_buffer = uart_buffer[1:]
     # 如果缓冲区不够 4 个字节，或者没找到有效包，返回 -1
     return -1
+classification_log = None
+current_flag = -1
+
+def init_classification_log():
+    global classification_log
+    log_path = '/sd/classification_log.csv'
+    try:
+        try:
+            uos.stat(log_path)
+            file_exists = True
+        except OSError:
+            file_exists = False
+        classification_log = open(log_path, 'a')
+        if not file_exists:
+            classification_log.write('time_ms,received_flag,sent_int\n')
+        classification_log.write('# --- new session: %d ms ---\n' % time.ticks_ms())
+        classification_log.flush()
+    except Exception as exc:
+        classification_log = None
+        print('classification log init error:', exc)
+
+def log_sent_int(value):
+    if classification_log is None:
+        return
+    try:
+        flag_text = '0x%02X' % current_flag if current_flag != -1 else 'NONE'
+        classification_log.write('%d,%s,%d\n' % (time.ticks_ms(), flag_text, value))
+        classification_log.flush()
+    except Exception as exc:
+        print('classification log write error:', exc)
+
 def send_int_packet(cls):
     uart.write(bytes([cls]))
+    #log_sent_int(cls)
 
 black = (0, 31, -62, 43, -64, 44)
 purple = (35, 88, 71, 127, -95, -45)
@@ -59,14 +91,17 @@ num_path = '/sd/num_cls.tflite'
 num_net = tf.load(num_path, load_to_fb=uos.stat(num_path)[6] > (gc.mem_free() - (64*1024)))
 box_path = '/sd/box_cls.tflite'
 box_net = tf.load(box_path, load_to_fb=uos.stat(box_path)[6] > (gc.mem_free() - (64*1024)))
+#init_classification_log()
 
 while(True):
     flag = parse_uart_packet()
+    current_flag = flag
     if flag != -1:
         print(flag)
     img = sensor.snapshot()
-    #flag = 0xBB
+    #flag = 0xFE
     if flag == 0xFE:    #识别goal
+        print("goal...")
         purples = img.find_blobs([purple],roi=center_roi, area_threshold=800)
         if purples:   #无分类
             print(0)
@@ -74,10 +109,10 @@ while(True):
         else:
             #找边框矩形面积在1500,9500之间的blob (QQVGA)
             img.draw_rectangle((12,110,136,5),fill=True)
-            img.draw_rectangle((19,5,118,6),fill=True)
-            blobs = img.find_blobs([black], area_threshold=1500, threshold_cb=lambda b: b.area() < 9500)
+            img.draw_rectangle((19,12,118,6),fill=True)
+            blobs = img.find_blobs([black], area_threshold=2000, threshold_cb=lambda b: b.area() < 9500)
             if not blobs:
-                send_int_packet(11)
+                #send_int_packet(11)
                 continue
             best_label = -1
             best_prob = 0.0
@@ -116,17 +151,20 @@ while(True):
                 send_int_packet(best_label+1)
                 # 用红色显示最终的数字
                 img.draw_string(40, 10, f"{best_label}={best_prob:.2f}", color=(255, 0, 0), scale=1)   ##
-            else:
-                send_int_packet(11)
+            #else:
+                #send_int_packet(11)
+            print(best_label)
 
     elif flag == 0xBB:  #识别box
+        print("box...")
         result = tf.classify(box_net, img, roi=center_roi)
         probs = result[0].output()
         max_prob = max(probs)
         label = probs.index(max_prob)
-        img.draw_string(40, 10, f"{label} P:{max_prob:.2f}", color=(255, 0, 0), scale=2)    ##
+        img.draw_string(20, 10, f"{label}|{max_prob:.2f}", color=(255, 0, 0), scale=2)    ##
         if max_prob < 0.50:
-            send_int_packet(11)
+            #send_int_packet(11)
             print('unknown')
         else:
             send_int_packet(label+1)
+            print(label+1)
