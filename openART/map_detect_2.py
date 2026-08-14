@@ -6,7 +6,7 @@ from pyb import LED
 sensor.reset()
 sensor.set_pixformat(sensor.RGB565)
 #用QQVGA角度会有较大误差
-sensor.set_framesize(sensor.QVGA) # 320*240
+sensor.set_framesize(sensor.QQVGA) # 320*240
 sensor.skip_frames(times=200)
 
 sensor.set_auto_whitebal(False)
@@ -28,7 +28,9 @@ CAM_FY = 183.87969549
 CAM_K1 = 0.0681559578
 CAM_K2 = -0.0603082345
 
-def distort_point(ideal_x, ideal_y):
+FULL_FRAME_UNDISTORT = True
+
+def distort_point_raw(ideal_x, ideal_y):
     """
     【正向畸变】将理想(无畸变)的物理网格坐标，扭曲回实际摄像头的畸变像素坐标。
     (用于：算出理想网格后，去畸变图里准确的位置取色)
@@ -41,7 +43,7 @@ def distort_point(ideal_x, ideal_y):
     y_dist = y * radial
     return int(x_dist * CAM_FX + CAM_CX), int(y_dist * CAM_FY + CAM_CY)
 
-def undistort_point(dist_x, dist_y):
+def undistort_point_raw(dist_x, dist_y):
     """
     【逆向去畸变】将摄像头拍到的畸变像素坐标，还原为理想(无畸变)的坐标。
     (用于：将识别到的畸变角点、小车坐标拉平，以计算准确的透视矩阵)
@@ -56,6 +58,31 @@ def undistort_point(dist_x, dist_y):
         x_guess = x_d / radial
         y_guess = y_d / radial
     return (x_guess * CAM_FX + CAM_CX), (y_guess * CAM_FY + CAM_CY)
+
+def distort_point(ideal_x, ideal_y):
+    if FULL_FRAME_UNDISTORT:
+        return int(ideal_x), int(ideal_y)
+    return distort_point_raw(ideal_x, ideal_y)
+
+def undistort_point(dist_x, dist_y):
+    if FULL_FRAME_UNDISTORT:
+        return dist_x, dist_y
+    return undistort_point_raw(dist_x, dist_y)
+
+def undistort_frame(src):
+    if not FULL_FRAME_UNDISTORT:
+        return src
+    width = src.width()
+    height = src.height()
+    dst = src.copy()
+    for y in range(height):
+        for x in range(width):
+            sx, sy = distort_point_raw(x, y)
+            if 0 <= sx < width and 0 <= sy < height:
+                dst.set_pixel(x, y, src.get_pixel(sx, sy))
+            else:
+                dst.set_pixel(x, y, (0, 0, 0))
+    return dst
 # =====================================================================
 
 def sort_corners(corners):
@@ -797,8 +824,6 @@ last_car_angle_sin = None
 last_car_angle_cos = None
 car_float_centroid_supported = None
 car_lost_frames = 0
-last_speed_pixel = None
-last_speed_time_ms = None
 bomb_count = 0
 goal_count = 0
 first = True        #是否为初始化后第一份地图
@@ -806,37 +831,12 @@ delay = False       #出发车区后是否延迟
 wrong = 0   #地图不错误
 grid_spacing = 0
 
-def update_car_speed(car_info):
-    """Estimate the car center velocity from consecutive pixel positions."""
-    global last_speed_pixel, last_speed_time_ms
-
-    if car_info == -1:
-        last_speed_pixel = None
-        last_speed_time_ms = None
-        return None
-
-    now_ms = time.ticks_ms()
-    center_x, center_y = car_info[0]
-    speed = None
-    if last_speed_pixel is not None and last_speed_time_ms is not None:
-        dt_ms = time.ticks_diff(now_ms, last_speed_time_ms)
-        if dt_ms > 0:
-            dt = dt_ms * 0.001
-            vx = (center_x - last_speed_pixel[0]) / dt
-            vy = (center_y - last_speed_pixel[1]) / dt
-            magnitude = math.sqrt(vx*vx + vy*vy)
-            speed = (vx, vy, magnitude)
-            #print("CAR speed vx=%+.1f vy=%+.1f v=%.1f px/s" % (vx, vy, magnitude))
-    last_speed_pixel = (center_x, center_y)
-    last_speed_time_ms = now_ms
-    return speed
-
 def generate_mappoints(empty):
     """识别地图外框并更新采样点、ROI、单应矩阵和平均格距。"""
     global map_points, corners, inv_coeffs, outer_rect
     global grid_spacing, l
     while grid_spacing < 10:
-        img = sensor.snapshot()
+        img = undistort_frame(sensor.snapshot())
         #img.draw_rectangle(0,236,320,4,(0,0,0),fill=True)
         #img.draw_rectangle(0,0,4,240,(0,0,0),fill=True)
         mask = img.copy()
@@ -900,8 +900,8 @@ while True:
     if uart.any():
         alls = uart.read(uart.any())
         flag = alls[-1]
-        #print(flag)                ##
-    img = sensor.snapshot()
+        print(flag)
+    img = undistort_frame(sensor.snapshot())
 
     #img.draw_rectangle(0,236,320,4,(0,0,0),fill=True)
     #img.draw_rectangle(0,0,4,240,(0,0,0),fill=True)
@@ -914,7 +914,6 @@ while True:
     # 识别
     maps = build_map_from_colors(colors)
     car_info = get_and_update_car_info(img, maps, grid_spacing, inv_coeffs)
-    speed = update_car_speed(car_info)
     if car_info == -1:
         grid_spacing = 0
         generate_mappoints(False)
@@ -932,7 +931,6 @@ while True:
         last_car_angle_cos = None
         car_lost_frames = 0
         continue
-
     if not maps.count(1):    #若未开始比赛,重新初始化
         print("wait for start...")
         first = True
@@ -966,7 +964,7 @@ while True:
     tmp_goal_count = maps.count(3)
     if first == True and tmp_bomb_count+tmp_goal_count > 0:   #初始化数据记忆，更新space_maps
         if delay == False:
-            time.sleep_ms(150)
+            time.sleep_ms(100)
             print("等待地图刷新")
             delay = True
             continue
@@ -993,10 +991,10 @@ while True:
     draw_elem(maps, map_points)                             ##
 
     # flag=0xFE 表示小车静止不动等待校正角度
-    if flag == 0xFE and speed[2] < 10.0:
+    if flag == 0xFE:
         print(car_info[1])
         send_float_packet(car_info[1])
-    elif flag == 0xBB and speed[2] < 10.0:
+    elif flag == 0xBB:
         if maps.count(2) == maps.count(3):
             send_map_packet(maps)
             print("send map")           ##

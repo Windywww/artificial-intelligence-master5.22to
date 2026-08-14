@@ -11,9 +11,9 @@ import numpy as np
 
 def parse_args():
     parser = argparse.ArgumentParser(description="OpenCV 棋盘格相机标定")
-    parser.add_argument("images", help="图片目录或 glob，例如 photos 或 photos/*.bmp")
-    parser.add_argument("--cols", type=int, default=9, help="横向内角点数量，默认 9")
-    parser.add_argument("--rows", type=int, default=7, help="纵向内角点数量，默认 7")
+    parser.add_argument("images", default=r"D:\college\718\tag", help="图片目录或 glob，例如 photos 或 photos/*.bmp")
+    parser.add_argument("--cols", type=int, default=8, help="横向内角点数量，默认 8")
+    parser.add_argument("--rows", type=int, default=6, help="纵向内角点数量，默认 6")
     parser.add_argument(
         "--square-size",
         type=float,
@@ -33,6 +33,11 @@ def parse_args():
         type=float,
         default=1.0,
         help="剔除单图重投影误差超过此像素值的照片；设为 0 禁用",
+    )
+    parser.add_argument(
+        "--openart-model",
+        action="store_true",
+        help="Fit the two-radial-coefficient model used by map_detect.py",
     )
     return parser.parse_args()
 
@@ -103,13 +108,14 @@ def detect_corners(files, pattern_size, object_template, preview_dir=None):
     return object_points, image_points, accepted_files, image_size
 
 
-def calibrate(object_points, image_points, image_size):
+def calibrate(object_points, image_points, image_size, flags=0):
     rms, matrix, distortion, rotations, translations = cv2.calibrateCamera(
         object_points,
         image_points,
         image_size,
         None,
         None,
+        flags=flags,
     )
     errors = []
     for object_set, image_set, rotation, translation in zip(
@@ -200,11 +206,15 @@ def main():
     if len(accepted) < 5:
         raise SystemExit("成功检测棋盘角点的图片不足 5 张，建议至少准备 15～25 张。")
 
-    first = calibrate(object_points, image_points, image_size)
+    calibration_flags = 0
+    if args.openart_model:
+        calibration_flags = cv2.CALIB_ZERO_TANGENT_DIST | cv2.CALIB_FIX_K3
+
+    first = calibrate(object_points, image_points, image_size, calibration_flags)
     object_points, image_points, accepted, rejected = reject_outliers(
         object_points, image_points, accepted, first[-1], args.reject_error
     )
-    final = calibrate(object_points, image_points, image_size)
+    final = calibrate(object_points, image_points, image_size, calibration_flags)
     rms, matrix, distortion, _, _, errors = final
     save_result(
         args.output,

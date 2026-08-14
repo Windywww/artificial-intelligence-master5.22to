@@ -12,6 +12,9 @@ _deps
 CMakeUserPresets.json
 tmp/
 
+openART/calibration_output/corners
+openART/__pycache__
+
 # ==================================
 # Python & uv 包管理和运行环境
 # ==================================
