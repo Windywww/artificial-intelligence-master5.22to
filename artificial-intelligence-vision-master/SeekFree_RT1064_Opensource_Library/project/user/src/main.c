@@ -194,7 +194,7 @@ static void sync_car_angle(void)
     }
     same_time = 0;
     main_vision_angle = 999;
-    if (fabs(actual_yaw - car_angel + 90) >= 6)
+    if (fabs(actual_yaw - car_angel + 90) >= 5)
     {
         actual_yaw = car_angel - 90;
         while (actual_yaw > 180.0f)
