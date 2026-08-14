@@ -81,7 +81,7 @@ void wifi_task()
     seekfree_assistant_oscilloscope_data.data[4] = actual_yaw;
     seekfree_assistant_oscilloscope_data.data[5] = global_infor_type; // 0: 无效 1: 只要坐标 2: 只要角度 3: 坐标+角度 4: 坐标+角度+地图 5: 坐标+角度+地图+小车状态
     seekfree_assistant_oscilloscope_data.data[6] = final_image_index; // 最终目标航向角 单位度
-    seekfree_assistant_oscilloscope_data.data[7] = vision_distance_num; 
+    seekfree_assistant_oscilloscope_data.data[7] = vision_distance_num_plus; 
     SendDataToAssistant(&seekfree_assistant_oscilloscope_data, 8);
     // system_delay_ms(13);
 }

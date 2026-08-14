@@ -15,16 +15,20 @@
 extern uint8_t vision_run_correct_switch;
 
 //视觉几米矫正
-#define VISION_CORRECT_DISTANCE 9999.0f
+#define VISION_CORRECT_DISTANCE -0.1f
 //旋转延时时间
 #define TURN_DELAY_TIME_MS 400
 //是否斜线
-#define IF_PASS 0
+#define IF_PASS 1
 //是否行进视觉矫正
 #define IF_RUN_CORRECT 0
 //速度，加速度252,291
-
 //编码器系数 173
+
+//每次关卡结束时还会重新要地图检查是否推完，此为检查最大次数,0即为不检查
+#define CHECK_TIME_MAX 1
+//怎么样的矫正模式，2全矫正(只会在关键节点上矫正)，1半矫正(跑关卡不矫正，侦查时少量点矫正)，0不矫正，全局都不矫正,放的时候(0.3,1.2)
+#define CORRECT_MODE 2
 typedef enum
 {
     RF = 0,
@@ -121,6 +125,7 @@ extern uint8_t walk_mode;
 extern uint8_t first_time_fix;
 extern uint8_t wrong_time;
 extern float vision_distance_num;
+extern float vision_distance_num_plus ;
 
 extern uint8_t ban_map_check_ifgetVisionLoc ;
 extern uint8_t ban_last_vision_correct;
