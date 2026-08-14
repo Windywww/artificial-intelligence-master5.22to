@@ -213,6 +213,8 @@ def get_color_class(a, b):
             label = name
     if label == 6:
         label=0
+    elif label == 7:
+        label=1
     return label
 def build_map_from_colors(colors):
     """
@@ -711,6 +713,7 @@ greend = (33, 85, -69, -36, 30, 69)
 greenl = (30, 93, -90, -44, 21, 87)'''
 
 car = (0, 100, -90, -9, -53, 90)
+box = (20, 100, -46, -9, 32, 98)
 # 屏幕中心亮、四角暗，因此 L 放宽；蓝绿和黄色主要依靠 a/b 分离。
 blued = (15, 100, -61, -4, -50, -4)
 bluel = (15, 100, -65, -22, -44, 5)
@@ -775,6 +778,7 @@ COLOR_CENTERS = {
     3: (94, -68),
     4: (71, 55),
     6: (40,-83),    #==0
+    7: (22,-45),    #==1
     #容易和box混，舍弃吧
     #5: (-45,13) #里中外三点取样
 }
@@ -896,11 +900,11 @@ def generate_mappoints(empty):
 
 generate_mappoints(True)
 while True:
-    flag = 0xFE
+    flag = 0
     if uart.any():
         alls = uart.read(uart.any())
         flag = alls[-1]
-        #print(flag)                ##
+        print(flag)
     img = sensor.snapshot()
 
     #img.draw_rectangle(0,236,320,4,(0,0,0),fill=True)
@@ -932,7 +936,6 @@ while True:
         last_car_angle_cos = None
         car_lost_frames = 0
         continue
-
     if not maps.count(1):    #若未开始比赛,重新初始化
         print("wait for start...")
         first = True
@@ -943,7 +946,7 @@ while True:
         last_spacemap = [1] * LENS
         wrong = 1
         send_2f_packet(car_info[2])
-        if flag == 0xBB and maps.count(2) == 0:
+        if flag == 0xBB and maps.count(2) == 0 and speed[2] < 10.0:
             send_map_packet(maps)
             print("send map")
         continue
@@ -990,7 +993,7 @@ while True:
         continue
     last_spacemap = space_maps[:]'''
 
-    draw_elem(maps, map_points)                             ##
+    #draw_elem(maps, map_points)                             ##
 
     # flag=0xFE 表示小车静止不动等待校正角度
     if flag == 0xFE and speed[2] < 10.0:
