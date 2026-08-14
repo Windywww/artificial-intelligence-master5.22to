@@ -164,7 +164,7 @@ float local_encoder_vy = 0.0f;
 
 // 比赛版本0.925,0.97
 float vx_encoder_index = 0.925f;
-float vy_encoder_index = 0.97f;
+float vy_encoder_index = 0.96f;
 /**
  * @brief 里程计更新
  *
@@ -213,7 +213,7 @@ float last_error_x = 0.0f;
 float last_error_y = 0.0f;
 float last_global_target_vx = 0.0f; // 全局坐标系下的目标速度
 float last_global_target_vy = 0.0f; // 全局坐标系下
-float amax = 0.8f;                  // 最大加速度 m/s^2
+float amax = 1.6f;                  // 最大加速度 m/s^2
 float max_speed = 1.2f;             // 最大速度 m/s
 // 分别在最后一个点与其它节点起到延时作用
 uint8_t count_A = 0;
@@ -274,6 +274,11 @@ void navigation_update(void)
 
     // 速度与加速度限制，仅当加速时有加速度限制，将要到达节点减速时由位置环决定
     speed_limit();
+    float v_whole = sqrtf(global_target_vx*global_target_vx+global_target_vy*global_target_vy);
+    if(v_whole>=max_speed+0.1f){
+        global_target_vx = max_speed*global_target_vx/v_whole;
+        global_target_vy = max_speed*global_target_vy/v_whole;
+    }
     // 记忆目标速度赋值，为了求加速度
     last_global_target_vx = global_target_vx;
     last_global_target_vy = global_target_vy;
@@ -288,7 +293,7 @@ void navigation_update(void)
     float dy = target_y - global_y;
     float distance = sqrtf(dx * dx + dy * dy);
 
-    if (distance <= 0.015f && stop_flag == 0)
+    if (distance <= 0.017f && stop_flag == 0)
     {
         stop_flag = 1; // 开启手刹
         if (walk_mode != 4)
@@ -336,7 +341,7 @@ void navigation_update(void)
 
             if (first_time_fix == 1)
             {
-                if (!ban_last_vision_correct)
+                if (!ban_last_vision_correct&&CORRECT_MODE>0)
                 {
                     if (wait_for_loc == 0)
                     {
@@ -452,7 +457,7 @@ void navigation_update(void)
 
                         = round_int((path_queue_x[current_path + 2] - 0.1f) / 0.2f) + round_int((2.3f - path_queue_y[current_path + 2]) / 0.2f) * 16;
                 }
-                if (map_check_ifgetVisionLoc(final_map_data, car_to, car_to_to) && vision_distance_num_plus >= VISION_CORRECT_DISTANCE&&(1==0))
+                if (map_check_ifgetVisionLoc(final_map_data, car_to, car_to_to) && vision_distance_num_plus >= VISION_CORRECT_DISTANCE&&CORRECT_MODE == 2)
                 {
                     // 节点是否视觉矫正判定的相关参数归零
                     vision_point_num = 0;
@@ -504,7 +509,7 @@ void navigation_update(void)
                             vision_x = car_location[0];
                             vision_y = car_location[1];
                         }
-                        if (loac_test >= 2)
+                        if (loac_test >= 4)
                         {
                             float dx = global_x - 3.2f * car_location[0];
                             float dy = global_y - (2.4f - 2.4f * car_location[1]);

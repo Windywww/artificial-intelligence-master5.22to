@@ -75,8 +75,8 @@ static void return_to_start_zone(void)
     first_time_fix = 2;
     vision_angle_switch = 0;
     vision_run_correct_switch = 0;
-    car_move_point(0.3, 1.2, angle, 0);
     ban_map_check_ifgetVisionLoc = 1;
+    car_move_point(0.3, 1.2, angle, 0);
     while (navigate_flag)
     {
         wifi_task();
@@ -173,7 +173,7 @@ float main_vision_angle = 999;
 uint8_t same_time = 0;
 static void sync_car_angle(void)
 {
-    while (same_time <= 7)
+    while (same_time <= 2)
     {
         wait_global_info();
         want_global_infor(2);
@@ -194,12 +194,26 @@ static void sync_car_angle(void)
     }
     same_time = 0;
     main_vision_angle = 999;
-    actual_yaw = car_angel - 90;
-    while (actual_yaw > 180.0f)
-        actual_yaw -= 360.0f;
-    while (actual_yaw < -180.0f)
-        actual_yaw += 360.0f;
+    if (fabs(actual_yaw - car_angel + 90) >= 6)
+    {
+        actual_yaw = car_angel - 90;
+        while (actual_yaw > 180.0f)
+            actual_yaw -= 360.0f;
+        while (actual_yaw < -180.0f)
+            actual_yaw += 360.0f;
+    }
 }
+
+static uint8_t if_in_carStart(){
+    if(global_x<=0.5f&&global_y>=1.2f-0.33f&&global_y<=1.2f+0.33f){
+        return 1;
+    }else{
+        return 0;
+    }
+}
+
+//小车在某一关卡复活的次数
+uint8_t resurgence_time = 0;
 /**
  * @brief 跑一关
  * @param round_index 0第一关 1第二关 2第三关
@@ -207,23 +221,26 @@ static void sync_car_angle(void)
  */
 static uint8_t run_round(uint8_t round_index)
 {
+    ban_map_check_ifgetVisionLoc = 1;
     WaypointPath path = {0};
     vision_run_correct_switch = 0;
     reset_round_runtime();
 
     vision_angle_switch = 0;
-    car_move_point(global_x + 0.25f, global_y, angle, 0);
+    if(if_in_carStart()){
+        car_move_point(global_x + 0.25f, global_y, angle, 0);
+    }
     wait_navigation();
-    if (round_index >= 1)
+    if (round_index >= 0)
     {
-        // sync_car_angle();
+        sync_car_angle();
     }
 
-    ban_map_check_ifgetVisionLoc = 0;
     // 获取地图
     while (1)
     {
         request_round_map();
+        if(resurgence_time>0){break;}
         uint8_t map_ok = 0;
         for (int i = 0; i < 192; i++)
         {
@@ -243,7 +260,7 @@ static uint8_t run_round(uint8_t round_index)
     {
         return 0;
     }
-
+    ban_map_check_ifgetVisionLoc = 0;
     vision_run_correct_switch = 0;
     if (!build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 1U : 1U))
     {
@@ -273,6 +290,12 @@ static uint8_t run_round(uint8_t round_index)
     lost = 66;
     car_move(&path, angle, 0);
     wait_navigation();
+    if(resurgence_time<CHECK_TIME_MAX){
+        resurgence_time++;
+        if(run_round(round_index)){
+            return 1;
+        }
+    }
 
     return_to_start_zone();
     return 1;
@@ -315,10 +338,13 @@ int main(void)
 
     system_delay_ms(600);
 
-    sync_car_position();
+    if(CORRECT_MODE !=0){
+        sync_car_position();
+    }
     // 循环跑三关
     for (uint8_t round_index = 0; round_index < ROUND_COUNT; round_index++)
     {
+        resurgence_time = 0;
         if (!run_round(round_index))
         {
             return_to_start_zone();

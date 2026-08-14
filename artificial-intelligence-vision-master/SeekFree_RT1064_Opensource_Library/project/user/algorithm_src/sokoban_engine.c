@@ -27,7 +27,7 @@
 #define MOVE_PENALTY 10
 #endif
 #define UNKNOWN 11
-#define ERROR 0.05f
+#define ERROR 99.0f
 // 节点上限必须作为独立状态逐层传播，不能与无解或下一阈值混淆。
 #define RES_NODE_LIMIT -2.0f
 // 保持置换表总容量不变，每个集合容纳四个相同低位索引的状态。
@@ -2014,7 +2014,8 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             float thistime_soko = time_line;
             vision_run_correct_switch = 0;
 
-            while(time_line-thistime_soko<=1.2f){
+            while (time_line - thistime_soko <= 1.2f)
+            {
                 if (image_rx_state == 0)
                 {
                     check_image(3 - is_box, 1);
@@ -2023,7 +2024,8 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                 {
                     check_image(3 - is_box, 0);
                 }
-                if(final_image_index!=UINT8_MAX){
+                if (final_image_index != UINT8_MAX)
+                {
                     break;
                 }
             }
@@ -2097,8 +2099,6 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                 }
             }
             vision_run_correct_switch = 0;
-            // ��ʶ������Ȼδ֪�����������ʶ�𣨿����ǵ�һ�ζ�׼����׼ȷ��
-            // ʶ��ʱ����carmove�����Ӿ��Ƕ�У��
             // system_delay_ms(700);
             uint8_t recognized_id = final_image_index;
 
@@ -2596,6 +2596,16 @@ static bool pass(uint8_t startpoint, uint8_t endpoint, float error, const uint8_
             }
         }
     }
+    for (uint8_t i = endpoint-16; i <= endpoint+16; i+=16)
+    {
+        for (uint8_t j = -1; j <= 1; j++)
+        {
+            if(obstacles[i+j]){
+                return 0;
+            }
+        }        
+    }
+    
     return 1;
 }
 // 节点平滑
@@ -2861,10 +2871,9 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
             break;
         }
     }
-    
 
     // -------------------------- 水平方向处理 --------------------------
-    if ((car_from / 16) == (car_to / 16)&&car_from!=car_to)
+    if ((car_from / 16) == (car_to / 16) && car_from != car_to)
     {
         // 水平向右移动
         if (car_from < car_to)
@@ -3084,7 +3093,7 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
         }
     }
     // -------------------------- 垂直方向处理 --------------------------
-    else if ((car_from % 16) == (car_to % 16)&&car_from!=car_to)
+    else if ((car_from % 16) == (car_to % 16) && car_from != car_to)
     {
         // 垂直向下移动
         if (car_from < car_to)
@@ -3329,7 +3338,7 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
     {
         if (car_to < car_to_to)
         {
-            for (uint8_t i = car_to + 1; i <= car_to_to; i++)
+            for (uint8_t i = car_to + 1; i <= car_to_to + 1; i++)
             {
                 if (i - 16 > 0)
                 {
@@ -3343,11 +3352,14 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                     if (type == 2 || type == 4 || type == 6 || type == 7)
                         return 1;
                 }
+                uint8_t type = map[i];
+                if (type == 2 || type == 4 || type == 6 || type == 7)
+                    return 1;
             }
         }
         else
         {
-            for (uint8_t i = car_to - 1; i >= car_to_to; i--)
+            for (uint8_t i = car_to - 1; i >= car_to_to - 1; i--)
             {
                 if (i - 16 > 0)
                 {
@@ -3361,6 +3373,9 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                     if (type == 2 || type == 4 || type == 6 || type == 7)
                         return 1;
                 }
+                uint8_t type = map[i];
+                if (type == 2 || type == 4 || type == 6 || type == 7)
+                    return 1;
             }
         }
     }
@@ -3368,7 +3383,7 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
     {
         if (car_to < car_to_to)
         {
-            for (uint8_t i = car_to + 16; i <= car_to_to; i += 16)
+            for (uint8_t i = car_to + 16; i <= car_to_to + 16; i += 16)
             {
                 if (i - 1 > 0)
                 {
@@ -3382,11 +3397,14 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                     if (type == 2 || type == 4 || type == 6 || type == 7)
                         return 1;
                 }
+                uint8_t type = map[i];
+                if (type == 2 || type == 4 || type == 6 || type == 7)
+                    return 1;
             }
         }
         else
         {
-            for (uint8_t i = car_to - 16; i >= car_to_to; i -= 16)
+            for (uint8_t i = car_to - 16; i >= car_to_to - 16; i -= 16)
             {
                 if (i - 1 > 0)
                 {
@@ -3400,10 +3418,24 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                     if (type == 2 || type == 4 || type == 6 || type == 7)
                         return 1;
                 }
+                uint8_t type = map[i];
+                if (type == 2 || type == 4 || type == 6 || type == 7)
+                    return 1;
             }
         }
     }
-
+    else if (car_to_to != car_to)
+    {
+        for (uint8_t i = car_to_to - 16; i <= car_to_to + 16; i += 16)
+        {
+            for (uint8_t j = -1; j <= 1; i++)
+            {
+                uint8_t type = map[i+j];
+                if (type == 2 || type == 4 || type == 6 || type == 7)
+                    return 1;
+            }
+        }
+    }
     return 0;
 }
 
