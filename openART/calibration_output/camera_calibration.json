@@ -1,0 +1,279 @@
+{
+  "image_size": [
+    320,
+    240
+  ],
+  "pattern_inner_corners": [
+    8,
+    6
+  ],
+  "square_size": 1.0,
+  "rms": 0.4517498625140877,
+  "mean_reprojection_error": 0.2807793392423998,
+  "camera_matrix": [
+    [
+      191.41777269742374,
+      0.0,
+      155.4905510315571
+    ],
+    [
+      0.0,
+      184.1842620581628,
+      115.17147941703635
+    ],
+    [
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "distortion_coefficients": [
+    0.09747794028153643,
+    -0.18595656640268415,
+    -0.0036747008437224365,
+    -0.0009878049140602428,
+    0.14449464019444377
+  ],
+  "opencv_distortion": {
+    "k1": 0.09747794028153643,
+    "k2": -0.18595656640268415,
+    "p1": -0.0036747008437224365,
+    "p2": -0.0009878049140602428,
+    "k3": 0.14449464019444377
+  },
+  "images": [
+    {
+      "file": "D:\\college\\718\\tag\\12.jpg",
+      "reprojection_error": 0.737227201461792
+    },
+    {
+      "file": "D:\\college\\718\\tag\\13.jpg",
+      "reprojection_error": 0.30142781138420105
+    },
+    {
+      "file": "D:\\college\\718\\tag\\15.jpg",
+      "reprojection_error": 0.26798975467681885
+    },
+    {
+      "file": "D:\\college\\718\\tag\\16.jpg",
+      "reprojection_error": 0.27122315764427185
+    },
+    {
+      "file": "D:\\college\\718\\tag\\17.jpg",
+      "reprojection_error": 0.2219383865594864
+    },
+    {
+      "file": "D:\\college\\718\\tag\\18.jpg",
+      "reprojection_error": 0.2767326831817627
+    },
+    {
+      "file": "D:\\college\\718\\tag\\19.jpg",
+      "reprojection_error": 0.26986822485923767
+    },
+    {
+      "file": "D:\\college\\718\\tag\\2.jpg",
+      "reprojection_error": 0.32247433066368103
+    },
+    {
+      "file": "D:\\college\\718\\tag\\20.jpg",
+      "reprojection_error": 0.28580397367477417
+    },
+    {
+      "file": "D:\\college\\718\\tag\\21.jpg",
+      "reprojection_error": 0.3014671206474304
+    },
+    {
+      "file": "D:\\college\\718\\tag\\22.jpg",
+      "reprojection_error": 0.8834061026573181
+    },
+    {
+      "file": "D:\\college\\718\\tag\\24.jpg",
+      "reprojection_error": 0.2540021240711212
+    },
+    {
+      "file": "D:\\college\\718\\tag\\25.jpg",
+      "reprojection_error": 0.22005923092365265
+    },
+    {
+      "file": "D:\\college\\718\\tag\\26.jpg",
+      "reprojection_error": 0.2519289553165436
+    },
+    {
+      "file": "D:\\college\\718\\tag\\27.jpg",
+      "reprojection_error": 0.24586576223373413
+    },
+    {
+      "file": "D:\\college\\718\\tag\\29.jpg",
+      "reprojection_error": 0.4784245789051056
+    },
+    {
+      "file": "D:\\college\\718\\tag\\3.jpg",
+      "reprojection_error": 0.3127706050872803
+    },
+    {
+      "file": "D:\\college\\718\\tag\\30.jpg",
+      "reprojection_error": 0.2753071188926697
+    },
+    {
+      "file": "D:\\college\\718\\tag\\31.jpg",
+      "reprojection_error": 0.4226418435573578
+    },
+    {
+      "file": "D:\\college\\718\\tag\\32.jpg",
+      "reprojection_error": 0.25373411178588867
+    },
+    {
+      "file": "D:\\college\\718\\tag\\35.jpg",
+      "reprojection_error": 0.2485676258802414
+    },
+    {
+      "file": "D:\\college\\718\\tag\\36.jpg",
+      "reprojection_error": 0.25932514667510986
+    },
+    {
+      "file": "D:\\college\\718\\tag\\37.jpg",
+      "reprojection_error": 0.23412346839904785
+    },
+    {
+      "file": "D:\\college\\718\\tag\\38.jpg",
+      "reprojection_error": 0.23745250701904297
+    },
+    {
+      "file": "D:\\college\\718\\tag\\39.jpg",
+      "reprojection_error": 0.24238646030426025
+    },
+    {
+      "file": "D:\\college\\718\\tag\\4.jpg",
+      "reprojection_error": 0.19909298419952393
+    },
+    {
+      "file": "D:\\college\\718\\tag\\40.jpg",
+      "reprojection_error": 0.22703255712985992
+    },
+    {
+      "file": "D:\\college\\718\\tag\\41.jpg",
+      "reprojection_error": 0.1810551881790161
+    },
+    {
+      "file": "D:\\college\\718\\tag\\42.jpg",
+      "reprojection_error": 0.19156770408153534
+    },
+    {
+      "file": "D:\\college\\718\\tag\\43.jpg",
+      "reprojection_error": 0.19790871441364288
+    },
+    {
+      "file": "D:\\college\\718\\tag\\44.jpg",
+      "reprojection_error": 0.2054515928030014
+    },
+    {
+      "file": "D:\\college\\718\\tag\\46.jpg",
+      "reprojection_error": 0.2040996551513672
+    },
+    {
+      "file": "D:\\college\\718\\tag\\48.jpg",
+      "reprojection_error": 0.2509341537952423
+    },
+    {
+      "file": "D:\\college\\718\\tag\\49.jpg",
+      "reprojection_error": 0.2683527171611786
+    },
+    {
+      "file": "D:\\college\\718\\tag\\5.jpg",
+      "reprojection_error": 0.24492323398590088
+    },
+    {
+      "file": "D:\\college\\718\\tag\\50.jpg",
+      "reprojection_error": 0.2215358018875122
+    },
+    {
+      "file": "D:\\college\\718\\tag\\51.jpg",
+      "reprojection_error": 0.28956079483032227
+    },
+    {
+      "file": "D:\\college\\718\\tag\\52.jpg",
+      "reprojection_error": 0.2755151689052582
+    },
+    {
+      "file": "D:\\college\\718\\tag\\53.jpg",
+      "reprojection_error": 0.19231979548931122
+    },
+    {
+      "file": "D:\\college\\718\\tag\\55.jpg",
+      "reprojection_error": 0.22599263489246368
+    },
+    {
+      "file": "D:\\college\\718\\tag\\57.jpg",
+      "reprojection_error": 0.3906860649585724
+    },
+    {
+      "file": "D:\\college\\718\\tag\\58.jpg",
+      "reprojection_error": 0.2146621197462082
+    },
+    {
+      "file": "D:\\college\\718\\tag\\6.jpg",
+      "reprojection_error": 0.21152953803539276
+    },
+    {
+      "file": "D:\\college\\718\\tag\\60.jpg",
+      "reprojection_error": 0.35438111424446106
+    },
+    {
+      "file": "D:\\college\\718\\tag\\61.jpg",
+      "reprojection_error": 0.188981294631958
+    },
+    {
+      "file": "D:\\college\\718\\tag\\62.jpg",
+      "reprojection_error": 0.3093521296977997
+    },
+    {
+      "file": "D:\\college\\718\\tag\\63.jpg",
+      "reprojection_error": 0.2870192527770996
+    },
+    {
+      "file": "D:\\college\\718\\tag\\64.jpg",
+      "reprojection_error": 0.1832219809293747
+    },
+    {
+      "file": "D:\\college\\718\\tag\\65.jpg",
+      "reprojection_error": 0.24471397697925568
+    },
+    {
+      "file": "D:\\college\\718\\tag\\67.jpg",
+      "reprojection_error": 0.1814592331647873
+    },
+    {
+      "file": "D:\\college\\718\\tag\\69.jpg",
+      "reprojection_error": 0.25299158692359924
+    },
+    {
+      "file": "D:\\college\\718\\tag\\7.jpg",
+      "reprojection_error": 0.1863749623298645
+    },
+    {
+      "file": "D:\\college\\718\\tag\\71.jpg",
+      "reprojection_error": 0.2899797856807709
+    },
+    {
+      "file": "D:\\college\\718\\tag\\72.jpg",
+      "reprojection_error": 0.6373502612113953
+    },
+    {
+      "file": "D:\\college\\718\\tag\\8.jpg",
+      "reprojection_error": 0.18754954636096954
+    },
+    {
+      "file": "D:\\college\\718\\tag\\80.jpg",
+      "reprojection_error": 0.21984796226024628
+    },
+    {
+      "file": "D:\\college\\718\\tag\\9.jpg",
+      "reprojection_error": 0.2128305435180664
+    }
+  ],
+  "rejected_images": [
+    "D:\\college\\718\\tag\\23.jpg",
+    "D:\\college\\718\\tag\\54.jpg",
+    "D:\\college\\718\\tag\\78.jpg"
+  ]
+}

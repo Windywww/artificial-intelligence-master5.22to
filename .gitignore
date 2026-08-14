@@ -1,0 +1,143 @@
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps
+CMakeUserPresets.json
+tmp/
+
+openART/calibration_output/corners
+openART/__pycache__
+
+# ==================================
+# Python & uv 包管理和运行环境
+# ==================================
+# Python 字节码和缓存
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+# uv 及虚拟环境 (uv 默认创建 .venv)
+.venv/
+venv/
+env/
+ENV/
+# Python 构建、打包产物
+build/
+dist/
+downloads/
+eggs/
+.eggs/
+*.egg-info/
+*.egg
+
+# ==================================
+# TensorFlow & AI 模型开发相关
+# ==================================
+# Jupyter Notebook 临时文件
+.ipynb_checkpoints/
+# TensorFlow 模型文件和权重
+*.pb
+*.h5
+*.keras
+*.tflite
+!MCXVision/classification/project/user/models/box_student_npu.tflite
+!MCXVision/classification/project/user/models/num_cls.tflite
+!MCXVision/classification/project/user/models/num_cls_npu.tflite
+saved_model/
+*.ckpt
+*.ckpt.meta
+*.ckpt.index
+*.ckpt.data-*
+# 训练日志与 TensorBoard
+logs/
+tensorboard/
+tb_logs/
+core.*
+# 数据集和缓存数据
+data/
+datasets/
+*.csv
+*.tsv
+*.jsonl
+*.tfrecord
+*.npy
+*.npz
+# 硬件加速相关的缓存 (如 CUDA/CuDNN 等编译缓存)
+*.ptx
+
+# ==================================
+# C/C++ 或 Python 扩展的编译产物
+# ==================================
+*.so
+*.dll
+*.dylib
+
+# ==================================
+# C/C++ 编译产物和可执行文件
+# ==================================
+*.exe
+*.out
+*.elf
+*.hex
+*.bin
+*.a
+*.lib
+!MCXVision/classification/libraries/**/*.a
+!MCXVision/classification/libraries/**/*.lib
+
+# ==================================
+# 编译中间文件
+# ==================================
+*.o
+*.obj
+*.d
+*.crf
+*.map
+*.dep
+*.htm
+
+# ==================================
+# Keil MDK / 单片机开发特有文件
+# ==================================
+Objects/
+Listings/
+DebugConfig/
+!MCXVision/classification/project/mdk/DebugConfig/
+!MCXVision/classification/project/mdk/DebugConfig/**
+*.uvoptx
+!MCXVision/classification/project/mdk/mcx_vision_board.uvoptx
+*.uvguix.*
+*.uvgui.*
+*.bak
+*.iex
+*.Administrator
+*.JLinkScript
+
+# ==================================
+# IDE 和编辑器配置
+# ==================================
+.vscode/
+.idea/
+
+# ==================================
+# 操作系统自动生成的隐藏文件
+# ==================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ==================================
+# 合并冲突产生的备份文件（防止误提交）
+# ==================================
+*.orig
+*_BACKUP_*
+*_BASE_*
+*_LOCAL_*
+*_REMOTE_*
