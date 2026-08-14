@@ -134,6 +134,7 @@ static void wait_global_info(void)
         wifi_task();
     }
 }
+
 // 要一次地图
 static void request_round_map(void)
 {
@@ -141,8 +142,12 @@ static void request_round_map(void)
     wait_global_info();
 
     want_global_infor(1);
+    float this_time = time_line;
     while (global_infor_type != 5)
     {
+        if(time_line-this_time>=5){
+            break;
+        }
         switch (global_infor_type)
         {
         case 1:
@@ -157,6 +162,7 @@ static void request_round_map(void)
     }
 }
 // 矫正一次target_x target_y,阻塞式
+uint8_t same_time = 0;
 static void sync_car_position(void)
 {
     wait_global_info();
@@ -170,7 +176,7 @@ static void sync_car_position(void)
 }
 // 矫正一次车角度，阻塞式,多次采样
 float main_vision_angle = 999;
-uint8_t same_time = 0;
+
 static void sync_car_angle(void)
 {
     while (same_time <= 2)
@@ -262,7 +268,7 @@ static uint8_t run_round(uint8_t round_index)
     }
     ban_map_check_ifgetVisionLoc = 0;
     vision_run_correct_switch = 0;
-    if (!build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 1U : 1U))
+    if (!build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 0U : 1U))
     {
         return 0;
     }
