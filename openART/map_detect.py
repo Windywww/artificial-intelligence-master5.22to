@@ -834,6 +834,36 @@ def update_car_speed(car_info):
     last_speed_pixel = (center_x, center_y)
     last_speed_time_ms = now_ms
     return speed
+def recover_boxes_from_blobs(img, maps):
+    """全地图补搜箱子色块，并将其中心吸附到最近的网格点。"""
+    blobs = img.find_blobs(
+        [box], roi=outer_rect,
+        pixels_threshold=pixels_threshold,
+        area_threshold=pixels_threshold)
+    recovered_count = 0
+    for blob in blobs:
+        map_point = pixel_to_map_point(blob.cx(), blob.cy(), inv_coeffs)
+        if map_point is None:
+            continue
+        u, v = map_point
+        x = min(COLS-1, max(0, int(u*COLS)))
+        y = min(ROWS-1, max(0, int(v*ROWS)))
+        index = x + COLS*y
+        if maps[index] != 2:
+            maps[index] = 2
+            recovered_count += 1
+        # 修正2产生1的错误 （逻辑同修复5产生1）
+        dx = u*COLS - x
+        dy = v*ROWS - y
+        if dx>0.7 and maps[x+COLS*y+1]==1:
+            maps[x+1+COLS*y]=0
+        elif dx<0.3 and maps[x+COLS*y-1]==1:
+            maps[x-1+COLS*y]=0
+        elif dy<0.3 and maps[x+COLS*(y-1)]==1:
+            maps[x+COLS*(y-1)]=0
+        elif dy>0.7 and maps[x+COLS*(y+1)]==1:
+            maps[x+COLS*(y+1)]=0
+    return len(blobs), recovered_count
 
 def generate_mappoints(empty):
     """识别地图外框并更新采样点、ROI、单应矩阵和平均格距。"""
@@ -900,7 +930,7 @@ def generate_mappoints(empty):
 
 generate_mappoints(True)
 while True:
-    flag = 0
+    flag = 0xBB
     if uart.any():
         alls = uart.read(uart.any())
         flag = alls[-1]
@@ -936,20 +966,7 @@ while True:
         last_car_angle_cos = None
         car_lost_frames = 0
         continue
-    if not maps.count(1):    #若未开始比赛,重新初始化
-        print("wait for start...")
-        first = True
-        delay = False
-        bomb_count = 0
-        goal_count = 0
-        space_maps = [1] * LENS
-        last_spacemap = [1] * LENS
-        wrong = 1
-        send_2f_packet(car_info[2])
-        if flag == 0xBB and maps.count(2) == 0 and speed[2] < 10.0:
-            send_map_packet(maps)
-            print("send map")
-        continue
+
     # 修正5产生1的错误：若小车位于两格中间附近一小段，其中一格置为空地
     u, v = car_info[2]
     x,y = int(u*COLS), int(v*ROWS)
@@ -964,6 +981,25 @@ while True:
         maps[x+COLS*(y-1)]=0
     elif dy>0.8 and maps[x+COLS*(y+1)]==1:
         maps[x+COLS*(y+1)]=0
+
+    #若未开始比赛,重新初始化
+    if not maps.count(1):
+        print("wait for start...")
+        first = True
+        delay = False
+        bomb_count = 0
+        goal_count = 0
+        space_maps = [1] * LENS
+        last_spacemap = [1] * LENS
+        wrong = 1
+        send_2f_packet(car_info[2])
+        if flag == 0xBB and speed[2] < 10.0:
+            blob_count, recovered_count = recover_boxes_from_blobs(img, maps)
+            #print("BOX search blobs=%d recovered=%d" % (blob_count, recovered_count))
+            if maps.count(2) == 0:
+                send_map_packet(maps)
+                #print("send map")
+        continue
 
     tmp_bomb_count = maps.count(4)
     tmp_goal_count = maps.count(3)
@@ -1000,7 +1036,11 @@ while True:
         print(car_info[1])
         send_float_packet(car_info[1])
     elif flag == 0xBB and speed[2] < 10.0:
+        blob_count, recovered_count = recover_boxes_from_blobs(
+                img, maps)
+        #print("BOX search blobs=%d recovered=%d" % (blob_count, recovered_count))
+        draw_elem(maps, map_points)
         if maps.count(2) == maps.count(3):
             send_map_packet(maps)
-            print("send map")           ##
+            #print("send map")           ##
     send_2f_packet(car_info[2])
