@@ -44,7 +44,7 @@
 #include <math.h>
 #include "sokoban_engine.h"
 
-#define ROUND_COUNT 5U
+#define ROUND_COUNT 3U
 #define ROUND_CLEAR_WAIT_MS 600U
 #define ROUND_MAP_SETTLE_MS 1200U
 #define START_ZONE_GRID_INDEX (0U + 6U * WIDTH)
@@ -52,6 +52,7 @@ extern void imu_calibrate(void);
 
 volatile float time_line = 0.0f;
 SokobanContext engine_ctx;
+static void sync_car_position();
 
 static void reset_round_runtime(void)
 {
@@ -80,7 +81,7 @@ static void return_to_start_zone(void)
     while (navigate_flag)
     {
         wifi_task();
-    }
+    }   
     first_time_fix = 2;
     system_delay_ms(50);
     while (global_infor_type != 5)
@@ -115,6 +116,13 @@ static void return_to_start_zone(void)
     if (!if_whitemap)
     {
         system_delay_ms(3000);
+    }
+    system_delay_ms(40);
+    sync_car_position();
+    car_move_point(0.3,1.2,angle,0);
+    while (navigate_flag)
+    {
+        wifi_task();
     }
 }
 
@@ -163,12 +171,33 @@ static void request_round_map(void)
 }
 // 矫正一次target_x target_y,阻塞式
 uint8_t same_time = 0;
+float main_vision_position_x = 99.0f;
+float main_vision_position_y = 99.0f;
+
 static void sync_car_position(void)
 {
-    wait_global_info();
-    want_global_infor(0);
-    wait_global_info();
-
+    while (same_time <= 5)
+    {
+        wait_global_info();
+        want_global_infor(0);
+        while (global_infor_type != 5)
+        {
+            wifi_task();
+        }
+        if (fabs(car_location[0] - main_vision_position_x) <= 0.002f&&fabs(car_location[1] - main_vision_position_y) <= 0.002f)
+        {
+            same_time++;
+        }
+        else
+        {
+            main_vision_position_x = car_location[0];
+            main_vision_position_y = car_location[1];
+            same_time = 0;
+        }
+    }
+    same_time = 0;
+    main_vision_position_x = 99.0f;
+    main_vision_position_y = 99.0f;
     global_x = 3.2f * car_location[0];
     global_y = 2.4f - 2.4f * car_location[1];
     target_x = global_x;
@@ -237,7 +266,7 @@ static uint8_t run_round(uint8_t round_index)
         car_move_point(global_x + 0.25f, global_y, angle, 0);
     }
     wait_navigation();
-    if (round_index >= 0)
+    if (round_index >= 0&&IF_VISION_ANGLE)
     {
         sync_car_angle();
     }
@@ -248,13 +277,20 @@ static uint8_t run_round(uint8_t round_index)
         request_round_map();
         if(resurgence_time>0){break;}
         uint8_t map_ok = 0;
+        uint8_t box_num = 0;
+        uint8_t goal_num = 0;
         for (int i = 0; i < 192; i++)
         {
-            if (final_map_data[i] == 2 || final_map_data[i] == 3)
+            if (final_map_data[i] == 2)
             {
-                map_ok = 1;
-                break;
+                box_num++;
+            }else if (final_map_data[i] == 3)
+            {
+                goal_num++;
             }
+        }
+        if(box_num == goal_num&&box_num>0){
+            map_ok = 1;
         }
         if (map_ok)
         {
@@ -268,7 +304,7 @@ static uint8_t run_round(uint8_t round_index)
     }
     ban_map_check_ifgetVisionLoc = 0;
     vision_run_correct_switch = 0;
-    if (!build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 0U : 1U))
+    if (!build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 0U : 0U))
     {
         return 0;
     }
@@ -333,13 +369,14 @@ int main(void)
     system_delay_ms(50);
     imu_calibrate();
     motor_init();
-
+    
     move_control_init();
-
+    system_delay_ms(50);
+    
     pit_ms_init(PIT_CH0, 10);            // 速度闭环和姿态闭环
     pit_ms_init(PIT_CH1, 5);             // 陀螺仪积分
     interrupt_set_priority(PIT_IRQn, 1); // 设置 PIT 中断优先级为 1
-
+    
     interrupt_global_enable(0);
 
     system_delay_ms(600);
@@ -395,7 +432,8 @@ void pit_ch1_handler(void)
     {
         return;
     }
-    imu660rb_gyro_z = (int)((imu660rb_gyro_z - bias) / 10) * 10;
+    imu660rb_gyro_z = imu660rb_gyro_z - bias;
+    // imu660rb_gyro_z = (int)((imu660rb_gyro_z) / 10) * 10;
 
     // if(time<100){
     // }else{

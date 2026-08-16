@@ -102,7 +102,7 @@ typedef enum
 
 
 #define IMU660RB_ACC_SAMPLE_DEFAULT     ( IMU660RB_ACC_SAMPLE_SGN_8G )          // 在这设置默认的 加速度计 初始化量程
-#define IMU660RB_GYRO_SAMPLE_DEFAULT    ( IMU660RB_GYRO_SAMPLE_SGN_2000DPS )    // 在这设置默认的 陀螺仪   初始化量程
+#define IMU660RB_GYRO_SAMPLE_DEFAULT    ( IMU660RB_GYRO_SAMPLE_SGN_500DPS )    // 在这设置默认的 陀螺仪   初始化量程
 #define IMU660RB_TIMEOUT_COUNT                      (0x00FF)                    // IMU660RB 超时计数
 //================================================定义 IMU660RB 基本配置================================================
 
@@ -148,7 +148,7 @@ typedef enum
 // 设置为:0x3C 加速度量程为:±8G      获取到的加速度计数据 除以4098， 可以转化为带物理单位的数据，单位：g(m/s^2)
 // 设置为:0x34 加速度量程为:±16G     获取到的加速度计数据 除以2049， 可以转化为带物理单位的数据，单位：g(m/s^2)
 
-#define IMU660RB_GYR_SAMPLE                         (0x5C)                      // 陀螺仪量程
+#define IMU660RB_GYR_SAMPLE                         (0x54)                      // 陀螺仪量程
 // 设置为:0x52 陀螺仪量程为:±125dps  获取到的陀螺仪数据除以228.6，   可以转化为带物理单位的数据，单位为：°/s
 // 设置为:0x50 陀螺仪量程为:±250dps  获取到的陀螺仪数据除以114.3，   可以转化为带物理单位的数据，单位为：°/s
 // 设置为:0x54 陀螺仪量程为:±500dps  获取到的陀螺仪数据除以57.1，    可以转化为带物理单位的数据，单位为：°/s
