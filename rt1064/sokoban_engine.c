@@ -96,12 +96,12 @@ static inline int neighbor_index(int idx, int direction)
     return y * WIDTH + x;
 }
 
-static inline bool can_recon_consume_goal(uint8_t box_type, uint8_t goal_type)
+static inline bool can_consume_goal(uint8_t box_type, uint8_t goal_type)
 {
     return box_type != UNKNOWN && goal_type != UNKNOWN && box_type == goal_type;
 }
 
-static inline bool can_recon_use_goal_for_box(uint8_t box_type, uint8_t goal_type)
+static inline bool can_box_cross_goal(uint8_t box_type, uint8_t goal_type)
 {
     if (goal_type == UNKNOWN)
         return false;
@@ -1618,7 +1618,7 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
                     {
                         continue;
                     }
-                    if (can_recon_consume_goal(current_box_type, goal_type))
+                    if (can_consume_goal(current_box_type, goal_type))
                     {
                         consumed = true;
                     }
@@ -1631,7 +1631,7 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
                         if (current_state->active_goals_mask & (1U << g))
                         {
 
-                            if (can_recon_use_goal_for_box(current_box_type, ctx->goals[g].id))
+                            if (can_box_cross_goal(current_box_type, ctx->goals[g].id))
                             {
                                 if (ctx->cached_dist_table[g][next_item_idx] < INF_DIST)
                                 {
