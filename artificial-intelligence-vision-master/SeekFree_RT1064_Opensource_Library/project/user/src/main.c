@@ -44,7 +44,7 @@
 #include <math.h>
 #include "sokoban_engine.h"
 
-#define ROUND_COUNT 5U
+#define ROUND_COUNT 3U
 #define ROUND_CLEAR_WAIT_MS 600U
 #define ROUND_MAP_SETTLE_MS 1200U
 #define START_ZONE_GRID_INDEX (0U + 6U * WIDTH)
@@ -52,6 +52,7 @@ extern void imu_calibrate(void);
 
 volatile float time_line = 0.0f;
 SokobanContext engine_ctx;
+static void sync_car_position();
 
 static void reset_round_runtime(void)
 {
@@ -116,6 +117,13 @@ static void return_to_start_zone(void)
     {
         system_delay_ms(3000);
     }
+    system_delay_ms(40);
+    sync_car_position();
+    car_move_point(0.3, 1.2, angle, 0);
+    while (navigate_flag)
+    {
+        wifi_task();
+    }
 }
 
 // 等 navigate_flag 变 0
@@ -145,7 +153,8 @@ static void request_round_map(void)
     float this_time = time_line;
     while (global_infor_type != 5)
     {
-        if(time_line-this_time>=5){
+        if (time_line - this_time >= 5)
+        {
             break;
         }
         switch (global_infor_type)
@@ -163,12 +172,33 @@ static void request_round_map(void)
 }
 // 矫正一次target_x target_y,阻塞式
 uint8_t same_time = 0;
+float main_vision_position_x = 99.0f;
+float main_vision_position_y = 99.0f;
+
 static void sync_car_position(void)
 {
-    wait_global_info();
-    want_global_infor(0);
-    wait_global_info();
-
+    while (same_time <= 5)
+    {
+        wait_global_info();
+        want_global_infor(0);
+        while (global_infor_type != 5)
+        {
+            wifi_task();
+        }
+        if (fabs(car_location[0] - main_vision_position_x) <= 0.002f && fabs(car_location[1] - main_vision_position_y) <= 0.002f)
+        {
+            same_time++;
+        }
+        else
+        {
+            main_vision_position_x = car_location[0];
+            main_vision_position_y = car_location[1];
+            same_time = 0;
+        }
+    }
+    same_time = 0;
+    main_vision_position_x = 99.0f;
+    main_vision_position_y = 99.0f;
     global_x = 3.2f * car_location[0];
     global_y = 2.4f - 2.4f * car_location[1];
     target_x = global_x;
@@ -188,7 +218,7 @@ static void sync_car_angle(void)
             wifi_task();
             uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
         }
-        if (fabsf(car_angel - main_vision_angle) <= 2.0f)
+        if (fabs(car_angel - main_vision_angle) <= 2)
         {
             same_time++;
         }
@@ -200,7 +230,7 @@ static void sync_car_angle(void)
     }
     same_time = 0;
     main_vision_angle = 999;
-    if (fabsf(actual_yaw - car_angel + 90.0f) >= 5.0f)
+    if (fabs(actual_yaw - car_angel + 90) >= 5)
     {
         actual_yaw = car_angel - 90;
         while (actual_yaw > 180.0f)
@@ -210,15 +240,19 @@ static void sync_car_angle(void)
     }
 }
 
-static uint8_t if_in_carStart(void){
-    if(global_x<=0.5f&&global_y>=1.2f-0.33f&&global_y<=1.2f+0.33f){
+static uint8_t if_in_carStart()
+{
+    if (global_x <= 0.5f && global_y >= 1.2f - 0.33f && global_y <= 1.2f + 0.33f)
+    {
         return 1;
-    }else{
+    }
+    else
+    {
         return 0;
     }
 }
 
-//小车在某一关卡复活的次数
+// 小车在某一关卡复活的次数
 uint8_t resurgence_time = 0;
 /**
  * @brief 跑一关
@@ -233,25 +267,41 @@ static uint8_t run_round(uint8_t round_index)
     reset_round_runtime();
 
     vision_angle_switch = 0;
-    if(if_in_carStart()){
+    if (if_in_carStart())
+    {
         car_move_point(global_x + 0.25f, global_y, angle, 0);
     }
     wait_navigation();
-    sync_car_angle();
+    if (round_index >= 0 && IF_VISION_ANGLE)
+    {
+        sync_car_angle();
+    }
 
     // 获取地图
     while (1)
     {
         request_round_map();
-        if(resurgence_time>0){break;}
+        if (resurgence_time > 0)
+        {
+            break;
+        }
         uint8_t map_ok = 0;
+        uint8_t box_num = 0;
+        uint8_t goal_num = 0;
         for (int i = 0; i < 192; i++)
         {
-            if (final_map_data[i] == 2 || final_map_data[i] == 3)
+            if (final_map_data[i] == 2)
             {
-                map_ok = 1;
-                break;
+                box_num++;
             }
+            else if (final_map_data[i] == 3)
+            {
+                goal_num++;
+            }
+        }
+        if (box_num == goal_num && box_num > 0)
+        {
+            map_ok = 1;
         }
         if (map_ok)
         {
@@ -265,7 +315,7 @@ static uint8_t run_round(uint8_t round_index)
     }
     ban_map_check_ifgetVisionLoc = 0;
     vision_run_correct_switch = 0;
-    if (!build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 0U : 1U))
+    if (!build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 0U : 0U))
     {
         return 0;
     }
@@ -284,20 +334,20 @@ static uint8_t run_round(uint8_t round_index)
         }
     }
 
-    if (!generate_path(&engine_ctx, &path) || path.length == 0)
+    generate_path(&engine_ctx, &path);
+    if (path.length == 0)
     {
         return 0;
     }
 
     lost = 66;
-    if (!car_move(&path, angle, 0))
-    {
-        return 0;
-    }
+    car_move(&path, angle, 0);
     wait_navigation();
-    if(resurgence_time<CHECK_TIME_MAX){
+    if (resurgence_time < CHECK_TIME_MAX)
+    {
         resurgence_time++;
-        if(run_round(round_index)){
+        if (run_round(round_index))
+        {
             return 1;
         }
     }
@@ -334,6 +384,7 @@ int main(void)
     motor_init();
 
     move_control_init();
+    system_delay_ms(50);
 
     pit_ms_init(PIT_CH0, 10);            // 速度闭环和姿态闭环
     pit_ms_init(PIT_CH1, 5);             // 陀螺仪积分
@@ -343,7 +394,8 @@ int main(void)
 
     system_delay_ms(600);
 
-    if(CORRECT_MODE !=0){
+    if (CORRECT_MODE != 0)
+    {
         sync_car_position();
     }
     // 循环跑三关
@@ -365,27 +417,43 @@ int main(void)
     return 0;
 }
 
-static int32_t bias = 0;
+int16 bias_z = 0;
+int16 bias_x = 0;
+int16 bias_y = 0;
 static int calibrated = 0;
+float ax_average = 0;
+float ay_average = 0;
+float az_average = 0;
 
-void imu_calibrate(void)
+void imu_calibrate()
 {
-    int32_t sum = 0;
+    int sum_z = 0;
+    int sum_x = 0;
+    int sum_y = 0;
+
     for (int i = 0; i < 500; i++)
     {
         imu660rb_get_gyro();
-        sum += imu660rb_gyro_z;
+        imu660rb_get_acc();
+        sum_z += imu660rb_gyro_z;
+        sum_x += imu660rb_gyro_x;
+        sum_y += imu660rb_gyro_y;
+        ax_average = sqrtf((ax_average * ax_average * i + imu660rb_acc_x * imu660rb_acc_x) / (i + 1));
+        ay_average = sqrtf((ay_average * ay_average * i + imu660rb_acc_y * imu660rb_acc_y) / (i + 1));
+        az_average = sqrtf((az_average * az_average * i + imu660rb_acc_z * imu660rb_acc_z) / (i + 1));
         system_delay_ms(2);
     }
-    bias = sum / 500;
+    float a_all = sqrtf(ax_average * ax_average + ay_average * ay_average + az_average * az_average);
+    ax_average = ax_average / a_all;
+    ay_average = ay_average / a_all;
+    az_average = az_average / a_all;
+    bias_z = sum_z / 500;
+    bias_x = sum_x / 500;
+    bias_y = sum_y / 500;
     calibrated = 1;
 }
 
-int time = 0;
-float ax_Zero = 0;
-float ay_Zero = 0;
-float imu_vx = 0;
-float imu_vy = 0;
+float real_yaw_rate = 0;
 void pit_ch1_handler(void)
 {
 
@@ -394,13 +462,24 @@ void pit_ch1_handler(void)
     {
         return;
     }
-    imu660rb_gyro_z = (int)((imu660rb_gyro_z - bias) / 10) * 10;
-
-    // if(time<100){
-    // }else{
-    actual_yaw -= (float)imu660rb_gyro_z / imu660rb_transition_factor[1] * 0.005f;
-    // }
-    time++;
+    float gx_deg_s = 0;
+    float gy_deg_s = 0;
+    if (!IMU_FLAT)
+    {
+        gx_deg_s = (float)(imu660rb_gyro_x - bias_x) / imu660rb_transition_factor[1];
+        gy_deg_s = (float)(imu660rb_gyro_y - bias_y) / imu660rb_transition_factor[1];
+    }
+    float gz_deg_s = (float)(imu660rb_gyro_z - bias_z) / imu660rb_transition_factor[1];
+    if (!IMU_FLAT)
+    {
+        float vertical_omega = gx_deg_s * ax_average + gy_deg_s * ay_average + gz_deg_s * az_average;
+        real_yaw_rate = vertical_omega;
+        actual_yaw -= real_yaw_rate * 0.005f;
+    }
+    else
+    {
+        actual_yaw -= gz_deg_s * 0.005f;
+    }
 
     while (actual_yaw > 180.0f)
         actual_yaw -= 360.0f;
@@ -412,7 +491,7 @@ float time_for_vision_loac = 0;
 uint8_t vision_correct_flag = 0;
 uint8_t vision_run_correct_switch = 0;
 float time_vision_main = 0;
-void run_vision_correct(void)
+void run_vision_correct()
 {
     if (vision_run_correct_switch == 1 && walk_mode != 3 && walk_mode != 4)
     {
