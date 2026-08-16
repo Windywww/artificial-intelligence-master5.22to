@@ -403,27 +403,43 @@ int main(void)
     return 0;
 }
 
-static int16 bias = 0;
+int16 bias_z = 0;
+int16 bias_x = 0;
+int16 bias_y = 0;
 static int calibrated = 0;
+float ax_average = 0;
+float ay_average = 0;
+float az_average = 0;
 
 void imu_calibrate()
 {
-    int16 sum = 0;
+    int sum_z = 0;
+    int sum_x = 0;
+    int sum_y = 0;
+
     for (int i = 0; i < 500; i++)
     {
         imu660rb_get_gyro();
-        sum += imu660rb_gyro_z;
+        imu660rb_get_acc();
+        sum_z += imu660rb_gyro_z;
+        sum_x += imu660rb_gyro_x;
+        sum_y += imu660rb_gyro_y;
+        ax_average = sqrtf((ax_average * ax_average * i + imu660rb_acc_x * imu660rb_acc_x) / (i + 1));
+        ay_average = sqrtf((ay_average * ay_average * i + imu660rb_acc_y * imu660rb_acc_y) / (i + 1));
+        az_average = sqrtf((az_average * az_average * i + imu660rb_acc_z * imu660rb_acc_z) / (i + 1));
         system_delay_ms(2);
     }
-    bias = sum / 500;
+    float a_all = sqrtf(ax_average * ax_average + ay_average * ay_average + az_average * az_average);
+    ax_average = ax_average / a_all;
+    ay_average = ay_average / a_all;
+    az_average = az_average / a_all;
+    bias_z = sum_z / 500;
+    bias_x = sum_x / 500;
+    bias_y = sum_y / 500;
     calibrated = 1;
 }
 
-int time = 0;
-float ax_Zero = 0;
-float ay_Zero = 0;
-float imu_vx = 0;
-float imu_vy = 0;
+float real_yaw_rate = 0;
 void pit_ch1_handler(void)
 {
 
@@ -432,14 +448,14 @@ void pit_ch1_handler(void)
     {
         return;
     }
-    imu660rb_gyro_z = imu660rb_gyro_z - bias;
-    // imu660rb_gyro_z = (int)((imu660rb_gyro_z) / 10) * 10;
+    float gx_deg_s = (float)(imu660rb_gyro_x - bias_x) / imu660rb_transition_factor[1];
+    float gy_deg_s = (float)(imu660rb_gyro_y - bias_y) / imu660rb_transition_factor[1];
+    float gz_deg_s = (float)(imu660rb_gyro_z - bias_z) / imu660rb_transition_factor[1];
 
-    // if(time<100){
-    // }else{
-    actual_yaw -= (float)imu660rb_gyro_z / imu660rb_transition_factor[1] * 0.005f;
-    // }
-    time++;
+    float vertical_omega = gx_deg_s * ax_average + gy_deg_s * ay_average + gz_deg_s * az_average;
+    real_yaw_rate = vertical_omega;
+
+    actual_yaw -= real_yaw_rate * 0.005f;
 
     while (actual_yaw > 180.0f)
         actual_yaw -= 360.0f;
