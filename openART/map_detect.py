@@ -929,8 +929,9 @@ def generate_mappoints(empty):
                 return
 
 generate_mappoints(True)
+flag = 0
 while True:
-    flag = 0xBB
+    #flag = 0xBB
     if uart.any():
         alls = uart.read(uart.any())
         flag = alls[-1]
@@ -949,6 +950,7 @@ while True:
     maps = build_map_from_colors(colors)
     car_info = get_and_update_car_info(img, maps, grid_spacing, inv_coeffs)
     speed = update_car_speed(car_info)
+    car_is_stopped = speed is not None and speed[2] < 10.0
     if car_info == -1:
         grid_spacing = 0
         generate_mappoints(False)
@@ -993,7 +995,7 @@ while True:
         last_spacemap = [1] * LENS
         wrong = 1
         send_2f_packet(car_info[2])
-        if flag == 0xBB and speed[2] < 10.0:
+        if flag == 0xBB and car_is_stopped:
             blob_count, recovered_count = recover_boxes_from_blobs(img, maps)
             #print("BOX search blobs=%d recovered=%d" % (blob_count, recovered_count))
             if maps.count(2) == 0:
@@ -1032,10 +1034,10 @@ while True:
     #draw_elem(maps, map_points)                             ##
 
     # flag=0xFE 表示小车静止不动等待校正角度
-    if flag == 0xFE and speed[2] < 10.0:
+    if flag == 0xFE and car_is_stopped:
         print(car_info[1])
         send_float_packet(car_info[1])
-    elif flag == 0xBB and speed[2] < 10.0:
+    elif flag == 0xBB and car_is_stopped:
         blob_count, recovered_count = recover_boxes_from_blobs(
                 img, maps)
         #print("BOX search blobs=%d recovered=%d" % (blob_count, recovered_count))
