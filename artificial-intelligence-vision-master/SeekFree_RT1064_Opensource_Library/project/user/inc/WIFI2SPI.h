@@ -3,10 +3,10 @@
 
 #include "zf_common_headfile.h"
 
-void myWIFI2SPI_Init();
+void myWIFI2SPI_Init(void);
 void SendDataToAssistant(seekfree_assistant_oscilloscope_struct* sendDataStructure,char num);
-void ReceiveData();
-void wifi_task();
+void ReceiveData(void);
+void wifi_task(void);
 
 extern uint8_t lost;
 #endif

@@ -41,12 +41,12 @@ float kp_position_y = 4.0f;
 float kd_position_x = 0.0f;
 float kd_position_y = 0.0f;
 
-float path_queue_x[100];
-float path_queue_y[100];
+float path_queue_x[MOTION_PATH_CAPACITY];
+float path_queue_y[MOTION_PATH_CAPACITY];
 uint16_t path_length = 0;  // 路径总点数
 uint16_t current_path = 0; // 当前正在追第几个点
-uint8_t navigate_flag = 0; // 1: 正在追路径 0: 没有路径需要追
-uint8_t yaw_arrived_flag = 0;
+volatile uint8_t navigate_flag = 0; // 1: 正在追路径 0: 没有路径需要追
+volatile uint8_t yaw_arrived_flag = 0;
 uint8_t stop_flag = 0; // 1: 手刹 0: 不手刹
 
 PID_TypeDef pid[4];
@@ -59,7 +59,7 @@ uint8_t wrong_over_time = 0;
 
 uint8_t ban_map_check_ifgetVisionLoc = 1;
 uint8_t ban_last_vision_correct = 0;
-void move_control_init()
+void move_control_init(void)
 {
     for (int i = 0; i < 4; i++)
     {
@@ -169,7 +169,7 @@ float vy_encoder_index = 0.96f;
  * @brief 里程计更新
  *
  */
-void odometry_update()
+void odometry_update(void)
 {
     // 车模坐标系下的速度
     local_encoder_vx = (actual_v[LF] + actual_v[RB] - actual_v[LB] - actual_v[RF]) / 4.0f * vx_encoder_index;
@@ -236,7 +236,7 @@ float time_vision = 0;
  * @brief 转点，时一些全局变量归零
  *
  */
-void turnpoint_update()
+void turnpoint_update(void)
 {
     stop_flag = 0;
     count_A = 0;
@@ -445,19 +445,27 @@ void navigation_update(void)
             {
                 //   path_queue_x[i] = (path->points[i] % 16) * 0.2f + 0.1f;
                 // path_queue_y[i] = 2.4 - (path->points[i] / 16) * 0.2f - 0.1f;
-                uint8_t path_X = round_int((target_x - 0.1f) / 0.2f);
-                uint8_t path_Y = round_int((2.3f - target_y) / 0.2f);
-                uint8_t car_to = path_X + path_Y * 16;
-                uint8_t path_X_to = round_int((path_queue_x[current_path + 1] - 0.1f) / 0.2f);
-                uint8_t path_Y_to = round_int((2.3f - path_queue_y[current_path + 1]) / 0.2f);
-                uint8_t car_to_to = path_X_to + path_Y_to * 16;
-                if (car_to_to > 191 || car_to_to < 0)
+                int path_X = round_int((target_x - 0.1f) / 0.2f);
+                int path_Y = round_int((2.3f - target_y) / 0.2f);
+                int car_to = path_X + path_Y * WIDTH;
+                int path_X_to = round_int((path_queue_x[current_path + 1] - 0.1f) / 0.2f);
+                int path_Y_to = round_int((2.3f - path_queue_y[current_path + 1]) / 0.2f);
+                int car_to_to = path_X_to + path_Y_to * WIDTH;
+                if (car_to_to < 0 || car_to_to >= MAP_SIZE)
                 { // 说明是炸弹延时特殊点
-                    car_to_to
-
-                        = round_int((path_queue_x[current_path + 2] - 0.1f) / 0.2f) + round_int((2.3f - path_queue_y[current_path + 2]) / 0.2f) * 16;
+                    if (current_path + 2U < path_length)
+                    {
+                        car_to_to = round_int((path_queue_x[current_path + 2U] - 0.1f) / 0.2f) +
+                                    round_int((2.3f - path_queue_y[current_path + 2U]) / 0.2f) * WIDTH;
+                    }
+                    else
+                    {
+                        car_to_to = car_to;
+                    }
                 }
-                if (map_check_ifgetVisionLoc(final_map_data, car_to, car_to_to) && vision_distance_num_plus >= VISION_CORRECT_DISTANCE&&CORRECT_MODE == 2)
+                if (car_to >= 0 && car_to < MAP_SIZE && car_to_to >= 0 && car_to_to < MAP_SIZE &&
+                    map_check_ifgetVisionLoc(final_map_data, (uint8_t)car_to, (uint8_t)car_to_to) &&
+                    vision_distance_num_plus >= VISION_CORRECT_DISTANCE && CORRECT_MODE == 2)
                 {
                     // 节点是否视觉矫正判定的相关参数归零
                     vision_point_num = 0;
@@ -511,8 +519,6 @@ void navigation_update(void)
                         }
                         if (loac_test >= 4)
                         {
-                            float dx = global_x - 3.2f * car_location[0];
-                            float dy = global_y - (2.4f - 2.4f * car_location[1]);
                             // if (sqrtf(dx * dx + dy * dy) >= 0.35f)
                             // {
                             //     // 如果视觉坐标和里程计坐标差距超过 35cm 就不修正了
@@ -552,7 +558,7 @@ void navigation_update(void)
     }
 }
 // 速度，加速度限制
-void speed_limit()
+void speed_limit(void)
 {
     if (global_target_vx > max_speed)
         global_target_vx = max_speed;
@@ -633,9 +639,9 @@ void speed_limit()
 }
 
 // 确立到下一个节点的行走模式，累加vision_point_num与vision_distance_num
-void walk_mode_set()
+void walk_mode_set(void)
 {
-    if (fabs(path_queue_x[current_path] - 3.1) <= 0.001f && fabs(path_queue_y[current_path] + 0.7) <= 0.001f)
+    if (fabsf(path_queue_x[current_path] - 3.1f) <= 0.001f && fabsf(path_queue_y[current_path] + 0.7f) <= 0.001f)
     {
         target_x = path_queue_x[current_path - 1];
         target_y = path_queue_y[current_path - 1];
@@ -656,14 +662,14 @@ void walk_mode_set()
         else if (d_point_x != 0 && d_point_y == 0)
         {
             walk_mode = 0;
-            vision_distance_num += fabs(d_point_x);
-            vision_distance_num_plus += fabs(d_point_x);
+            vision_distance_num += fabsf(d_point_x);
+            vision_distance_num_plus += fabsf(d_point_x);
         }
         else if (d_point_x == 0 && d_point_y != 0)
         {
             walk_mode = 1;
-            vision_distance_num += fabs(d_point_y);
-            vision_distance_num_plus += fabs(d_point_y);
+            vision_distance_num += fabsf(d_point_y);
+            vision_distance_num_plus += fabsf(d_point_y);
         }
         else
         {
@@ -679,22 +685,25 @@ void walk_mode_set()
  * @brief 是否在视觉获取坐标之后，根据结果微调小车
  *
  */
-uint8_t check_correctOn_vision()
+uint8_t check_correctOn_vision(void)
 {
-    if (fabs(path_queue_x[current_path + 1] - 3.1) <= 0.001f && fabs(path_queue_y[current_path + 1] + 0.7) <= 0.001f)
+    if (fabsf(path_queue_x[current_path + 1] - 3.1f) <= 0.001f && fabsf(path_queue_y[current_path + 1] + 0.7f) <= 0.001f)
     {
-        if (fabs(path_queue_x[current_path + 2] - path_queue_x[current_path]) <= 0.001f)
+        if (current_path + 2U >= path_length)
+            return 0;
+
+        if (fabsf(path_queue_x[current_path + 2] - path_queue_x[current_path]) <= 0.001f)
         {
-            if (fabs(path_queue_x[current_path] - global_x) >= 0.015f)
+            if (fabsf(path_queue_x[current_path] - global_x) >= 0.015f)
             {
                 first_time_fix = 0;
                 stop_flag = 0;
                 return 1;
             }
         }
-        else if (fabs(path_queue_y[current_path + 2] - path_queue_y[current_path]) <= 0.001f)
+        else if (fabsf(path_queue_y[current_path + 2] - path_queue_y[current_path]) <= 0.001f)
         {
-            if (fabs(path_queue_y[current_path] - global_y) >= 0.015f)
+            if (fabsf(path_queue_y[current_path] - global_y) >= 0.015f)
             {
                 first_time_fix = 0;
                 stop_flag = 0;
@@ -704,18 +713,18 @@ uint8_t check_correctOn_vision()
     }
     else
     {
-        if (fabs(path_queue_x[current_path + 1] - path_queue_x[current_path]) <= 0.001f)
+        if (fabsf(path_queue_x[current_path + 1] - path_queue_x[current_path]) <= 0.001f)
         {
-            if (fabs(path_queue_x[current_path] - global_x) >= 0.015f)
+            if (fabsf(path_queue_x[current_path] - global_x) >= 0.015f)
             {
                 first_time_fix = 0;
                 stop_flag = 0;
                 return 1;
             }
         }
-        else if (fabs(path_queue_y[current_path + 1] - path_queue_y[current_path]) <= 0.001f)
+        else if (fabsf(path_queue_y[current_path + 1] - path_queue_y[current_path]) <= 0.001f)
         {
-            if (fabs(path_queue_y[current_path] - global_y) >= 0.015f)
+            if (fabsf(path_queue_y[current_path] - global_y) >= 0.015f)
             {
                 first_time_fix = 0;
                 stop_flag = 0;
@@ -727,7 +736,7 @@ uint8_t check_correctOn_vision()
 }
 
 // 计算目标转速
-float get_target_vz()
+float get_target_vz(void)
 {
     float max_yaw_step = 10.0f;
 
@@ -789,10 +798,10 @@ void move_control_task(void)
  * @param yaw 目标航向角
  * @param m 模式
  */
-void car_move(WaypointPath *path, float yaw, uint8_t m)
+bool car_move(const WaypointPath *path, float yaw, uint8_t m)
 {
-    if (path->length == 0 || path->length > 100)
-        return;
+    if (path == NULL || path->length == 0 || path->length > MOTION_PATH_CAPACITY)
+        return false;
 
     for (int i = 0; i < path->length; i++)
     {
@@ -816,6 +825,7 @@ void car_move(WaypointPath *path, float yaw, uint8_t m)
     yaw_arrived_flag = 0;
     navigate_flag = 1;
     stop_flag = 0;
+    return true;
 }
 
 void car_turn(float yaw)
@@ -849,7 +859,7 @@ void car_move_point(float x, float y, float yaw, uint8_t m)
  * @brief 停车
  *
  */
-void car_stop()
+void car_stop(void)
 {
     target_vx = 0.0f;
     target_vy = 0.0f;

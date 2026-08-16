@@ -77,7 +77,7 @@ __attribute__((section(".bss.sdram"))) static uint8_t transposition_versions[HAS
 __attribute__((section(".bss.sdram"))) static ChildNode all_children_pool[MAX_STEPS][MAX_BRANCHES];
 
 // 关键内部接口。
-static void get_smooth_path(SokobanContext *ctx, const WaypointPath *grid_path, const uint8_t *obstacles, WaypointPath *out_smooth_path);
+static void get_smooth_path(const WaypointPath *grid_path, const uint8_t *obstacles, WaypointPath *out_smooth_path);
 static bool get_micro_path(uint8_t start_pos, uint8_t target_pos, const uint8_t *obstacles, WaypointPath *out_path);
 static uint8_t is_deadlock(SokobanContext *ctx, uint8_t idx, State *state, bool is_bomb, const uint8_t *walls);
 // 按当前墙布局和剩余炸弹数，构建各目标点的反向推动距离表。
@@ -101,6 +101,16 @@ static inline int neighbor_index(int idx, int direction)
     if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT)
         return -1;
     return y * WIDTH + x;
+}
+
+static inline bool valid_map_xy(int x, int y)
+{
+    return x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT;
+}
+
+static inline bool is_dynamic_map_object(uint8_t type)
+{
+    return type == 2U || type == 4U || type == 6U || type == 7U;
 }
 
 static inline bool can_recon_consume_goal(uint8_t box_type, uint8_t goal_type)
@@ -176,7 +186,7 @@ static uint64_t xorshift64(uint64_t *state)
     return *state;
 }
 
-static void init_zobrist()
+static void init_zobrist(void)
 {
     uint64_t seed = 0x123456789ABCDEF0ULL;
     for (int i = 0; i < MAP_SIZE; i++)
@@ -284,6 +294,8 @@ static void engine_init(SokobanContext *ctx, const uint8_t *raw_map)
     memset(ctx->goal_type_map, 255, sizeof(ctx->goal_type_map));
     memset(ctx->goal_mask_map, -1, sizeof(ctx->goal_mask_map));
     State *init_state = &ctx->initial_state;
+    uint8_t car_count = 0;
+    init_state->car_pos = 0;
     init_state->box_count = 0;
     init_state->bomb_count = 0;
     memset(ctx->initial_walls, 0, sizeof(ctx->initial_walls));
@@ -342,13 +354,28 @@ static void engine_init(SokobanContext *ctx, const uint8_t *raw_map)
                 }
                 else
                 {
+                    ctx->map_valid = false;
                 }
             }
             else if (val == 5)
             { // С�� (CAR)
                 init_state->car_pos = idx;
+                car_count++;
+                if (car_count > 1U)
+                {
+                    ctx->map_valid = false;
+                }
+            }
+            else if (val != 0)
+            {
+                ctx->map_valid = false;
             }
         }
+    }
+
+    if (car_count != 1U)
+    {
+        ctx->map_valid = false;
     }
 
     if (ctx->goal_count > 0)
@@ -1826,6 +1853,9 @@ static bool solve_recon_ida(SokobanContext *ctx, State *start_state, const bool 
 
 bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
 {
+    if (ctx == NULL || raw_map == NULL)
+        return false;
+
     hash_table_clear();
     engine_init(ctx, raw_map);
     if (!ctx->map_valid)
@@ -1952,16 +1982,17 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             uint8_t final_pos = selected_candidate.pos;
             uint8_t target_info = selected_candidate.target_info;
             bool is_box = (target_info >> 7) == 1;
-            uint8_t index = target_info & 0b01111111;
+            uint8_t index = target_info & 0x7FU;
             uint8_t entity_pos = is_box ? current_state->boxes[index].pos : ctx->goals[index].pos;
-            get_smooth_path(ctx, &path, obstacles, &smooth_path);
+            get_smooth_path(&path, obstacles, &smooth_path);
             current_state->car_pos = final_pos;
 
             uint8_t target_direction = selected_candidate.direction;
 
             //--��Ϊ�˲��ߵ����һ���㣬���һ������������
             smooth_path.length--;
-            car_move(&smooth_path, angle, 0);
+            if (smooth_path.length > 0U && !car_move(&smooth_path, angle, 0))
+                return false;
             while (navigate_flag)
             {
                 wifi_task();
@@ -1974,8 +2005,8 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             int8_t dx = entity_pos_X - final_pos_X;
             int8_t dy = entity_pos_Y - final_pos_Y;
 
-            float final_actual_x = final_pos_X * 0.2 + 0.1;
-            float final_actual_y = 2.4f - final_pos_Y * 0.2 - 0.1;
+            float final_actual_x = final_pos_X * 0.2f + 0.1f;
+            float final_actual_y = 2.4f - final_pos_Y * 0.2f - 0.1f;
             // 如果要用直接到视点而非逼近式的，赋值为-0.001f即可，逼近式的步长为0.005f，避免过冲
             float back_error = 0.01f;
             if (dx > 0)
@@ -2041,28 +2072,28 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                 }
                 if (dx > 0)
                 {
-                    if (final_actual_x < final_pos_X * 0.2 + 0.1)
+                    if (final_actual_x < final_pos_X * 0.2f + 0.1f)
                     {
                         final_actual_x += 0.005f;
                     }
                 }
                 else if (dx < 0)
                 {
-                    if (final_actual_x > final_pos_X * 0.2 + 0.1)
+                    if (final_actual_x > final_pos_X * 0.2f + 0.1f)
                     {
                         final_actual_x -= 0.005f;
                     }
                 }
                 else if (dy > 0)
                 {
-                    if (final_actual_y > 2.4f - final_pos_Y * 0.2 - 0.1)
+                    if (final_actual_y > 2.4f - final_pos_Y * 0.2f - 0.1f)
                     {
                         final_actual_y -= 0.005f;
                     }
                 }
                 else if (dy < 0)
                 {
-                    if (final_actual_y < 2.4f - final_pos_Y * 0.2 - 0.1)
+                    if (final_actual_y < 2.4f - final_pos_Y * 0.2f - 0.1f)
                     {
                         final_actual_y += 0.005f;
                     }
@@ -2161,9 +2192,11 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
         {
             if (solve_recon_ida(ctx, current_state, observation_points, virtual_obs_points))
             {
-                generate_path(ctx, &smooth_path);
+                if (!generate_path(ctx, &smooth_path))
+                    return false;
                 current_state = &ctx->initial_state;
-                car_move(&smooth_path, angle, 0);
+                if (!car_move(&smooth_path, angle, 0))
+                    return false;
                 while (navigate_flag)
                     continue;
             }
@@ -2490,6 +2523,9 @@ static bool get_micro_path(uint8_t start_pos, uint8_t target_pos, const uint8_t 
 
 static bool pass(uint8_t startpoint, uint8_t endpoint, float error, const uint8_t *obstacles)
 {
+    static const float plus_xy[4][2] = {
+        {0.1f, -0.1f}, {0.1f, 0.1f}, {-0.1f, 0.1f}, {-0.1f, -0.1f}};
+
 
     uint8_t start_x = startpoint % WIDTH;
     uint8_t start_y = startpoint / WIDTH;
@@ -2574,7 +2610,6 @@ static bool pass(uint8_t startpoint, uint8_t endpoint, float error, const uint8_
             bool in_the_way = false;
             float x_runf = x_run * 0.2f + 0.1f;
             float y_runf = y_run * 0.2f + 0.1f;
-            float plus_xy[4][2] = {{0.1, -0.1}, {0.1, 0.1}, {-0.1, 0.1}, {-0.1, -0.1}};
             for (uint8_t i = 0; i < 4; i++)
             {
                 float x = x_runf + plus_xy[i][0];
@@ -2596,20 +2631,25 @@ static bool pass(uint8_t startpoint, uint8_t endpoint, float error, const uint8_
             }
         }
     }
-    for (uint8_t i = endpoint-16; i <= endpoint+16; i+=16)
+    int endpoint_x = endpoint % WIDTH;
+    int endpoint_y = endpoint / WIDTH;
+    for (int dy = -1; dy <= 1; dy++)
     {
-        for (uint8_t j = -1; j <= 1; j++)
+        for (int dx = -1; dx <= 1; dx++)
         {
-            if(obstacles[i+j]){
+            int x = endpoint_x + dx;
+            int y = endpoint_y + dy;
+            if (valid_map_xy(x, y) && obstacles[y * WIDTH + x])
+            {
                 return 0;
             }
-        }        
+        }
     }
     
     return 1;
 }
 // 节点平滑
-static void get_smooth_path(SokobanContext *ctx, const WaypointPath *grid_path, const uint8_t *obstacles, WaypointPath *out_smooth_path)
+static void get_smooth_path(const WaypointPath *grid_path, const uint8_t *obstacles, WaypointPath *out_smooth_path)
 {
     if (grid_path->length <= 2)
     {
@@ -2637,7 +2677,7 @@ static void get_smooth_path(SokobanContext *ctx, const WaypointPath *grid_path, 
     }
 }
 
-static void get_final_path(SokobanContext *ctx, WaypointPath *path)
+static void get_final_path(WaypointPath *path)
 {
     if (path->length <= 2)
     {
@@ -2700,8 +2740,11 @@ static void get_final_path(SokobanContext *ctx, WaypointPath *path)
     }
 }
 
-void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
+bool generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
 {
+    if (ctx == NULL || out_full_path == NULL)
+        return false;
+
     State sim_state = ctx->initial_state;
     uint8_t sim_walls[MAP_SIZE];
     memcpy(sim_walls, ctx->initial_walls, MAP_SIZE);
@@ -2733,9 +2776,16 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
 
         if (!get_micro_path(sim_state.car_pos, act.move_to, obstacles, &micro_path))
         {
-            return;
+            out_full_path->length = 0;
+            return false;
         }
-        get_smooth_path(ctx, &micro_path, obstacles, &smooth_path);
+        get_smooth_path(&micro_path, obstacles, &smooth_path);
+        uint16_t required_points = smooth_path.length + 1U + (act.is_explode ? 1U : 0U);
+        if (required_points > MAP_SIZE - out_full_path->length)
+        {
+            out_full_path->length = 0;
+            return false;
+        }
         out_full_path->length += smooth_path.length;
         for (int p = 0; p < smooth_path.length; p++)
         {
@@ -2749,8 +2799,14 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
         // ===========================================
 
         // ������һ֡��ͼ
-        int push_dir = act.push_to - act.move_to;
-        uint8_t next_pos = act.push_to + push_dir;
+        int push_dir = (int)act.push_to - (int)act.move_to;
+        int next_pos_index = (int)act.push_to + push_dir;
+        if (next_pos_index < 0 || next_pos_index >= MAP_SIZE)
+        {
+            out_full_path->length = 0;
+            return false;
+        }
+        uint8_t next_pos = (uint8_t)next_pos_index;
 
         int entity_idx = -1;
         bool is_bomb_entity = false;
@@ -2773,6 +2829,11 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
                     break;
                 }
             }
+        }
+        if (entity_idx < 0)
+        {
+            out_full_path->length = 0;
+            return false;
         }
         if (act.is_explode)
         {
@@ -2807,7 +2868,8 @@ void generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
     // 更新初始状态为最终状�?
     ctx->initial_state = sim_state;
     memcpy(ctx->initial_walls, sim_walls, MAP_SIZE);
-    get_final_path(ctx, out_full_path); // 对整条路径进行最终的优化处理
+    get_final_path(out_full_path); // 对整条路径进行最终的优化处理
+    return true;
 }
 
 // 此函数根据tnt_loc坐标炸掉以坐标为中心3*3的墙壁，边界墙炸不到
@@ -2861,16 +2923,23 @@ uint8_t run_type_state = 0;
 // 仅当从car_to到car_to_to的路径两侧有箱子，炸弹时才需要获取视觉坐标
 uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to)
 {
+    if (map == NULL || car_to >= MAP_SIZE || car_to_to >= MAP_SIZE)
+        return 0;
+
     uint8_t car_from = 0;
+    bool car_found = false;
     // 扫描获取小车当前位置，兼容5和8两种状态
     for (uint8_t i = 0; i < MAP_SIZE; i++)
     {
         if (map[i] == 5 || map[i] == 8)
         {
             car_from = i;
+            car_found = true;
             break;
         }
     }
+    if (!car_found)
+        return 0;
 
     // -------------------------- 水平方向处理 --------------------------
     if ((car_from / 16) == (car_to / 16) && car_from != car_to)
@@ -2910,7 +2979,7 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                         else if (run_type_state == 2)
                         {
                             // mapin_boxes状态更新，直接在循环里拿到box_index
-                            uint8_t box_index = 0;
+                            int box_index = -1;
                             for (int j = 0; j < length_mapin_boxes; j++)
                             {
                                 if (mapin_boxes[j].pos == i)
@@ -2924,7 +2993,7 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                             {
                                 if (mapin_goals[j].pos == car_to + 1)
                                 {
-                                    if (mapin_boxes[box_index].id == mapin_goals[j].id)
+                                    if (box_index >= 0 && mapin_boxes[box_index].id == mapin_goals[j].id)
                                     {
                                         map[car_to + 1] = 0;
                                     }
@@ -3018,7 +3087,7 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                         else if (run_type_state == 2)
                         {
                             // mapin_boxes状态更新，直接在循环里拿到box_index
-                            uint8_t box_index = 0;
+                            int box_index = -1;
                             for (int j = 0; j < length_mapin_boxes; j++)
                             {
                                 if (mapin_boxes[j].pos == i)
@@ -3032,7 +3101,7 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                             {
                                 if (mapin_goals[j].pos == car_to - 1)
                                 {
-                                    if (mapin_boxes[box_index].id == mapin_goals[j].id)
+                                    if (box_index >= 0 && mapin_boxes[box_index].id == mapin_goals[j].id)
                                     {
                                         map[car_to - 1] = 0;
                                     }
@@ -3130,7 +3199,7 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                         else if (run_type_state == 2)
                         {
                             // mapin_boxes状态更新，直接在循环里拿到box_index
-                            uint8_t box_index = 0;
+                            int box_index = -1;
                             for (int j = 0; j < length_mapin_boxes; j++)
                             {
                                 if (mapin_boxes[j].pos == i)
@@ -3144,7 +3213,7 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                             {
                                 if (mapin_goals[j].pos == car_to + 16)
                                 {
-                                    if (mapin_boxes[box_index].id == mapin_goals[j].id)
+                                    if (box_index >= 0 && mapin_boxes[box_index].id == mapin_goals[j].id)
                                     {
                                         map[car_to + 16] = 0;
                                     }
@@ -3238,7 +3307,7 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                         else if (run_type_state == 2)
                         {
                             // mapin_boxes状态更新，直接在循环里拿到box_index
-                            uint8_t box_index = 0;
+                            int box_index = -1;
                             for (int j = 0; j < length_mapin_boxes; j++)
                             {
                                 if (mapin_boxes[j].pos == i)
@@ -3252,7 +3321,7 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                             {
                                 if (mapin_goals[j].pos == car_to - 16)
                                 {
-                                    if (mapin_boxes[box_index].id == mapin_goals[j].id)
+                                    if (box_index >= 0 && mapin_boxes[box_index].id == mapin_goals[j].id)
                                     {
                                         map[car_to - 16] = 0;
                                     }
@@ -3334,104 +3403,46 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
     }
 
     // -------------------------- 视觉定位触发判断 --------------------------
-    if ((car_to_to / 16) == (car_to / 16))
+    int from_x = car_to % WIDTH;
+    int from_y = car_to / WIDTH;
+    int to_x = car_to_to % WIDTH;
+    int to_y = car_to_to / WIDTH;
+
+    if (from_y == to_y && from_x != to_x)
     {
-        if (car_to < car_to_to)
+        int step = from_x < to_x ? 1 : -1;
+        for (int x = from_x + step; x != to_x + step; x += step)
         {
-            for (uint8_t i = car_to + 1; i <= car_to_to + 1; i++)
+            for (int dy = -1; dy <= 1; dy++)
             {
-                if (i - 16 > 0)
-                {
-                    uint8_t type = map[i - 16];
-                    if (type == 2 || type == 4 || type == 6 || type == 7)
-                        return 1;
-                }
-                if (i + 16 < 192)
-                {
-                    uint8_t type = map[i + 16];
-                    if (type == 2 || type == 4 || type == 6 || type == 7)
-                        return 1;
-                }
-                uint8_t type = map[i];
-                if (type == 2 || type == 4 || type == 6 || type == 7)
-                    return 1;
-            }
-        }
-        else
-        {
-            for (uint8_t i = car_to - 1; i >= car_to_to - 1; i--)
-            {
-                if (i - 16 > 0)
-                {
-                    uint8_t type = map[i - 16];
-                    if (type == 2 || type == 4 || type == 6 || type == 7)
-                        return 1;
-                }
-                if (i + 16 < 192)
-                {
-                    uint8_t type = map[i + 16];
-                    if (type == 2 || type == 4 || type == 6 || type == 7)
-                        return 1;
-                }
-                uint8_t type = map[i];
-                if (type == 2 || type == 4 || type == 6 || type == 7)
+                int y = from_y + dy;
+                if (valid_map_xy(x, y) && is_dynamic_map_object(map[y * WIDTH + x]))
                     return 1;
             }
         }
     }
-    else if ((car_to_to % 16) == (car_to % 16))
+    else if (from_x == to_x && from_y != to_y)
     {
-        if (car_to < car_to_to)
+        int step = from_y < to_y ? 1 : -1;
+        for (int y = from_y + step; y != to_y + step; y += step)
         {
-            for (uint8_t i = car_to + 16; i <= car_to_to + 16; i += 16)
+            for (int dx = -1; dx <= 1; dx++)
             {
-                if (i - 1 > 0)
-                {
-                    uint8_t type = map[i - 1];
-                    if (type == 2 || type == 4 || type == 6 || type == 7)
-                        return 1;
-                }
-                if (i + 1 < 192)
-                {
-                    uint8_t type = map[i + 1];
-                    if (type == 2 || type == 4 || type == 6 || type == 7)
-                        return 1;
-                }
-                uint8_t type = map[i];
-                if (type == 2 || type == 4 || type == 6 || type == 7)
-                    return 1;
-            }
-        }
-        else
-        {
-            for (uint8_t i = car_to - 16; i >= car_to_to - 16; i -= 16)
-            {
-                if (i - 1 > 0)
-                {
-                    uint8_t type = map[i - 1];
-                    if (type == 2 || type == 4 || type == 6 || type == 7)
-                        return 1;
-                }
-                if (i + 1 < 192)
-                {
-                    uint8_t type = map[i + 1];
-                    if (type == 2 || type == 4 || type == 6 || type == 7)
-                        return 1;
-                }
-                uint8_t type = map[i];
-                if (type == 2 || type == 4 || type == 6 || type == 7)
+                int x = from_x + dx;
+                if (valid_map_xy(x, y) && is_dynamic_map_object(map[y * WIDTH + x]))
                     return 1;
             }
         }
     }
     else if (car_to_to != car_to)
     {
-        for (uint8_t i = car_to_to - 16; i <= car_to_to + 16; i += 16)
+        for (int dy = -1; dy <= 1; dy++)
         {
-            for (uint8_t j = -1; j <= 1; i++)
+            for (int dx = -1; dx <= 1; dx++)
             {
-                uint8_t type = map[i+j];
-                if (type == 2 || type == 4 || type == 6 || type == 7)
+                int x = to_x + dx;
+                int y = to_y + dy;
+                if (valid_map_xy(x, y) && is_dynamic_map_object(map[y * WIDTH + x]))
                     return 1;
             }
         }

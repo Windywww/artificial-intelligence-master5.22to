@@ -188,7 +188,7 @@ static void sync_car_angle(void)
             wifi_task();
             uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
         }
-        if (fabs(car_angel - main_vision_angle) <= 2)
+        if (fabsf(car_angel - main_vision_angle) <= 2.0f)
         {
             same_time++;
         }
@@ -200,7 +200,7 @@ static void sync_car_angle(void)
     }
     same_time = 0;
     main_vision_angle = 999;
-    if (fabs(actual_yaw - car_angel + 90) >= 5)
+    if (fabsf(actual_yaw - car_angel + 90.0f) >= 5.0f)
     {
         actual_yaw = car_angel - 90;
         while (actual_yaw > 180.0f)
@@ -210,7 +210,7 @@ static void sync_car_angle(void)
     }
 }
 
-static uint8_t if_in_carStart(){
+static uint8_t if_in_carStart(void){
     if(global_x<=0.5f&&global_y>=1.2f-0.33f&&global_y<=1.2f+0.33f){
         return 1;
     }else{
@@ -237,10 +237,7 @@ static uint8_t run_round(uint8_t round_index)
         car_move_point(global_x + 0.25f, global_y, angle, 0);
     }
     wait_navigation();
-    if (round_index >= 0)
-    {
-        sync_car_angle();
-    }
+    sync_car_angle();
 
     // 获取地图
     while (1)
@@ -287,14 +284,16 @@ static uint8_t run_round(uint8_t round_index)
         }
     }
 
-    generate_path(&engine_ctx, &path);
-    if (path.length == 0)
+    if (!generate_path(&engine_ctx, &path) || path.length == 0)
     {
         return 0;
     }
 
     lost = 66;
-    car_move(&path, angle, 0);
+    if (!car_move(&path, angle, 0))
+    {
+        return 0;
+    }
     wait_navigation();
     if(resurgence_time<CHECK_TIME_MAX){
         resurgence_time++;
@@ -366,12 +365,12 @@ int main(void)
     return 0;
 }
 
-static int16 bias = 0;
+static int32_t bias = 0;
 static int calibrated = 0;
 
-void imu_calibrate()
+void imu_calibrate(void)
 {
-    int16 sum = 0;
+    int32_t sum = 0;
     for (int i = 0; i < 500; i++)
     {
         imu660rb_get_gyro();
@@ -413,7 +412,7 @@ float time_for_vision_loac = 0;
 uint8_t vision_correct_flag = 0;
 uint8_t vision_run_correct_switch = 0;
 float time_vision_main = 0;
-void run_vision_correct()
+void run_vision_correct(void)
 {
     if (vision_run_correct_switch == 1 && walk_mode != 3 && walk_mode != 4)
     {

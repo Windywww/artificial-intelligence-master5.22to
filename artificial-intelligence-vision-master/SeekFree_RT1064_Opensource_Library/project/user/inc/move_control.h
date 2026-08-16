@@ -27,6 +27,7 @@ extern uint8_t vision_run_correct_switch;
 
 //每次关卡结束时还会重新要地图检查是否推完，此为检查最大次数,0即为不检查
 #define CHECK_TIME_MAX 1
+#define MOTION_PATH_CAPACITY 100U
 //怎么样的矫正模式，2全矫正(只会在关键节点上矫正)，1半矫正(跑关卡不矫正，侦查时少量点矫正)，0不矫正，全局都不矫正,放的时候(0.3,1.2)
 #define CORRECT_MODE 1
 typedef enum
@@ -64,25 +65,25 @@ extern float vision_y;
 
 extern PID_TypeDef pid[4];
 
-void move_control_init();
+void move_control_init(void);
 float yaw_pid_calculate(void);
 void wheel_speed_calculate(float vx, float vy, float vz);
-void odometry_update();
+void odometry_update(void);
 void navigation_update(void);
 void move_control_task(void);
-void walk_mode_set();
-void speed_limit();
-uint8_t check_correctOn_vision();
+void walk_mode_set(void);
+void speed_limit(void);
+uint8_t check_correctOn_vision(void);
 
 
-void car_move(WaypointPath *path, float yaw, uint8_t m);
-void car_stop();
+bool car_move(const WaypointPath *path, float yaw, uint8_t m);
+void car_stop(void);
 void car_turn(float yaw);
 void car_move_point(float x, float y, float yaw, uint8_t m);
 
 
-extern uint8_t yaw_arrived_flag; // 航向角到达标志位：1表示已到达目标航向角，0表示未到达
-extern uint8_t navigate_flag; // 1: 正在追路径 0: 没有路径需要追
+extern volatile uint8_t yaw_arrived_flag; // 航向角到达标志位：1表示已到达目标航向角，0表示未到达
+extern volatile uint8_t navigate_flag; // 1: 正在追路径 0: 没有路径需要追
 extern uint8_t vision_xy_update_flag;  // 视觉数据更新标志位：1表示有新数据，0表示已处理
 extern uint8_t vision_yaw_update_flag; // 视觉航向角更新标志位：1表示有新数据，0表示已处理
 

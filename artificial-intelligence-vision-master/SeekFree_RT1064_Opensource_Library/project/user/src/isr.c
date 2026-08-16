@@ -50,14 +50,12 @@ void PIT_IRQHandler(void)
 {
     if(pit_flag_get(PIT_CH0))
     {
-        extern void pit_ch0_handler();
         pit_ch0_handler();
         pit_flag_clear(PIT_CH0);
     }
     
     if(pit_flag_get(PIT_CH1))
     {
-        extern void pit_ch1_handler();
         pit_ch1_handler();
         pit_flag_clear(PIT_CH1);
     }
@@ -136,7 +134,6 @@ void LPUART4_IRQHandler(void)
         
         // gnss_uart_callback();
 
-        extern void uart4_rx_interrupt_handler();
         uart4_rx_interrupt_handler();
     }
         

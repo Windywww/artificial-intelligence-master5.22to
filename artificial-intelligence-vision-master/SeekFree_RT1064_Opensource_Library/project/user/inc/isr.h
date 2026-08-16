@@ -38,7 +38,8 @@
 #ifndef _isr_h
 #define _isr_h
 
-
+void pit_ch0_handler(void);
+void pit_ch1_handler(void);
 
 
 #endif

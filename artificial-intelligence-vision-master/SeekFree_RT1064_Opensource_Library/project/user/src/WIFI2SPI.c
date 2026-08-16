@@ -18,7 +18,7 @@ uint8_t lost = 0;
  * @brief 连wifi，连一次之后上位机软件不要断联，否则需要小车重新上电
  *
  */
-void myWIFI2SPI_Init()
+void myWIFI2SPI_Init(void)
 {
     clock_init(SYSTEM_CLOCK_600M); // 不可删除
     system_delay_ms(300);
@@ -63,11 +63,11 @@ void SendDataToAssistant(seekfree_assistant_oscilloscope_struct *sendDataStructu
  * @brief 接收数据到seekfree_assistant_parameter数组，这个函数放到周期循环中
  *
  */
-void ReceiveData()
+void ReceiveData(void)
 {
     seekfree_assistant_data_analysis();
 }
-void wifi_task()
+void wifi_task(void)
 {
 
     // 解析上位机发送过来的参数，解析后数据会存放在seekfree_assistant_parameter数组中，可以通过在线调试的方式查看数据

@@ -21,7 +21,7 @@ uint8_t expected_len_global = 0; // 当前包预期要接收的数据长度
 
 // ---------------- 定义全局存储变量 ----------------
 uint8_t final_map_data[MAP_LENS]; // 解压后的 192 个地图数据
-uint8_t got_map_flag = 0;         // 标志位，表示是否已经成功接收并解压了地图数据
+volatile uint8_t got_map_flag = 0; // 标志位，表示是否已经成功接收并解压了地图数据
 float car_location[2];
 float car_angel = 0;
 
@@ -75,7 +75,7 @@ static uint8_t global_packet_crc_valid(void)
 // 视觉组会持续传来每一帧检测结果，只有连续五次数据一样才接取
 uint8_t test_rx_local = 0;
 uint8_t test_rx_local_same_time = 0;
-uint8_t image_rx_state = 0;
+volatile uint8_t image_rx_state = 0;
 volatile uint8_t final_image_index = 0;
 uint8_t image_id = 0; // 2箱子，3目的地
 
@@ -121,20 +121,30 @@ void myuart_rx_error_handler(void)
  * @brief 索要全局摄像头的一些信息 (触发按需接收)
  * @param infor_type 0小车位置 1地图，2小车角度
  */
-void want_global_infor(char infor_type)
+void want_global_infor(uint8_t infor_type)
 {
+    if (infor_type == 5U)
+    {
+        global_infor_type = 5U;
+        __DMB();
+        reset_global_receiver();
+        return;
+    }
     if (global_infor_type != 5)
     {
         return;
     }
+    if (infor_type > 2U)
+    {
+        return;
+    }
 
-    // 1. 设置标志位，唤醒接收中断
+    // 在发布请求前完成清理，避免接收中断看到新请求和旧状态的组合。
+    reset_global_receiver();
+    __DMB();
     global_infor_type = infor_type;
 
-    // 2. 清理战场，确保状态机处于干干净净的找包头状态
-    reset_global_receiver();
-
-    // 3. 按需发送握手信号给视觉模块
+    // 按需发送握手信号给视觉模块
     switch (infor_type)
     {
     case 0:
@@ -147,8 +157,6 @@ void want_global_infor(char infor_type)
         uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
         break;
     default:
-        // 如果传入异常值，强制切回挂机态
-        global_infor_type = 5;
         break;
     }
 }
@@ -186,8 +194,8 @@ void Unpack_Received_Map(uint8_t *thismap)
 static uint8_t Unpack_Received_CarLoc(void)
 {
     float received_location[2];
-    memcpy(&received_location[0], &test_rx_buffer_global[0], 4);
-    memcpy(&received_location[1], &test_rx_buffer_global[4], 4);
+    memcpy(&received_location[0], &test_rx_buffer_global[0], sizeof(received_location[0]));
+    memcpy(&received_location[1], &test_rx_buffer_global[4], sizeof(received_location[1]));
 
     if (!(received_location[0] >= 0.0f && received_location[0] <= 1.0f &&
           received_location[1] >= 0.0f && received_location[1] <= 1.0f))
@@ -224,7 +232,7 @@ static uint8_t Unpack_Received_CarLoc(void)
 static uint8_t Unpack_Received_CarAngel(void)
 {
     float received_angle;
-    memcpy(&received_angle, &test_rx_buffer_global[0], 4);
+    memcpy(&received_angle, &test_rx_buffer_global[0], sizeof(received_angle));
 
     if (!(received_angle >= -180.0f && received_angle <= 180.0f))
     {
@@ -326,6 +334,7 @@ void uart1_rx_interrupt_handler(void)
         }
     }
 
+    __DMB();
     global_infor_type = 5;
     rx_state_global = 0;
 }
@@ -365,7 +374,7 @@ void check_image(char obj, char is_firsttime)
     }
 }
 
-void uart4_rx_interrupt_handler()
+void uart4_rx_interrupt_handler(void)
 {
     uint8_t get_data;
     if (!uart_query_byte(UART_LOCAL_INDEX, &get_data))

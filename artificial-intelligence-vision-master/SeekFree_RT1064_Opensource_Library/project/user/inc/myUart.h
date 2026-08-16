@@ -19,18 +19,18 @@
 #define UART_LOCAL_PRIORITY (LPUART4_IRQn) // 对应串口中断的中断编号 在 MIMXRT1064.h 头文件中查看 IRQn_Type 枚举体
 
 extern volatile uint8_t global_infor_type;     
-extern uint8_t image_rx_state;
+extern volatile uint8_t image_rx_state;
 extern volatile uint8_t final_image_index;
 extern uint8_t final_map_data[MAP_LENS]; // 解压后的 192 个地图数据
 extern float car_location[2];
 extern float car_angel;
-extern uint8_t got_map_flag;
-extern float car_angel ;
+extern volatile uint8_t got_map_flag;
 
 void myuart_init(void);
 void myuart_timeout_tick_10ms(void);
 void myuart_rx_error_handler(void);
 void uart1_rx_interrupt_handler(void);
-void want_global_infor(char infor_type);
+void uart4_rx_interrupt_handler(void);
+void want_global_infor(uint8_t infor_type);
 void check_image(char obj,char is_firsttime);
 #endif
