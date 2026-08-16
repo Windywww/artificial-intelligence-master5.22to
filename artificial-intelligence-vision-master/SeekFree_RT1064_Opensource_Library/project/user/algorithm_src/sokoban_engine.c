@@ -15,7 +15,7 @@
 #define DEBUG_RECON 0
 #define MAX_ID 12 // id 可能的取值个数
 #ifndef MAX_ALLOWABLE_NODES
-#define MAX_ALLOWABLE_NODES 700000 // 限制搜索节点总数
+#define MAX_ALLOWABLE_NODES 200000 // 限制搜索节点总数
 #endif
 #ifndef SOKOBAN_CURRENT_WEIGHT
 #define SOKOBAN_CURRENT_WEIGHT 3.0f
