@@ -81,7 +81,7 @@ static void return_to_start_zone(void)
     while (navigate_flag)
     {
         wifi_task();
-    }   
+    }
     first_time_fix = 2;
     system_delay_ms(50);
     while (global_infor_type != 5)
@@ -119,7 +119,7 @@ static void return_to_start_zone(void)
     }
     system_delay_ms(40);
     sync_car_position();
-    car_move_point(0.3,1.2,angle,0);
+    car_move_point(0.3, 1.2, angle, 0);
     while (navigate_flag)
     {
         wifi_task();
@@ -153,7 +153,8 @@ static void request_round_map(void)
     float this_time = time_line;
     while (global_infor_type != 5)
     {
-        if(time_line-this_time>=5){
+        if (time_line - this_time >= 5)
+        {
             break;
         }
         switch (global_infor_type)
@@ -184,7 +185,7 @@ static void sync_car_position(void)
         {
             wifi_task();
         }
-        if (fabs(car_location[0] - main_vision_position_x) <= 0.002f&&fabs(car_location[1] - main_vision_position_y) <= 0.002f)
+        if (fabs(car_location[0] - main_vision_position_x) <= 0.002f && fabs(car_location[1] - main_vision_position_y) <= 0.002f)
         {
             same_time++;
         }
@@ -239,15 +240,19 @@ static void sync_car_angle(void)
     }
 }
 
-static uint8_t if_in_carStart(){
-    if(global_x<=0.5f&&global_y>=1.2f-0.33f&&global_y<=1.2f+0.33f){
+static uint8_t if_in_carStart()
+{
+    if (global_x <= 0.5f && global_y >= 1.2f - 0.33f && global_y <= 1.2f + 0.33f)
+    {
         return 1;
-    }else{
+    }
+    else
+    {
         return 0;
     }
 }
 
-//小车在某一关卡复活的次数
+// 小车在某一关卡复活的次数
 uint8_t resurgence_time = 0;
 /**
  * @brief 跑一关
@@ -262,11 +267,12 @@ static uint8_t run_round(uint8_t round_index)
     reset_round_runtime();
 
     vision_angle_switch = 0;
-    if(if_in_carStart()){
+    if (if_in_carStart())
+    {
         car_move_point(global_x + 0.25f, global_y, angle, 0);
     }
     wait_navigation();
-    if (round_index >= 0&&IF_VISION_ANGLE)
+    if (round_index >= 0 && IF_VISION_ANGLE)
     {
         sync_car_angle();
     }
@@ -275,7 +281,10 @@ static uint8_t run_round(uint8_t round_index)
     while (1)
     {
         request_round_map();
-        if(resurgence_time>0){break;}
+        if (resurgence_time > 0)
+        {
+            break;
+        }
         uint8_t map_ok = 0;
         uint8_t box_num = 0;
         uint8_t goal_num = 0;
@@ -284,12 +293,14 @@ static uint8_t run_round(uint8_t round_index)
             if (final_map_data[i] == 2)
             {
                 box_num++;
-            }else if (final_map_data[i] == 3)
+            }
+            else if (final_map_data[i] == 3)
             {
                 goal_num++;
             }
         }
-        if(box_num == goal_num&&box_num>0){
+        if (box_num == goal_num && box_num > 0)
+        {
             map_ok = 1;
         }
         if (map_ok)
@@ -332,9 +343,11 @@ static uint8_t run_round(uint8_t round_index)
     lost = 66;
     car_move(&path, angle, 0);
     wait_navigation();
-    if(resurgence_time<CHECK_TIME_MAX){
+    if (resurgence_time < CHECK_TIME_MAX)
+    {
         resurgence_time++;
-        if(run_round(round_index)){
+        if (run_round(round_index))
+        {
             return 1;
         }
     }
@@ -369,19 +382,20 @@ int main(void)
     system_delay_ms(50);
     imu_calibrate();
     motor_init();
-    
+
     move_control_init();
     system_delay_ms(50);
-    
+
     pit_ms_init(PIT_CH0, 10);            // 速度闭环和姿态闭环
     pit_ms_init(PIT_CH1, 5);             // 陀螺仪积分
     interrupt_set_priority(PIT_IRQn, 1); // 设置 PIT 中断优先级为 1
-    
+
     interrupt_global_enable(0);
 
     system_delay_ms(600);
 
-    if(CORRECT_MODE !=0){
+    if (CORRECT_MODE != 0)
+    {
         sync_car_position();
     }
     // 循环跑三关
@@ -448,14 +462,24 @@ void pit_ch1_handler(void)
     {
         return;
     }
-    float gx_deg_s = (float)(imu660rb_gyro_x - bias_x) / imu660rb_transition_factor[1];
-    float gy_deg_s = (float)(imu660rb_gyro_y - bias_y) / imu660rb_transition_factor[1];
+    float gx_deg_s = 0;
+    float gy_deg_s = 0;
+    if (!IMU_FLAT)
+    {
+        gx_deg_s = (float)(imu660rb_gyro_x - bias_x) / imu660rb_transition_factor[1];
+        gy_deg_s = (float)(imu660rb_gyro_y - bias_y) / imu660rb_transition_factor[1];
+    }
     float gz_deg_s = (float)(imu660rb_gyro_z - bias_z) / imu660rb_transition_factor[1];
-
-    float vertical_omega = gx_deg_s * ax_average + gy_deg_s * ay_average + gz_deg_s * az_average;
-    real_yaw_rate = vertical_omega;
-
-    actual_yaw -= real_yaw_rate * 0.005f;
+    if (!IMU_FLAT)
+    {
+        float vertical_omega = gx_deg_s * ax_average + gy_deg_s * ay_average + gz_deg_s * az_average;
+        real_yaw_rate = vertical_omega;
+        actual_yaw -= real_yaw_rate * 0.005f;
+    }
+    else
+    {
+        actual_yaw -= gz_deg_s * 0.005f;
+    }
 
     while (actual_yaw > 180.0f)
         actual_yaw -= 360.0f;

@@ -32,6 +32,9 @@ extern uint8_t vision_run_correct_switch;
 
 //是否需要视觉角度
 #define IF_VISION_ANGLE 0
+
+//是否认为imu模块绝对水平。是1。
+#define IMU_FLAT 0
 typedef enum
 {
     RF = 0,
