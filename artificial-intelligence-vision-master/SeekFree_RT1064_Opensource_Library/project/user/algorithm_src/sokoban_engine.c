@@ -25,11 +25,16 @@ static inline int neighbor_index(int idx, int direction)
 {
     int x = idx % WIDTH;
     int y = idx / WIDTH;
-    if (direction == 0) y--;
-    else if (direction == 1) y++;
-    else if (direction == 2) x--;
-    else x++;
-    if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) return -1;
+    if (direction == 0)
+        y--;
+    else if (direction == 1)
+        y++;
+    else if (direction == 2)
+        x--;
+    else
+        x++;
+    if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT)
+        return -1;
     return y * WIDTH + x;
 }
 
@@ -172,7 +177,7 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
         ReconCandidate selected_candidate;
         // 在线选点负责降低识别阶段原地旋转；实际移动仍由 get_micro_path() 生成严格最短单段路径。
         if (sokoban_solver_select_recon_candidate(current_state->car_pos, sokoban_recon_angle_to_direction(angle),
-                                   candidates, candidate_count, obstacles, &selected_candidate) &&
+                                                  candidates, candidate_count, obstacles, &selected_candidate) &&
             get_micro_path(current_state->car_pos, selected_candidate.pos, obstacles, &path))
         {
             uint8_t final_pos = selected_candidate.pos;
@@ -391,6 +396,7 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                 if (!generate_path(ctx, &smooth_path))
                     return false;
                 current_state = &ctx->initial_state;
+                goal_box_giveRelation(ctx);
                 if (!car_move(&smooth_path, angle, 0))
                     return false;
                 while (navigate_flag)
@@ -479,7 +485,6 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             }
         }
     }
-    goal_box_giveRelation(ctx);
     return true;
 }
 // 引擎主入口：执行加权 IDA* 搜索。
@@ -1015,46 +1020,45 @@ static void boom_wall(uint8_t *map, uint8_t tnt_loc)
 
 // 在侦查函数结束后存储目标与箱子的位置，以及其id，length是长度
 EntityData mapin_goals[MAX_GOALS];
-uint8_t length_mapin_goals;
+uint8_t length_mapin_goals = 0;
 EntityData mapin_boxes[MAX_BOXES];
-uint8_t length_mapin_boxes;
+uint8_t length_mapin_boxes = 0;
 void goal_box_giveRelation(SokobanContext *ctx)
 {
-    length_mapin_goals = ctx->goal_count;
-    for (int i = 0; i < length_mapin_goals; i++)
+    for (int i = 0; i < ctx->goal_count; i++)
     {
         mapin_goals[i] = ctx->goals[i];
     }
-    length_mapin_boxes = ctx->initial_state.box_count;
-    for (int i = 0; i < length_mapin_boxes; i++)
+    for (int i = 0; i < ctx->initial_state.box_count; i++)
     {
         mapin_boxes[i] = ctx->initial_state.boxes[i];
     }
-    run_type_state = 2;
+    length_mapin_goals = ctx->goal_count;
+    length_mapin_boxes = ctx->initial_state.box_count;
 }
 // 任务状态定义：0=无分类关卡，1=有分类侦查阶段，2=有分类推送阶段
 uint8_t run_type_state = 0;
-//上下左右，0123
+// 上下左右，0123
 static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
 {
     uint8_t next_step = 0;
     // 根据方向计算小车单步要走到的点位
-    switch(direction)
+    switch (direction)
     {
-        case 0: // 向上
-            next_step = car_loc - 16;
-            break;
-        case 1: // 向下
-            next_step = car_loc + 16;
-            break;
-        case 2: // 向左
-            next_step = car_loc - 1;
-            break;
-        case 3: // 向右
-            next_step = car_loc + 1;
-            break;
-        default:
-            return; // 非法方向直接退出，不处理
+    case 0: // 向上
+        next_step = car_loc - 16;
+        break;
+    case 1: // 向下
+        next_step = car_loc + 16;
+        break;
+    case 2: // 向左
+        next_step = car_loc - 1;
+        break;
+    case 3: // 向右
+        next_step = car_loc + 1;
+        break;
+    default:
+        return; // 非法方向直接退出，不处理
     }
 
     // -------------------------- 碰到箱子2/箱子+目的地6 --------------------------
@@ -1072,18 +1076,36 @@ static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
 
         // 计算箱子被推动后的落点
         uint8_t push_target = 0;
-        switch(direction)
+        switch (direction)
         {
-            case 0: push_target = next_step - 16; break; // 向上推箱子
-            case 1: push_target = next_step + 16; break; // 向下推箱子
-            case 2: push_target = next_step - 1; break; // 向左推箱子
-            case 3: push_target = next_step + 1; break; // 向右推箱子
+        case 0:
+            push_target = next_step - 16;
+            break; // 向上推箱子
+        case 1:
+            push_target = next_step + 16;
+            break; // 向下推箱子
+        case 2:
+            push_target = next_step - 1;
+            break; // 向左推箱子
+        case 3:
+            push_target = next_step + 1;
+            break; // 向右推箱子
         }
 
         // 更新箱子落点的地图状态
         if (map[push_target] == 0)
         {
             map[push_target] = 2;
+            if(run_type_state == 1){
+                for (int j = 0; j < length_mapin_boxes; j++)
+                {
+                    if (mapin_boxes[j].pos == next_step)
+                    {
+                        mapin_boxes[j].pos = push_target;
+                        break;
+                    }
+                }
+            }
         }
         else if (map[push_target] == 3)
         {
@@ -1092,10 +1114,6 @@ static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
                 map[push_target] = 0;
             }
             else if (run_type_state == 1)
-            {
-                map[push_target] = 6;
-            }
-            else if (run_type_state == 2)
             {
                 // 更新箱子全局位置，直接拿到对应箱子索引
                 uint8_t box_index = 0;
@@ -1148,12 +1166,20 @@ static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
 
         // 计算炸弹被推动后的落点
         uint8_t push_target = 0;
-        switch(direction)
+        switch (direction)
         {
-            case 0: push_target = next_step - 16; break;
-            case 1: push_target = next_step + 16; break;
-            case 2: push_target = next_step - 1; break;
-            case 3: push_target = next_step + 1; break;
+        case 0:
+            push_target = next_step - 16;
+            break;
+        case 1:
+            push_target = next_step + 16;
+            break;
+        case 2:
+            push_target = next_step - 1;
+            break;
+        case 3:
+            push_target = next_step + 1;
+            break;
         }
 
         // 更新炸弹落点的地图状态
