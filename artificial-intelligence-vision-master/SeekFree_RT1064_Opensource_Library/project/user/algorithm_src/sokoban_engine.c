@@ -391,8 +391,8 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                     return false;
                 current_state = &ctx->initial_state;
 
+                goal_box_giveRelation(ctx);
 
-                
                 if (!car_move(&smooth_path, angle, 0))
                     return false;
                 while (navigate_flag)
@@ -1073,11 +1073,16 @@ EntityData mapin_boxes[MAX_BOXES];
 uint8_t length_mapin_boxes;
 void goal_box_giveRelation(SokobanContext *ctx)
 {
-    length_mapin_goals = ctx->goal_count;
-    for (int i = 0; i < length_mapin_goals; i++)
+    uint8_t mapin_goals_count = 0;
+    for (int i = 0; i < ctx->goal_count; i++)
     {
-        mapin_goals[i] = ctx->goals[i];
+        if(ctx->active_goals_mask & (1U << i))
+        {
+            mapin_goals[mapin_goals_count] = ctx->goals[i];
+            mapin_goals_count++;
+        }
     }
+    length_mapin_goals = mapin_goals_count;
     length_mapin_boxes = ctx->initial_state.box_count;
     for (int i = 0; i < length_mapin_boxes; i++)
     {
