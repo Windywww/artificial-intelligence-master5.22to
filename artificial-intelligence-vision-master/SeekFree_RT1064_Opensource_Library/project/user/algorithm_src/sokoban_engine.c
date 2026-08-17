@@ -369,7 +369,6 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
 
             while (sokoban_solver_try_infer_identities(ctx, current_state))
             {
-
                 unid_boxes = 0;
                 unid_goals = 0;
                 for (int k = 0; k < current_state->box_count; k++)
@@ -391,6 +390,9 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                 if (!generate_path(ctx, &smooth_path))
                     return false;
                 current_state = &ctx->initial_state;
+
+
+                
                 if (!car_move(&smooth_path, angle, 0))
                     return false;
                 while (navigate_flag)
@@ -797,11 +799,11 @@ static void get_smooth_path(const WaypointPath *grid_path, const uint8_t *obstac
     }
 }
 
-static void get_final_path(WaypointPath *path)
+static bool get_final_path(WaypointPath *path)
 {
-    if (path->length <= 2)
+    if (path->length == 0U)
     {
-        return;
+        return true;
     }
 
     uint8_t unique_points[MAP_SIZE];
@@ -815,12 +817,11 @@ static void get_final_path(WaypointPath *path)
             unique_points[unique_len++] = path->points[i];
         }
     }
-    if (unique_len <= 2)
+    if (unique_len == 1)
     {
-        path->length = unique_len;
-        for (int i = 0; i < unique_len; i++)
-            path->points[i] = unique_points[i];
-        return;
+        path->length = 1U;
+        path->points[0] = unique_points[0];
+        return true;
     }
 
     uint8_t new_points[MAP_SIZE];
@@ -852,12 +853,60 @@ static void get_final_path(WaypointPath *path)
         }
     }
     new_points[new_len++] = unique_points[unique_len - 1];
-    // д��ԭ�ṹ��
-    path->length = new_len;
-    for (int i = 0; i < new_len; i++)
+
+    // 长直线按阈值均分；斜线和延时标记保持原样。
+    int final_len = 0;
+    unique_points[final_len++] = new_points[0];
+    for (int i = 1; i < new_len; i++)
     {
-        path->points[i] = new_points[i];
+        int start = new_points[i - 1];
+        int end = new_points[i];
+
+        if (start != 255 && end != 255)
+        {
+            int start_x = start % WIDTH;
+            int start_y = start / WIDTH;
+            int end_x = end % WIDTH;
+            int end_y = end / WIDTH;
+            int dx = end_x - start_x;
+            int dy = end_y - start_y;
+            bool is_straight = (dx == 0) != (dy == 0);
+
+            if (is_straight)
+            {
+                int distance = dx != 0 ? (dx > 0 ? dx : -dx) : (dy > 0 ? dy : -dy);
+                int split_count = distance / MAX_L;
+                int segment_count = split_count + 1;
+
+                for (int split = 1; split <= split_count; split++)
+                {
+                    if (final_len >= MAP_SIZE)
+                    {
+                        return false;
+                    }
+
+                    // 四舍五入到最近格点，使各段长度之差不超过一格。
+                    int offset = (split * distance + segment_count / 2) / segment_count;
+                    int x = start_x + (dx == 0 ? 0 : (dx > 0 ? offset : -offset));
+                    int y = start_y + (dy == 0 ? 0 : (dy > 0 ? offset : -offset));
+                    unique_points[final_len++] = (uint8_t)(y * WIDTH + x);
+                }
+            }
+        }
+
+        if (final_len >= MAP_SIZE)
+        {
+            return false;
+        }
+        unique_points[final_len++] = (uint8_t)end;
     }
+
+    path->length = (uint16_t)final_len;
+    for (int i = 0; i < final_len; i++)
+    {
+        path->points[i] = unique_points[i];
+    }
+    return true;
 }
 
 bool generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
@@ -985,10 +1034,14 @@ bool generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
         }
         sim_state.car_pos = act.push_to;
     }
+    if (!get_final_path(out_full_path)) // 对整条路径进行最终的优化处理
+    {
+        out_full_path->length = 0;
+        return false;
+    }
     // 更新初始状态为最终状�?
     ctx->initial_state = sim_state;
     memcpy(ctx->initial_walls, sim_walls, MAP_SIZE);
-    get_final_path(out_full_path); // 对整条路径进行最终的优化处理
     return true;
 }
 
