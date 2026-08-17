@@ -699,7 +699,7 @@ ROWS = 12
 COLS = 16
 LENS = ROWS*COLS
 pixels_threshold =  60    #QQVGA 30
-black0 = (0, 8, -128, 127, -128, 127)   #由空地获取角点
+black0 = (0, 16, -55, 76, -62, 58)   #由空地获取角点
 black1 = (0, 3, -128, 127, -128, 127)   #由边界墙获取角点
 count = 5  #角度求均值帧数
 
@@ -931,7 +931,7 @@ def generate_mappoints(empty):
 generate_mappoints(True)
 flag = 0
 while True:
-    #flag = 0xBB
+    #flag = 0xFE
     if uart.any():
         alls = uart.read(uart.any())
         flag = alls[-1]
@@ -1001,6 +1001,9 @@ while True:
             if maps.count(2) == 0:
                 send_map_packet(maps)
                 #print("send map")
+        if flag == 0xFE and car_is_stopped:
+            print(car_info[1])
+            send_float_packet(car_info[1])
         continue
 
     tmp_bomb_count = maps.count(4)
@@ -1031,18 +1034,17 @@ while True:
         continue
     last_spacemap = space_maps[:]'''
 
-    #draw_elem(maps, map_points)                             ##
+    draw_elem(maps, map_points)                             ##
 
     # flag=0xFE 表示小车静止不动等待校正角度
     if flag == 0xFE and car_is_stopped:
         print(car_info[1])
         send_float_packet(car_info[1])
     elif flag == 0xBB and car_is_stopped:
-        blob_count, recovered_count = recover_boxes_from_blobs(
-                img, maps)
+        blob_count, recovered_count = recover_boxes_from_blobs(img, maps)
         #print("BOX search blobs=%d recovered=%d" % (blob_count, recovered_count))
         draw_elem(maps, map_points)
-        if maps.count(2) == maps.count(3):
-            send_map_packet(maps)
+        #if maps.count(2) == maps.count(3):
+        send_map_packet(maps)
             #print("send map")           ##
     send_2f_packet(car_info[2])
