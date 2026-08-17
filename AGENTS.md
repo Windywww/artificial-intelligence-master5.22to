@@ -14,4 +14,4 @@ openART\map_detect.py ：识别全局第三人称视角的openart上运行的程
 openART\classification.py：第一人称箱子和目的地分类的程序
 不读取 openART\ 中除二者之外的其他文件。
 artificial-intelligence-vision-master\SeekFree_RT1064_Opensource_Library:在小车rt1064核心板运行的版本，其中我们写的代码在SeekFree_RT1064_Opensource_Library\project\user下。
-不读取project\user\algorithm_src\sokoban_lut.c
+不能改动project/user/algorithm_src/sokoban_lut.c中数组记录的数据信息
