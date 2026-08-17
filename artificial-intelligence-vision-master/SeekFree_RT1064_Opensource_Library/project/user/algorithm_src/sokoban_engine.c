@@ -1080,7 +1080,7 @@ void goal_box_giveRelation(SokobanContext *ctx)
     uint8_t mapin_goals_count = 0;
     for (int i = 0; i < ctx->goal_count; i++)
     {
-        if(ctx->active_goals_mask & (1U << i))
+        if(ctx->initial_state.active_goals_mask & (1U << i))
         {
             mapin_goals[mapin_goals_count] = ctx->goals[i];
             mapin_goals_count++;
