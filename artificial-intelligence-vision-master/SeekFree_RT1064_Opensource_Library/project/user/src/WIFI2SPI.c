@@ -14,6 +14,8 @@ seekfree_assistant_oscilloscope_struct SendData;
 extern float time_for_vision_loac;
 extern uint8_t same_time;
 uint8_t lost = 0;
+extern int16_t imu_gyro_z_max;
+extern int16_t imu_gyro_z_min;
 /**
  * @brief 连wifi，连一次之后上位机软件不要断联，否则需要小车重新上电
  *

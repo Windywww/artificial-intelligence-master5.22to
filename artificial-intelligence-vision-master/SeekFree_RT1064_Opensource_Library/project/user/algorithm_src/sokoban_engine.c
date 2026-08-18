@@ -1375,7 +1375,7 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
     {
         if (car_to < car_to_to)
         {
-            for (uint8_t i = car_to + 1; i <= car_to_to; i++)
+            for (uint8_t i = car_to; i <= car_to_to + 1; i++)
             {
                 if (i - 16 > 0)
                 {
@@ -1393,7 +1393,7 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
         }
         else
         {
-            for (uint8_t i = car_to - 1; i >= car_to_to; i--)
+            for (uint8_t i = car_to ; i >= car_to_to- 1; i--)
             {
                 if (i - 16 > 0)
                 {
@@ -1414,7 +1414,7 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
     {
         if (car_to < car_to_to)
         {
-            for (uint8_t i = car_to + 16; i <= car_to_to; i += 16)
+            for (uint8_t i = car_to ; i <= car_to_to+ 16; i += 16)
             {
                 if (i - 1 > 0)
                 {
@@ -1432,7 +1432,7 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
         }
         else
         {
-            for (uint8_t i = car_to - 16; i >= car_to_to; i -= 16)
+            for (uint8_t i = car_to ; i >= car_to_to- 16; i -= 16)
             {
                 if (i - 1 > 0)
                 {

@@ -417,14 +417,16 @@ int main(void)
     return 0;
 }
 
-int16 bias_z = 0;
-int16 bias_x = 0;
-int16 bias_y = 0;
+float bias_z = 0;
+float bias_x = 0;
+float bias_y = 0;
 static int calibrated = 0;
 float ax_average = 0;
 float ay_average = 0;
 float az_average = 0;
 
+int16_t imu_gyro_z_max = 0;
+int16_t imu_gyro_z_min = 0;
 void imu_calibrate()
 {
     int sum_z = 0;
@@ -435,6 +437,12 @@ void imu_calibrate()
     {
         imu660rb_get_gyro();
         imu660rb_get_acc();
+        if(imu660rb_gyro_z>imu_gyro_z_max){
+            imu_gyro_z_max = imu660rb_gyro_z;
+        }
+        if(imu660rb_gyro_z<imu_gyro_z_min){
+            imu_gyro_z_min = imu660rb_gyro_z;
+        }
         sum_z += imu660rb_gyro_z;
         sum_x += imu660rb_gyro_x;
         sum_y += imu660rb_gyro_y;
@@ -447,9 +455,9 @@ void imu_calibrate()
     ax_average = ax_average / a_all;
     ay_average = ay_average / a_all;
     az_average = az_average / a_all;
-    bias_z = sum_z / 500;
-    bias_x = sum_x / 500;
-    bias_y = sum_y / 500;
+    bias_z = (float)sum_z / 500;
+    bias_x = (float)sum_x / 500;
+    bias_y = (float)sum_y / 500;
     calibrated = 1;
 }
 
@@ -469,7 +477,11 @@ void pit_ch1_handler(void)
         gx_deg_s = (float)(imu660rb_gyro_x) / imu660rb_transition_factor[1];
         gy_deg_s = (float)(imu660rb_gyro_y) / imu660rb_transition_factor[1];
     }
-    float gz_deg_s = (float)(imu660rb_gyro_z) / imu660rb_transition_factor[1];
+    float gz_deg_s = 0;
+    if(imu660rb_gyro_z<imu_gyro_z_min||imu660rb_gyro_z>imu_gyro_z_max){
+        gz_deg_s = (float)(imu660rb_gyro_z) / imu660rb_transition_factor[1];
+        gz_deg_s-=bias_z/imu660rb_transition_factor[1];
+    }
     if (!IMU_FLAT)
     {
         float vertical_omega = gx_deg_s * ax_average + gy_deg_s * ay_average + gz_deg_s * az_average;

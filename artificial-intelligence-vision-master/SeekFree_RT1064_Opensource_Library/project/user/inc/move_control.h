@@ -19,7 +19,7 @@ extern uint8_t vision_run_correct_switch;
 //旋转延时时间
 #define TURN_DELAY_TIME_MS 400
 //是否斜线
-#define IF_PASS 0
+#define IF_PASS 1
 //是否行进视觉矫正
 #define IF_RUN_CORRECT 0
 //速度，加速度252,291
