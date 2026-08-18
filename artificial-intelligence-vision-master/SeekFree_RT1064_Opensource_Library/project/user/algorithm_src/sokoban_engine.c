@@ -76,14 +76,16 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
         }
         return true;
     }
+    run_type_state = 1;
     // 只有一对儿的情况
     if(ctx->goal_count==1 && ctx->initial_state.box_count==1)
     {
-        ctx->goals[0].id = NO_CLS;
-        current_state->boxes[0].id = NO_CLS;
+        ctx->goals[0].id = 1;
+        current_state->boxes[0].id = 1;
+        return true;
     }
 
-    run_type_state = 1;
+    
     uint8_t unid_boxes = current_state->box_count;
     uint8_t unid_goals = ctx->goal_count;
     // Each bit records a failed target direction from this viewpoint.

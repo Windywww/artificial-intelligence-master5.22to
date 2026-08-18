@@ -315,7 +315,7 @@ static uint8_t run_round(uint8_t round_index)
     }
     ban_map_check_ifgetVisionLoc = 0;
     vision_run_correct_switch = 0;
-    if (!build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 0U : 1U))
+    if (!build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 1U : 1U))
     {
         return 0;
     }
