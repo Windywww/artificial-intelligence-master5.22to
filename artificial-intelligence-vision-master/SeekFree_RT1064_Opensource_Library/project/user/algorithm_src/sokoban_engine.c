@@ -1158,7 +1158,7 @@ static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
             if(run_type_state == 1){
                 for (int j = 0; j < length_mapin_boxes; j++)
                 {
-                    if (mapin_boxes[j].pos == next_step)
+                    if (mapin_boxes[j].pos == next_step&&mapin_boxes[j].id!= UNKNOWN)
                     {
                         mapin_boxes[j].pos = push_target;
                         break;
@@ -1178,7 +1178,7 @@ static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
                 uint8_t box_index = 0;
                 for (int j = 0; j < length_mapin_boxes; j++)
                 {
-                    if (mapin_boxes[j].pos == next_step)
+                    if (mapin_boxes[j].pos == next_step&&mapin_boxes[j].id!= UNKNOWN)
                     {
                         mapin_boxes[j].pos = push_target;
                         box_index = j;
@@ -1187,7 +1187,7 @@ static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
                 }
                 for (int j = 0; j < length_mapin_goals; j++)
                 {
-                    if (mapin_goals[j].pos == push_target)
+                    if (mapin_goals[j].pos == push_target&&mapin_goals[j].id!=UNKNOWN)
                     {
                         if (mapin_boxes[box_index].id == mapin_goals[j].id)
                         {

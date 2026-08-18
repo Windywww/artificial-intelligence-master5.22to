@@ -19,7 +19,7 @@ extern uint8_t vision_run_correct_switch;
 //旋转延时时间
 #define TURN_DELAY_TIME_MS 400
 //是否斜线
-#define IF_PASS 1
+#define IF_PASS 0
 //是否行进视觉矫正
 #define IF_RUN_CORRECT 0
 //速度，加速度252,291
@@ -30,10 +30,10 @@ extern uint8_t vision_run_correct_switch;
 //传入路径最大节点数
 #define MOTION_PATH_CAPACITY 192U
 //怎么样的矫正模式，2全矫正(只会在关键节点上矫正)，1半矫正(跑关卡不矫正，侦查时少量点矫正)，0不矫正，全局都不矫正,放的时候(0.3,1.2)
-#define CORRECT_MODE 1
+#define CORRECT_MODE 2
 
 //是否认为IMU绝对水平
-#define IMU_FLAT 0
+#define IMU_FLAT 1
 
 //是否采用视觉角度
 #define IF_VISION_ANGLE 0
