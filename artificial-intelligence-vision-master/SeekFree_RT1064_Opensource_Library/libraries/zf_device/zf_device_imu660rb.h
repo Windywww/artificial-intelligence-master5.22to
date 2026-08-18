@@ -101,8 +101,8 @@ typedef enum
 
 
 
-#define IMU660RB_ACC_SAMPLE_DEFAULT     ( IMU660RB_ACC_SAMPLE_SGN_8G )          // 在这设置默认的 加速度计 初始化量程
-#define IMU660RB_GYRO_SAMPLE_DEFAULT    ( IMU660RB_GYRO_SAMPLE_SGN_2000DPS )    // 在这设置默认的 陀螺仪   初始化量程
+#define IMU660RB_ACC_SAMPLE_DEFAULT     ( IMU660RB_ACC_SAMPLE_SGN_2G )          // 在这设置默认的 加速度计 初始化量程
+#define IMU660RB_GYRO_SAMPLE_DEFAULT    ( IMU660RB_GYRO_SAMPLE_SGN_500DPS )    // 在这设置默认的 陀螺仪   初始化量程
 #define IMU660RB_TIMEOUT_COUNT                      (0x00FF)                    // IMU660RB 超时计数
 //================================================定义 IMU660RB 基本配置================================================
 
