@@ -325,7 +325,7 @@ void navigation_update(void)
 
         if (walk_mode == 4)
         {
-            if (count_A <= 150)
+            if (count_A <= 110)
             {
                 count_A++;
                 return;
@@ -428,7 +428,7 @@ void navigation_update(void)
 
         if (walk_mode == 4)
         {
-            if (count <= 150)
+            if (count <= 110)
             {
                 count++;
                 return;

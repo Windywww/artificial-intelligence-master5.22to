@@ -13,13 +13,7 @@
 #define MAX_BOMBS 4
 
 // 水平/垂直直线路径的分段阈值（格数），可由工程编译宏覆盖。
-#ifndef MAX_L
 #define MAX_L 4
-#endif
-
-#if MAX_L < 2
-#error "MAX_L must be at least 2"
-#endif
 
 #define VIRTUAL_WALL_COST 20
 #define BOMB_PENALTY 2

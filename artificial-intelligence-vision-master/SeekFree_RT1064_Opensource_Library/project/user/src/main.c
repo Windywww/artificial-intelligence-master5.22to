@@ -315,7 +315,7 @@ static uint8_t run_round(uint8_t round_index)
     }
     ban_map_check_ifgetVisionLoc = 0;
     vision_run_correct_switch = 0;
-    if (!build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 0U : 0U))
+    if (!build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 0U : 1U))
     {
         return 0;
     }
@@ -466,10 +466,10 @@ void pit_ch1_handler(void)
     float gy_deg_s = 0;
     if (!IMU_FLAT)
     {
-        gx_deg_s = (float)(imu660rb_gyro_x - bias_x) / imu660rb_transition_factor[1];
-        gy_deg_s = (float)(imu660rb_gyro_y - bias_y) / imu660rb_transition_factor[1];
+        gx_deg_s = (float)(imu660rb_gyro_x) / imu660rb_transition_factor[1];
+        gy_deg_s = (float)(imu660rb_gyro_y) / imu660rb_transition_factor[1];
     }
-    float gz_deg_s = (float)(imu660rb_gyro_z - bias_z) / imu660rb_transition_factor[1];
+    float gz_deg_s = (float)(imu660rb_gyro_z) / imu660rb_transition_factor[1];
     if (!IMU_FLAT)
     {
         float vertical_omega = gx_deg_s * ax_average + gy_deg_s * ay_average + gz_deg_s * az_average;
