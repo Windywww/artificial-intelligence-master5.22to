@@ -2,8 +2,8 @@ import sensor, image, time, tf, gc, uos
 
 
 CENTER_ROI = (20, 0, 120, 120)
-CONFIDENCE_THRESHOLD = 0.60
-SAVE_DIR = "/sd/background"
+CONFIDENCE_THRESHOLD = 0.95
+SAVE_DIR = "/sd"
 CAPTURE_INTERVAL_MS = 150
 
 
@@ -49,26 +49,21 @@ box_net = tf.load(
 
 ensure_save_dir()
 save_count = get_next_save_count()
-
+n = 0
 while True:
-    time.sleep_ms(CAPTURE_INTERVAL_MS)
     img = sensor.snapshot()
     result = tf.classify(box_net, img, roi=CENTER_ROI)
     probs = result[0].output()
     max_prob = max(probs)
     label = probs.index(max_prob)
-
     if max_prob < CONFIDENCE_THRESHOLD:
-        canvas = img.copy(roi=CENTER_ROI)
-        filename = "{}/{}.jpg".format(SAVE_DIR, save_count)
-        canvas.save(filename)
-        print("Saved: {} P:{:.2f}".format(save_count, max_prob))
-        save_count += 1
+        n+=1
+        if n%10 == 0:
+            canvas = img.copy(roi=CENTER_ROI)
+            filename = "{}/{}.jpg".format(SAVE_DIR, save_count)
+            canvas.save(filename)
+            print("Saved: {} P:{:.2f}".format(save_count, max_prob))
+            save_count += 1
 
-    img.draw_string(
-        40,
-        10,
-        "{} P:{:.2f}".format(label, max_prob),
-        color=(255, 0, 0),
-        scale=2,
-    )
+            img.draw_string(40,10, "{} P:{:.2f}".format(label, max_prob),
+                color=(255, 0, 0),scale=2,)
