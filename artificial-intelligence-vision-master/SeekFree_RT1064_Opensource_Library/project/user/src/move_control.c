@@ -29,7 +29,7 @@ float target_vy = 0.0f; // 车模坐标系下前进速度 单位 m/s
 float Kp_yaw = 0.06f; // 航向角 P 参数
 float Kd_yaw = 0.1f;  // 航向角 D 参数
 
-float global_x = 0.3f;      // 车模全局 x 坐标 单位 m
+float global_x = 0.25f;      // 车模全局 x 坐标 单位 m
 float global_y = 1.2f;      // 车模全局 y 坐标 单位 m
 uint8_t move_flag = 0;      // 1表示车子在移动 0 表示车子在停止
 uint8_t mode = 0;           // 两种运动模式

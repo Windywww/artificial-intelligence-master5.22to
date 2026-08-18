@@ -76,6 +76,13 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
         }
         return true;
     }
+    // 只有一对儿的情况
+    if(ctx->goal_count==1 && ctx->initial_state.box_count==1)
+    {
+        ctx->goals[0].id = NO_CLS;
+        current_state->boxes[0].id = NO_CLS;
+    }
+
     run_type_state = 1;
     uint8_t unid_boxes = current_state->box_count;
     uint8_t unid_goals = ctx->goal_count;
@@ -1080,7 +1087,7 @@ void goal_box_giveRelation(SokobanContext *ctx)
     uint8_t mapin_goals_count = 0;
     for (int i = 0; i < ctx->goal_count; i++)
     {
-        if(ctx->initial_state.active_goals_mask & (1U << i))
+        if (ctx->initial_state.active_goals_mask & (1U << i))
         {
             mapin_goals[mapin_goals_count] = ctx->goals[i];
             mapin_goals_count++;
@@ -1155,10 +1162,11 @@ static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
         if (map[push_target] == 0)
         {
             map[push_target] = 2;
-            if(run_type_state == 1){
+            if (run_type_state == 1)
+            {
                 for (int j = 0; j < length_mapin_boxes; j++)
                 {
-                    if (mapin_boxes[j].pos == next_step&&mapin_boxes[j].id!= UNKNOWN)
+                    if (mapin_boxes[j].pos == next_step && mapin_boxes[j].id != UNKNOWN)
                     {
                         mapin_boxes[j].pos = push_target;
                         break;
@@ -1178,7 +1186,7 @@ static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
                 uint8_t box_index = 0;
                 for (int j = 0; j < length_mapin_boxes; j++)
                 {
-                    if (mapin_boxes[j].pos == next_step&&mapin_boxes[j].id!= UNKNOWN)
+                    if (mapin_boxes[j].pos == next_step && mapin_boxes[j].id != UNKNOWN)
                     {
                         mapin_boxes[j].pos = push_target;
                         box_index = j;
@@ -1187,7 +1195,7 @@ static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
                 }
                 for (int j = 0; j < length_mapin_goals; j++)
                 {
-                    if (mapin_goals[j].pos == push_target&&mapin_goals[j].id!=UNKNOWN)
+                    if (mapin_goals[j].pos == push_target && mapin_goals[j].id != UNKNOWN)
                     {
                         if (mapin_boxes[box_index].id == mapin_goals[j].id)
                         {
@@ -1393,7 +1401,7 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
         }
         else
         {
-            for (uint8_t i = car_to ; i >= car_to_to- 1; i--)
+            for (uint8_t i = car_to; i >= car_to_to - 1; i--)
             {
                 if (i - 16 > 0)
                 {
@@ -1414,7 +1422,7 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
     {
         if (car_to < car_to_to)
         {
-            for (uint8_t i = car_to ; i <= car_to_to+ 16; i += 16)
+            for (uint8_t i = car_to; i <= car_to_to + 16; i += 16)
             {
                 if (i - 1 > 0)
                 {
@@ -1432,7 +1440,7 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
         }
         else
         {
-            for (uint8_t i = car_to ; i >= car_to_to- 16; i -= 16)
+            for (uint8_t i = car_to; i >= car_to_to - 16; i -= 16)
             {
                 if (i - 1 > 0)
                 {

@@ -346,7 +346,7 @@ static void engine_init(SokobanContext *ctx, const uint8_t *raw_map)
         }
     }
 
-    if (car_count != 1U)
+    if (car_count != 1U || ctx->goal_count != ctx->initial_state.box_count)
     {
         ctx->map_valid = false;
     }
