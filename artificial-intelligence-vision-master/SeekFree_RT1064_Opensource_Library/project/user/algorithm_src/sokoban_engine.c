@@ -55,6 +55,7 @@ static inline bool can_consume_goal(uint8_t box_type, uint8_t goal_type)
 
 bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
 {
+    run_type_state = cls;
     if (ctx == NULL || raw_map == NULL)
         return false;
 
@@ -64,7 +65,6 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
     State *current_state = &ctx->initial_state;
     if (cls == 0)
     {
-        run_type_state = 0;
         for (uint8_t j = 0; j < current_state->box_count; j++)
         {
             current_state->boxes[j].id = NO_CLS;
@@ -76,16 +76,14 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
         }
         return true;
     }
-    run_type_state = 1;
     // 只有一对儿的情况
-    if(ctx->goal_count==1 && ctx->initial_state.box_count==1)
+    if (ctx->goal_count == 1 && ctx->initial_state.box_count == 1)
     {
         ctx->goals[0].id = 1;
         current_state->boxes[0].id = 1;
         return true;
     }
 
-    
     uint8_t unid_boxes = current_state->box_count;
     uint8_t unid_goals = ctx->goal_count;
     // Each bit records a failed target direction from this viewpoint.
@@ -1104,7 +1102,7 @@ void goal_box_giveRelation(SokobanContext *ctx)
     length_mapin_goals = ctx->goal_count;
     length_mapin_boxes = ctx->initial_state.box_count;
 }
-// 任务状态定义：0=无分类关卡，1=有分类侦查阶段，2=有分类推送阶段
+// 任务状态定义：0=无分类关卡，1=有分类侦查阶段
 uint8_t run_type_state = 0;
 // 上下左右，0123
 static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
@@ -1399,6 +1397,9 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                     if (type == 2 || type == 4 || type == 6 || type == 7)
                         return 1;
                 }
+                uint8_t type = map[i];
+                if (type == 2 || type == 4 || type == 6 || type == 7)
+                    return 1;
             }
         }
         else
@@ -1417,6 +1418,9 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                     if (type == 2 || type == 4 || type == 6 || type == 7)
                         return 1;
                 }
+                uint8_t type = map[i];
+                if (type == 2 || type == 4 || type == 6 || type == 7)
+                    return 1;
             }
         }
     }
