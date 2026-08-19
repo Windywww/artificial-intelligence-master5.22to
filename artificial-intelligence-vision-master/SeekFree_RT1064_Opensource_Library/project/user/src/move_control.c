@@ -318,9 +318,13 @@ void navigation_update(void)
 
         if (!ban_map_check_ifgetVisionLoc)
         {
-            uint8_t path_X = round_int((target_x - 0.1f) / 0.2f);
-            uint8_t path_Y = round_int((2.3f - target_y) / 0.2f);
-            map_check_ifgetVisionLoc(final_map_data, 16 * path_Y + path_X, 16 * path_Y + path_X);
+            int path_x = round_int((target_x - 0.1f) / 0.2f);
+            int path_y = round_int((2.3f - target_y) / 0.2f);
+            if (path_x >= 0 && path_x < WIDTH && path_y >= 0 && path_y < HEIGHT)
+            {
+                uint8_t path_index = (uint8_t)(path_y * WIDTH + path_x);
+                map_check_ifgetVisionLoc(final_map_data, path_index, path_index);
+            }
         }
 
         if (walk_mode == 4)

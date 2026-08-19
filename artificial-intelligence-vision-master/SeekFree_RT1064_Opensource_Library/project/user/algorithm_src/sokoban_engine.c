@@ -1115,243 +1115,299 @@ void goal_box_giveRelation(SokobanContext *ctx)
 
 void clear_relation_in()
 {
-    for (int i = 0; i < MAX_GOALS; i++)
-    {
-        mapin_boxes->id = 0;
-        mapin_goals->id = 0;
-        mapin_boxes->pos = 0;
-        mapin_goals->pos = 0;
-    }
+    memset(mapin_boxes, 0, sizeof(mapin_boxes));
+    memset(mapin_goals, 0, sizeof(mapin_goals));
     length_mapin_boxes = 0;
     length_mapin_goals = 0;
 }
 // 任务状态定义：0=无分类关卡，1=有分类侦查阶段
 uint8_t run_type_state = 0;
-// 上下左右，0123
-static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
+typedef struct
 {
-    uint8_t next_step = 0;
-    // 根据方向计算小车单步要走到的点位
-    switch (direction)
+    EntityData goals[MAX_GOALS];
+    EntityData boxes[MAX_BOXES];
+    uint8_t goal_count;
+    uint8_t box_count;
+} MapRelationState;
+
+// This function only runs from the PIT control path, so static work buffers avoid a
+// large interrupt-stack allocation while keeping the map update transactional.
+static uint8_t map_sync_candidate[MAP_SIZE];
+static MapRelationState map_relation_candidate;
+
+static void map_relation_load(MapRelationState *state)
+{
+    memcpy(state->goals, mapin_goals, sizeof(mapin_goals));
+    memcpy(state->boxes, mapin_boxes, sizeof(mapin_boxes));
+    state->goal_count = length_mapin_goals;
+    state->box_count = length_mapin_boxes;
+}
+
+static void map_relation_store(const MapRelationState *state)
+{
+    memcpy(mapin_goals, state->goals, sizeof(mapin_goals));
+    memcpy(mapin_boxes, state->boxes, sizeof(mapin_boxes));
+    length_mapin_goals = state->goal_count;
+    length_mapin_boxes = state->box_count;
+}
+
+static int map_relation_box_index(const MapRelationState *state, uint8_t pos)
+{
+    for (uint8_t i = 0; i < state->box_count; i++)
     {
-    case 0: // 向上
-        next_step = car_loc - 16;
-        break;
-    case 1: // 向下
-        next_step = car_loc + 16;
-        break;
-    case 2: // 向左
-        next_step = car_loc - 1;
-        break;
-    case 3: // 向右
-        next_step = car_loc + 1;
-        break;
-    default:
-        return; // 非法方向直接退出，不处理
+        if (state->boxes[i].pos == pos)
+            return i;
+    }
+    return -1;
+}
+
+static int map_relation_goal_index(const MapRelationState *state, uint8_t pos)
+{
+    for (uint8_t i = 0; i < state->goal_count; i++)
+    {
+        if (state->goals[i].pos == pos)
+            return i;
+    }
+    return -1;
+}
+
+static void map_clear_car(uint8_t *map, uint8_t car_loc)
+{
+    map[car_loc] = (map[car_loc] == 8U) ? 3U : 0U;
+}
+
+static void map_place_car(uint8_t *map, uint8_t loc)
+{
+    map[loc] = (map[loc] == 3U) ? 8U : 5U;
+}
+
+// 上下左右，0123。失败时不修改 map 或分类关系。
+static bool map_inmove_step(uint8_t *map, MapRelationState *relations,
+                            uint8_t direction, uint8_t car_loc)
+{
+    if (map == NULL || relations == NULL || car_loc >= MAP_SIZE ||
+        (map[car_loc] != 5U && map[car_loc] != 8U))
+        return false;
+
+    int next_index = neighbor_index(car_loc, direction);
+    if (next_index < 0)
+        return false;
+
+    uint8_t next_step = (uint8_t)next_index;
+    uint8_t next_type = map[next_step];
+    if (next_type == 0U || next_type == 3U)
+    {
+        map_place_car(map, next_step);
+        map_clear_car(map, car_loc);
+        return true;
     }
 
-    // -------------------------- 碰到箱子2/箱子+目的地6 --------------------------
-    if (map[next_step] == 2 || map[next_step] == 6)
+    int push_index = neighbor_index(next_step, direction);
+    if (push_index < 0)
+        return false;
+
+    uint8_t push_target = (uint8_t)push_index;
+    uint8_t push_type = map[push_target];
+    if (next_type == 2U || next_type == 6U)
     {
-        // 先处理原位置：2号清空为0，6号恢复为3号纯目的地
-        if (map[next_step] == 2)
+        if (push_type == 0U)
         {
-            map[next_step] = 0;
-        }
-        else
-        {
-            map[next_step] = 3;
-        }
-
-        // 计算箱子被推动后的落点
-        uint8_t push_target = 0;
-        switch (direction)
-        {
-        case 0:
-            push_target = next_step - 16;
-            break; // 向上推箱子
-        case 1:
-            push_target = next_step + 16;
-            break; // 向下推箱子
-        case 2:
-            push_target = next_step - 1;
-            break; // 向左推箱子
-        case 3:
-            push_target = next_step + 1;
-            break; // 向右推箱子
-        }
-
-        // 更新箱子落点的地图状态
-        if (map[push_target] == 0)
-        {
-            map[push_target] = 2;
-            if (run_type_state == 1)
+            if (run_type_state == 1U)
             {
-                bool found_box = false;
-                for (int j = 0; j < length_mapin_boxes; j++)
-                {
-                    // 普通推动只按位置关联；未分类箱子也必须跟随更新位置。
-                    if (mapin_boxes[j].pos == next_step)
-                    {
-                        mapin_boxes[j].pos = push_target;
-                        found_box = true;
-                        break;
-                    }
-                }
-                if (!found_box)
-                {
-                    // return_to_start_zone();
-                    // return;
-                }
+                int box_index = map_relation_box_index(relations, next_step);
+                if (box_index < 0)
+                    return false;
+                relations->boxes[box_index].pos = push_target;
             }
+            map[push_target] = 2U;
         }
-        else if (map[push_target] == 3)
+        else if (push_type == 3U)
         {
-            if (run_type_state == 0)
+            if (run_type_state == 0U)
             {
-                map[push_target] = 0;
+                map[push_target] = 0U;
             }
-            else if (run_type_state == 1)
+            else if (run_type_state == 1U)
             {
-                // 目标落点必须同时找到对应箱子和目标点；两者均须已分类。
-                int box_index = -1;
-                for (int j = 0; j < length_mapin_boxes; j++)
-                {
-                    if (mapin_boxes[j].pos == next_step)
-                    {
-                        box_index = j;
-                        break;
-                    }
-                }
-
-                int goal_index = -1;
-                for (int j = 0; j < length_mapin_goals; j++)
-                {
-                    if (mapin_goals[j].pos == push_target)
-                    {
-                        goal_index = j;
-                        break;
-                    }
-                }
-
+                int box_index = map_relation_box_index(relations, next_step);
+                int goal_index = map_relation_goal_index(relations, push_target);
                 if (box_index < 0 || goal_index < 0 ||
-                    mapin_boxes[box_index].id == UNKNOWN ||
-                    mapin_goals[goal_index].id == UNKNOWN)
-                {
-                    // return_to_start_zone();
-                    // return;
-                }
+                    relations->boxes[box_index].id == UNKNOWN ||
+                    relations->goals[goal_index].id == UNKNOWN)
+                    return false;
 
-                mapin_boxes[box_index].pos = push_target;
-                if (mapin_boxes[box_index].id == mapin_goals[goal_index].id)
+                if (relations->boxes[box_index].id == relations->goals[goal_index].id)
                 {
-                    // 消除后物理删除两条关系，避免留下 UNKNOWN 箱子占位。
-                    for (int j = box_index; j + 1 < length_mapin_boxes; j++)
-                    {
-                        mapin_boxes[j] = mapin_boxes[j + 1];
-                    }
-                    length_mapin_boxes--;
-                    for (int j = goal_index; j + 1 < length_mapin_goals; j++)
-                    {
-                        mapin_goals[j] = mapin_goals[j + 1];
-                    }
-                    length_mapin_goals--;
-                    map[push_target] = 0;
+                    for (uint8_t i = (uint8_t)box_index; i + 1U < relations->box_count; i++)
+                        relations->boxes[i] = relations->boxes[i + 1U];
+                    relations->box_count--;
+                    for (uint8_t i = (uint8_t)goal_index; i + 1U < relations->goal_count; i++)
+                        relations->goals[i] = relations->goals[i + 1U];
+                    relations->goal_count--;
+                    map[push_target] = 0U;
                 }
                 else
                 {
-                    map[push_target] = 6;
+                    relations->boxes[box_index].pos = push_target;
+                    map[push_target] = 6U;
                 }
             }
-        }
-
-        // 小车停在刚才碰到箱子的点位next_step
-        if (map[next_step] == 0)
-        {
-            map[next_step] = 5;
-        }
-        else if (map[next_step] == 3)
-        {
-            map[next_step] = 8;
-        }
-    }
-    // -------------------------- 碰到炸弹4/炸弹+目的地7 --------------------------
-    else if (map[next_step] == 4 || map[next_step] == 7)
-    {
-        // 先处理原位置：4号清空为0，7号恢复为3号纯目的地
-        if (map[next_step] == 4)
-        {
-            map[next_step] = 0;
+            else
+            {
+                return false;
+            }
         }
         else
         {
-            map[next_step] = 3;
+            return false;
         }
 
-        // 计算炸弹被推动后的落点
-        uint8_t push_target = 0;
-        switch (direction)
-        {
-        case 0:
-            push_target = next_step - 16;
-            break;
-        case 1:
-            push_target = next_step + 16;
-            break;
-        case 2:
-            push_target = next_step - 1;
-            break;
-        case 3:
-            push_target = next_step + 1;
-            break;
-        }
+        map[next_step] = (next_type == 6U) ? 3U : 0U;
+        map_place_car(map, next_step);
+        map_clear_car(map, car_loc);
+        return true;
+    }
 
-        // 更新炸弹落点的地图状态
-        if (map[push_target] == 0)
-        {
-            map[push_target] = 4;
-        }
-        else if (map[push_target] == 3)
-        {
-            map[push_target] = 7;
-        }
-        else if (map[push_target] == 1)
-        {
+    if (next_type == 4U || next_type == 7U)
+    {
+        if (push_type == 0U)
+            map[push_target] = 4U;
+        else if (push_type == 3U)
+            map[push_target] = 7U;
+        else if (push_type == 1U)
             boom_wall(map, push_target);
-        }
+        else
+            return false;
 
-        // 小车停在刚才碰到炸弹的点位next_step
-        if (map[next_step] == 0)
+        map[next_step] = (next_type == 7U) ? 3U : 0U;
+        map_place_car(map, next_step);
+        map_clear_car(map, car_loc);
+        return true;
+    }
+
+    return false;
+}
+
+static bool map_sync_car_position(uint8_t *map, uint8_t car_from, uint8_t car_to)
+{
+    if (car_from == car_to)
+        return true;
+
+    memcpy(map_sync_candidate, map, MAP_SIZE);
+    map_relation_load(&map_relation_candidate);
+
+    if ((car_from / WIDTH) == (car_to / WIDTH))
+    {
+        uint8_t direction = (car_from < car_to) ? 3U : 2U;
+        uint8_t current = car_from;
+        while (current != car_to)
         {
-            map[next_step] = 5;
-        }
-        else if (map[next_step] == 3)
-        {
-            map[next_step] = 8;
+            if (!map_inmove_step(map_sync_candidate, &map_relation_candidate, direction, current))
+                return false;
+            current = (uint8_t)neighbor_index(current, direction);
         }
     }
-    // -------------------------- 路径上没有实体，小车正常走一步 --------------------------
+    else if ((car_from % WIDTH) == (car_to % WIDTH))
+    {
+        uint8_t direction = (car_from < car_to) ? 1U : 0U;
+        uint8_t current = car_from;
+        while (current != car_to)
+        {
+            if (!map_inmove_step(map_sync_candidate, &map_relation_candidate, direction, current))
+                return false;
+            current = (uint8_t)neighbor_index(current, direction);
+        }
+    }
     else
     {
-        if (map[next_step] == 0)
+        if (map_sync_candidate[car_to] != 0U && map_sync_candidate[car_to] != 3U)
+            return false;
+        map_place_car(map_sync_candidate, car_to);
+        map_clear_car(map_sync_candidate, car_from);
+    }
+
+    memcpy(map, map_sync_candidate, MAP_SIZE);
+    map_relation_store(&map_relation_candidate);
+    return true;
+}
+
+static bool map_has_vision_object(const uint8_t *map, uint8_t row, uint8_t col)
+{
+    return is_dynamic_map_object(map[row * WIDTH + col]);
+}
+
+static uint8_t map_scan_vision_segment(const uint8_t *map, uint8_t car_from,
+                                       uint8_t car_to, uint8_t car_to_to)
+{
+    uint8_t start_row = car_to / WIDTH;
+    uint8_t start_col = car_to % WIDTH;
+    uint8_t end_row = car_to_to / WIDTH;
+    uint8_t end_col = car_to_to % WIDTH;
+    int row_step = 0;
+    int col_step = 0;
+
+    if (start_row == end_row && start_col != end_col)
+        col_step = (end_col > start_col) ? 1 : -1;
+    else if (start_col == end_col && start_row != end_row)
+        row_step = (end_row > start_row) ? 1 : -1;
+    else if (car_to == car_to_to)
+    {
+        uint8_t from_row = car_from / WIDTH;
+        uint8_t from_col = car_from % WIDTH;
+        if (from_row == start_row && from_col != start_col)
+            col_step = (start_col > from_col) ? 1 : -1;
+        else if (from_col == start_col && from_row != start_row)
+            row_step = (start_row > from_row) ? 1 : -1;
+    }
+
+    if (start_row == end_row)
+    {
+        uint8_t first_col = (start_col < end_col) ? start_col : end_col;
+        uint8_t last_col = (start_col < end_col) ? end_col : start_col;
+        for (uint8_t col = first_col; col <= last_col; col++)
         {
-            map[next_step] = 5;
+            if (map_has_vision_object(map, start_row, col) ||
+                (start_row > 0U && map_has_vision_object(map, start_row - 1U, col)) ||
+                (start_row + 1U < HEIGHT && map_has_vision_object(map, start_row + 1U, col)))
+                return 1U;
         }
-        else if (map[next_step] == 3)
+    }
+    else if (start_col == end_col)
+    {
+        uint8_t first_row = (start_row < end_row) ? start_row : end_row;
+        uint8_t last_row = (start_row < end_row) ? end_row : start_row;
+        for (uint8_t row = first_row; row <= last_row; row++)
         {
-            map[next_step] = 8;
+            if (map_has_vision_object(map, row, start_col) ||
+                (start_col > 0U && map_has_vision_object(map, row, start_col - 1U)) ||
+                (start_col + 1U < WIDTH && map_has_vision_object(map, row, start_col + 1U)))
+                return 1U;
         }
     }
 
-    // 最后统一清空小车原位置的状态
-    if (map[car_loc] == 5)
+    // Keep looking three grids beyond the path endpoint, but never leave the map.
+    for (uint8_t extra = 0U; extra < 3U && (row_step != 0 || col_step != 0); extra++)
     {
-        map[car_loc] = 0;
+        int scan_row = (int)end_row + row_step * (int)(extra + 1U);
+        int scan_col = (int)end_col + col_step * (int)(extra + 1U);
+        if (!valid_map_xy(scan_col, scan_row))
+            break;
+
+        if (map_has_vision_object(map, (uint8_t)scan_row, (uint8_t)scan_col))
+            return 1U;
+        if (row_step != 0)
+        {
+            if ((scan_col > 0 && map_has_vision_object(map, (uint8_t)scan_row, (uint8_t)(scan_col - 1))) ||
+                (scan_col + 1 < WIDTH && map_has_vision_object(map, (uint8_t)scan_row, (uint8_t)(scan_col + 1))))
+                return 1U;
+        }
+        else if ((scan_row > 0 && map_has_vision_object(map, (uint8_t)(scan_row - 1), (uint8_t)scan_col)) ||
+                 (scan_row + 1 < HEIGHT && map_has_vision_object(map, (uint8_t)(scan_row + 1), (uint8_t)scan_col)))
+        {
+            return 1U;
+        }
     }
-    else if (map[car_loc] == 8)
-    {
-        map[car_loc] = 3;
-    }
+    return 0U;
 }
 
 // 6	箱子+目的地	箱子推入目的地，ID不匹配时生成的混合体，小车可把箱子重新推出来
@@ -1362,172 +1418,24 @@ static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
 // 仅当从car_to到car_to_to的路径两侧有箱子，炸弹时才需要获取视觉坐标
 uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to)
 {
-    uint8_t car_from = 0;
-    // 扫描获取小车当前位置，兼容5和8两种状态
+    if (map == NULL || car_to >= MAP_SIZE || car_to_to >= MAP_SIZE)
+        return 0U;
+
+    uint8_t car_from = 0U;
+    bool found_car = false;
     for (uint8_t i = 0; i < MAP_SIZE; i++)
     {
         if (map[i] == 5 || map[i] == 8)
         {
             car_from = i;
+            found_car = true;
             break;
         }
     }
-    uint8_t curr_car_loc = car_from;
-    // -------------------------- 水平方向同一路径直接逐格走到底 --------------------------
-    if ((car_from / 16) == (car_to / 16) && car_from != car_to)
-    {
-        if (car_from < car_to)
-        {
-            for (uint8_t step_cnt = 0; step_cnt < (car_to - car_from); step_cnt++)
-            {
-                map_inmove_step(map, 3, curr_car_loc); // 向右走一步
-                curr_car_loc += 1;
-            }
-        }
-        else
-        {
-            for (uint8_t step_cnt = 0; step_cnt < (car_from - car_to); step_cnt++)
-            {
-                map_inmove_step(map, 2, curr_car_loc); // 向左走一步
-                curr_car_loc -= 1;
-            }
-        }
-    }
-    // -------------------------- 垂直方向同一路径直接逐格走到底 --------------------------
-    else if ((car_from % 16) == (car_to % 16) && car_from != car_to)
-    {
-        if (car_from < car_to)
-        {
-            for (uint8_t step_cnt = 0; step_cnt < ((car_to - car_from) / 16); step_cnt++)
-            {
-                map_inmove_step(map, 1, curr_car_loc); // 向下走一步
-                curr_car_loc += 16;
-            }
-        }
-        else
-        {
-            for (uint8_t step_cnt = 0; step_cnt < ((car_from - car_to) / 16); step_cnt++)
-            {
-                map_inmove_step(map, 0, curr_car_loc); // 向上走一步
-                curr_car_loc -= 16;
-            }
-        }
-    }
-    // -------------------------- 非水平/非垂直的位移场景，直接沿用原有跳转逻辑 --------------------------
-    else
-    {
-        // 清空小车原位置
-        if (map[car_from] == 5)
-        {
-            map[car_from] = 0;
-        }
-        else if (map[car_from] == 8)
-        {
-            map[car_from] = 3;
-        }
-        // 写入小车目标位置
-        if (map[car_to] == 0)
-        {
-            map[car_to] = 5;
-        }
-        else if (map[car_to] == 3)
-        {
-            map[car_to] = 8;
-        }
-    }
+    if (!found_car || !map_sync_car_position(map, car_from, car_to))
+        return 0U;
 
-    // -------------------------- 视觉定位触发判断 完全原封不动保留 --------------------------
-    if ((car_to_to / 16) == (car_to / 16))
-    {
-        if (car_to < car_to_to)
-        {
-            for (uint8_t i = car_to; i <= car_to_to + 1; i++)
-            {
-                if (i - 16 > 0)
-                {
-                    uint8_t type = map[i - 16];
-                    if (type == 2 || type == 4 || type == 6 || type == 7)
-                        return 1;
-                }
-                if (i + 16 < 192)
-                {
-                    uint8_t type = map[i + 16];
-                    if (type == 2 || type == 4 || type == 6 || type == 7)
-                        return 1;
-                }
-                uint8_t type = map[i];
-                if (type == 2 || type == 4 || type == 6 || type == 7)
-                    return 1;
-            }
-        }
-        else
-        {
-            for (uint8_t i = car_to; i >= car_to_to - 1; i--)
-            {
-                if (i - 16 > 0)
-                {
-                    uint8_t type = map[i - 16];
-                    if (type == 2 || type == 4 || type == 6 || type == 7)
-                        return 1;
-                }
-                if (i + 16 < 192)
-                {
-                    uint8_t type = map[i + 16];
-                    if (type == 2 || type == 4 || type == 6 || type == 7)
-                        return 1;
-                }
-                uint8_t type = map[i];
-                if (type == 2 || type == 4 || type == 6 || type == 7)
-                    return 1;
-            }
-        }
-    }
-    else if ((car_to_to % 16) == (car_to % 16))
-    {
-        if (car_to < car_to_to)
-        {
-            for (uint8_t i = car_to; i <= car_to_to + 16; i += 16)
-            {
-                if (i - 1 > 0)
-                {
-                    uint8_t type = map[i - 1];
-                    if (type == 2 || type == 4 || type == 6 || type == 7)
-                        return 1;
-                }
-                if (i + 1 < 192)
-                {
-                    uint8_t type = map[i + 1];
-                    if (type == 2 || type == 4 || type == 6 || type == 7)
-                        return 1;
-                }
-                uint8_t type = map[i];
-                if (type == 2 || type == 4 || type == 6 || type == 7)
-                    return 1;
-            }
-        }
-        else
-        {
-            for (uint8_t i = car_to; i >= car_to_to - 16; i -= 16)
-            {
-                if (i - 1 > 0)
-                {
-                    uint8_t type = map[i - 1];
-                    if (type == 2 || type == 4 || type == 6 || type == 7)
-                        return 1;
-                }
-                if (i + 1 < 192)
-                {
-                    uint8_t type = map[i + 1];
-                    if (type == 2 || type == 4 || type == 6 || type == 7)
-                        return 1;
-                }
-                uint8_t type = map[i];
-                if (type == 2 || type == 4 || type == 6 || type == 7)
-                    return 1;
-            }
-        }
-    }
-    return 0;
+    return map_scan_vision_segment(map, car_from, car_to, car_to_to);
 }
 
 // /**
