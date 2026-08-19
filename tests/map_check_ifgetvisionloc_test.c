@@ -311,10 +311,29 @@ static void test_generate_path_preserves_explosion_marker(void)
     ctx.solution_actions[0] = (MacroAction){1U, 2U, true, false};
 
     assert(generate_path(&ctx, &path));
-    assert(path.length == 4U);
-    assert(path.points[0] == 0U && path.points[1] == 1U);
-    assert(path.points[2] == 2U && path.points[3] == 255U);
+    assert(path.length == 3U);
+    assert(path.points[0] == 0U && path.points[1] == 2U);
+    assert(path.points[2] == 255U);
     assert(ctx.initial_state.car_pos == 2U && ctx.initial_state.bomb_count == 0U);
+}
+
+static void test_generate_path_merges_collinear_pushes(void)
+{
+    SokobanContext ctx;
+    WaypointPath path;
+    memset(&ctx, 0, sizeof(ctx));
+    memset(&path, 0, sizeof(path));
+
+    ctx.initial_state.car_pos = 0U;
+    ctx.initial_state.box_count = 1U;
+    ctx.initial_state.boxes[0].pos = 2U;
+    ctx.solution_actions_len = 2U;
+    ctx.solution_actions[0] = (MacroAction){1U, 2U, false, false};
+    ctx.solution_actions[1] = (MacroAction){2U, 3U, false, false};
+
+    assert(generate_path(&ctx, &path));
+    assert(path.length == 2U);
+    assert(path.points[0] == 0U && path.points[1] == 3U);
 }
 
 int main(void)
@@ -326,5 +345,6 @@ int main(void)
     test_selective_visual_splitting();
     test_split_point_distribution();
     test_generate_path_preserves_explosion_marker();
+    test_generate_path_merges_collinear_pushes();
     return 0;
 }

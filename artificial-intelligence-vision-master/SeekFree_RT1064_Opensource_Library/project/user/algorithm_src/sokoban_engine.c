@@ -881,20 +881,27 @@ static bool straight_segment_needs_visual_split(uint8_t start, uint8_t end,
     return dynamic_vision_object_at(dynamic_map, end_x + step_x, end_y + step_y);
 }
 
-static bool append_path_point(WaypointPath *path, uint8_t point)
+static bool append_path_point(WaypointPath *path, uint8_t *preserve_point,
+                              uint8_t point, bool preserve)
 {
     if (path->length > 0U && path->points[path->length - 1U] == point)
+    {
+        if (preserve)
+            preserve_point[path->length - 1U] = 1U;
         return true;
+    }
     if (path->length >= MAP_SIZE)
         return false;
     path->points[path->length++] = point;
+    preserve_point[path->length - 1U] = preserve ? 1U : 0U;
     return true;
 }
 
 static bool append_smooth_path(WaypointPath *out_path, const WaypointPath *smooth_path,
-                               const uint8_t *dynamic_map)
+                               const uint8_t *dynamic_map, uint8_t *preserve_point)
 {
-    if (smooth_path->length == 0U || !append_path_point(out_path, smooth_path->points[0]))
+    if (smooth_path->length == 0U ||
+        !append_path_point(out_path, preserve_point, smooth_path->points[0], false))
         return false;
 
     for (uint16_t i = 1U; i < smooth_path->length; i++)
@@ -911,6 +918,7 @@ static bool append_smooth_path(WaypointPath *out_path, const WaypointPath *smoot
         if (((dx == 0) != (dy == 0)) &&
             straight_segment_needs_visual_split(start, end, dynamic_map))
         {
+            preserve_point[out_path->length - 1U] = 1U;
             int distance = dx != 0 ? (dx > 0 ? dx : -dx) : (dy > 0 ? dy : -dy);
             int segment_count = (distance + MAX_L - 1) / MAX_L;
             for (int segment = 1; segment <= segment_count; segment++)
@@ -918,16 +926,69 @@ static bool append_smooth_path(WaypointPath *out_path, const WaypointPath *smoot
                 int offset = (segment * distance + segment_count / 2) / segment_count;
                 int x = start_x + (dx == 0 ? 0 : (dx > 0 ? offset : -offset));
                 int y = start_y + (dy == 0 ? 0 : (dy > 0 ? offset : -offset));
-                if (!append_path_point(out_path, (uint8_t)(y * WIDTH + x)))
+                if (!append_path_point(out_path, preserve_point,
+                                       (uint8_t)(y * WIDTH + x), true))
                     return false;
             }
         }
-        else if (!append_path_point(out_path, end))
+        else if (!append_path_point(out_path, preserve_point, end, false))
         {
             return false;
         }
     }
     return true;
+}
+
+static bool path_points_are_collinear(uint8_t first, uint8_t middle, uint8_t last)
+{
+    if (first >= MAP_SIZE || middle >= MAP_SIZE || last >= MAP_SIZE)
+        return false;
+
+    int first_x = first % WIDTH;
+    int first_y = first / WIDTH;
+    int middle_x = middle % WIDTH;
+    int middle_y = middle / WIDTH;
+    int last_x = last % WIDTH;
+    int last_y = last / WIDTH;
+    return (first_y == middle_y && middle_y == last_y &&
+            (middle_x - first_x) * (last_x - middle_x) > 0) ||
+           (first_x == middle_x && middle_x == last_x &&
+            (middle_y - first_y) * (last_y - middle_y) > 0);
+}
+
+static void simplify_path_keep_visual_splits(WaypointPath *path, uint8_t *preserve_point)
+{
+    uint16_t write = 0U;
+    for (uint16_t read = 0U; read < path->length; read++)
+    {
+        if (write > 0U && path->points[read] == path->points[write - 1U])
+        {
+            if (preserve_point[read])
+                preserve_point[write - 1U] = 1U;
+            continue;
+        }
+        path->points[write] = path->points[read];
+        preserve_point[write++] = preserve_point[read];
+    }
+    path->length = write;
+
+    for (uint16_t index = 1U; index + 1U < path->length;)
+    {
+        if (preserve_point[index] ||
+            !path_points_are_collinear(path->points[index - 1U], path->points[index],
+                                       path->points[index + 1U]))
+        {
+            index++;
+            continue;
+        }
+
+        for (uint16_t move = index; move + 1U < path->length; move++)
+        {
+            path->points[move] = path->points[move + 1U];
+            preserve_point[move] = preserve_point[move + 1U];
+        }
+        path->length--;
+    }
 }
 
 #ifdef SOKOBAN_ENGINE_TEST
@@ -946,10 +1007,11 @@ bool sokoban_test_append_smooth_path(WaypointPath *out_path,
                                      const State *state)
 {
     uint8_t dynamic_map[MAP_SIZE];
+    uint8_t preserve_point[MAP_SIZE] = {0};
     if (out_path == NULL || smooth_path == NULL || state == NULL)
         return false;
     build_dynamic_vision_map(state, dynamic_map);
-    return append_smooth_path(out_path, smooth_path, dynamic_map);
+    return append_smooth_path(out_path, smooth_path, dynamic_map, preserve_point);
 }
 #endif
 
@@ -964,6 +1026,7 @@ bool generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
     out_full_path->length = 0;
     uint8_t obstacles[MAP_SIZE];
     uint8_t dynamic_vision_map[MAP_SIZE];
+    uint8_t preserve_path_point[MAP_SIZE] = {0};
     WaypointPath micro_path;
     WaypointPath smooth_path;
     for (int i = 0; i < ctx->solution_actions_len; i++)
@@ -1031,9 +1094,11 @@ bool generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
             return false;
         }
         build_dynamic_vision_map(&sim_state, dynamic_vision_map);
-        if (!append_smooth_path(out_full_path, &smooth_path, dynamic_vision_map) ||
-            !append_path_point(out_full_path, act.push_to) ||
-            (act.is_explode && !append_path_point(out_full_path, 255U)))
+        if (!append_smooth_path(out_full_path, &smooth_path, dynamic_vision_map,
+                                preserve_path_point) ||
+            !append_path_point(out_full_path, preserve_path_point, act.push_to, false) ||
+            (act.is_explode &&
+             !append_path_point(out_full_path, preserve_path_point, 255U, true)))
         {
             out_full_path->length = 0;
             return false;
@@ -1068,6 +1133,7 @@ bool generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
         }
         sim_state.car_pos = act.push_to;
     }
+    simplify_path_keep_visual_splits(out_full_path, preserve_path_point);
     // 更新初始状态为最终状�?
     ctx->initial_state = sim_state;
     memcpy(ctx->initial_walls, sim_walls, MAP_SIZE);
