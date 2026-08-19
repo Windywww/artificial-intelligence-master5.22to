@@ -219,7 +219,12 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             float final_actual_x = final_pos_X * 0.2f + 0.1f;
             float final_actual_y = 2.4f - final_pos_Y * 0.2f - 0.1f;
             // 如果要用直接到视点而非逼近式的，赋值为-0.001f即可，逼近式的步长为0.005f，避免过冲
-            float back_error = 0.01f;
+            float back_error;
+            if(is_box){
+                back_error = -0.001f;
+            }else{
+                back_error = 0.015f;
+            }
             if (dx > 0)
                 final_actual_x -= back_error;
             else if (dx < 0)
@@ -1455,9 +1460,9 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                     if (type == 2 || type == 4 || type == 6 || type == 7)
                         return 1;
                 }
-                uint8_t type = map[i];
-                if (type == 2 || type == 4 || type == 6 || type == 7)
-                    return 1;
+                // uint8_t type = map[i];
+                // if (type == 2 || type == 4 || type == 6 || type == 7)
+                //     return 1;
             }
         }
         else
@@ -1476,9 +1481,9 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                     if (type == 2 || type == 4 || type == 6 || type == 7)
                         return 1;
                 }
-                uint8_t type = map[i];
-                if (type == 2 || type == 4 || type == 6 || type == 7)
-                    return 1;
+                // uint8_t type = map[i];
+                // if (type == 2 || type == 4 || type == 6 || type == 7)
+                //     return 1;
             }
         }
     }
@@ -1500,9 +1505,9 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                     if (type == 2 || type == 4 || type == 6 || type == 7)
                         return 1;
                 }
-                uint8_t type = map[i];
-                if (type == 2 || type == 4 || type == 6 || type == 7)
-                    return 1;
+                // uint8_t type = map[i];
+                // if (type == 2 || type == 4 || type == 6 || type == 7)
+                //     return 1;
             }
         }
         else
@@ -1521,9 +1526,9 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                     if (type == 2 || type == 4 || type == 6 || type == 7)
                         return 1;
                 }
-                uint8_t type = map[i];
-                if (type == 2 || type == 4 || type == 6 || type == 7)
-                    return 1;
+                // uint8_t type = map[i];
+                // if (type == 2 || type == 4 || type == 6 || type == 7)
+                //     return 1;
             }
         }
     }
