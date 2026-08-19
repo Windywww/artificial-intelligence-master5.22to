@@ -37,6 +37,9 @@ extern uint8_t vision_run_correct_switch;
 
 //是否采用视觉角度
 #define IF_VISION_ANGLE 0
+
+//是否使用wifi
+#define IF_WIFI 0
 typedef enum
 {
     RF = 0,
