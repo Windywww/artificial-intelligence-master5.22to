@@ -1371,10 +1371,13 @@ static uint8_t map_scan_vision_segment(const uint8_t *map, uint8_t car_from,
         uint8_t last_col = (start_col < end_col) ? end_col : start_col;
         for (uint8_t col = first_col; col <= last_col; col++)
         {
-            if (map_has_vision_object(map, start_row, col) ||
+            if (
                 (start_row > 0U && map_has_vision_object(map, start_row - 1U, col)) ||
                 (start_row + 1U < HEIGHT && map_has_vision_object(map, start_row + 1U, col)))
                 return 1U;
+        }
+        if( map_has_vision_object(map, start_row, last_col+1)){
+            return 1U;
         }
     }
     else if (start_col == end_col)
@@ -1383,10 +1386,13 @@ static uint8_t map_scan_vision_segment(const uint8_t *map, uint8_t car_from,
         uint8_t last_row = (start_row < end_row) ? end_row : start_row;
         for (uint8_t row = first_row; row <= last_row; row++)
         {
-            if (map_has_vision_object(map, row, start_col) ||
+            if (
                 (start_col > 0U && map_has_vision_object(map, row, start_col - 1U)) ||
                 (start_col + 1U < WIDTH && map_has_vision_object(map, row, start_col + 1U)))
                 return 1U;
+        }
+        if( map_has_vision_object(map, last_row+1, start_col)){
+            return 1U;
         }
     }
 
