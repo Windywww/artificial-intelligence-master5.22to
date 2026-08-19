@@ -80,13 +80,19 @@ void return_to_start_zone(void)
     car_move_point(0.3, 1.2, angle, 0);
     while (navigate_flag)
     {
-        wifi_task();
+        if (IF_WIFI)
+        {
+            wifi_task();
+        }
     }
     first_time_fix = 2;
     system_delay_ms(50);
     while (global_infor_type != 5)
     {
-        wifi_task();
+        if (IF_WIFI)
+        {
+            wifi_task();
+        }
     }
     want_global_infor(1);
     while (global_infor_type != 5)
@@ -101,7 +107,10 @@ void return_to_start_zone(void)
             uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
             break;
         }
-        wifi_task();
+        if (IF_WIFI)
+        {
+            wifi_task();
+        }
     }
 
     uint8_t if_whitemap = 1;
@@ -122,7 +131,10 @@ void return_to_start_zone(void)
     car_move_point(0.3, 1.2, angle, 0);
     while (navigate_flag)
     {
-        wifi_task();
+        if (IF_WIFI)
+        {
+            wifi_task();
+        }
     }
 }
 
@@ -131,7 +143,10 @@ static void wait_navigation(void)
 {
     while (navigate_flag)
     {
-        wifi_task();
+        if (IF_WIFI)
+        {
+            wifi_task();
+        }
     }
 }
 // 等 global_infor_type 变 5
@@ -139,7 +154,10 @@ static void wait_global_info(void)
 {
     while (global_infor_type != 5)
     {
-        wifi_task();
+        if (IF_WIFI)
+        {
+            wifi_task();
+        }
     }
 }
 
@@ -167,7 +185,10 @@ static void request_round_map(void)
             uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
             break;
         }
-        wifi_task();
+        if (IF_WIFI)
+        {
+            wifi_task();
+        }
     }
 }
 // 矫正一次target_x target_y,阻塞式
@@ -183,7 +204,10 @@ static void sync_car_position(void)
         want_global_infor(0);
         while (global_infor_type != 5)
         {
-            wifi_task();
+            if (IF_WIFI)
+            {
+                wifi_task();
+            }
         }
         if (fabs(car_location[0] - main_vision_position_x) <= 0.002f && fabs(car_location[1] - main_vision_position_y) <= 0.002f)
         {
@@ -215,7 +239,10 @@ static void sync_car_angle(void)
         want_global_infor(2);
         while (global_infor_type != 5)
         {
-            wifi_task();
+            if (IF_WIFI)
+            {
+                wifi_task();
+            }
             uart_write_byte(UART_GLOBAL_INDEX, 0xFE);
         }
         if (fabs(car_angel - main_vision_angle) <= 2)
@@ -319,7 +346,7 @@ static uint8_t run_round(uint8_t round_index)
     }
     ban_map_check_ifgetVisionLoc = 0;
     vision_run_correct_switch = 0;
-    if (!build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 0U : 0U))
+    if (!build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 0U : 1U))
     {
         return 0;
     }
@@ -374,7 +401,10 @@ int main(void)
     // debug_init();                  // 调试端口初始化
     // 此处编写用户代码 例如外设初始化代码等
     system_delay_ms(600); // 等待主板其他外设上电完成
-    myWIFI2SPI_Init();
+    if (IF_WIFI)
+    {
+        myWIFI2SPI_Init();
+    }
     encoder_init();
     // key_init(5);
     // uart1_init();
@@ -415,7 +445,10 @@ int main(void)
     car_stop();
     while (1)
     {
-        wifi_task();
+        if (IF_WIFI)
+        {
+            wifi_task();
+        }
     }
     // NVIC_SystemReset(); // 复位
     return 0;

@@ -203,7 +203,10 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                 return false;
             while (navigate_flag)
             {
-                wifi_task();
+                if (IF_WIFI)
+                {
+                    wifi_task();
+                }
             }
             uint8_t final_pos_X = final_pos % 16;
             uint8_t final_pos_Y = final_pos / 16;
@@ -230,7 +233,10 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
             car_move_point(final_actual_x, final_actual_y, angle, 0);
             while (navigate_flag)
             {
-                wifi_task();
+                if (IF_WIFI)
+                {
+                    wifi_task();
+                }
             }
 
             ban_last_vision_correct = 0;
@@ -243,7 +249,10 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                 car_turn(angle);
                 while (!yaw_arrived_flag)
                 {
-                    wifi_task();
+                    if (IF_WIFI)
+                    {
+                        wifi_task();
+                    }
                 }
                 system_delay_ms(TURN_DELAY_TIME_MS);
             }
@@ -316,7 +325,10 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                         wait_ok = 1;
                         break;
                     }
-                    wifi_task();
+                    if (IF_WIFI)
+                    {
+                        wifi_task();
+                    }
                 }
                 if (wait_ok)
                 {
@@ -1188,8 +1200,8 @@ static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
                 }
                 if (!found_box)
                 {
-                    return_to_start_zone();
-                    return;
+                    // return_to_start_zone();
+                    // return;
                 }
             }
         }
@@ -1226,8 +1238,8 @@ static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
                     mapin_boxes[box_index].id == UNKNOWN ||
                     mapin_goals[goal_index].id == UNKNOWN)
                 {
-                    return_to_start_zone();
-                    return;
+                    // return_to_start_zone();
+                    // return;
                 }
 
                 mapin_boxes[box_index].pos = push_target;
@@ -1429,8 +1441,7 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
     {
         if (car_to < car_to_to)
         {
-            uint8_t end = ((car_to_to + 1) / 16 == car_to_to / 16) ? car_to_to + 1 : car_to_to;
-            for (uint8_t i = car_to; i <= end; i++)
+            for (uint8_t i = car_to; i <= car_to_to + 1; i++)
             {
                 if (i - 16 > 0)
                 {
@@ -1444,15 +1455,14 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                     if (type == 2 || type == 4 || type == 6 || type == 7)
                         return 1;
                 }
+                uint8_t type = map[i];
+                if (type == 2 || type == 4 || type == 6 || type == 7)
+                    return 1;
             }
-            uint8_t type = map[end];
-            if (type == 2 || type == 4 || type == 6 || type == 7)
-                return 1;
         }
         else
         {
-            uint8_t end = ((car_to_to - 1) / 16 == car_to_to / 16) ? car_to_to - 1 : car_to_to;
-            for (uint8_t i = car_to; i >= end; i--)
+            for (uint8_t i = car_to; i >= car_to_to - 1; i--)
             {
                 if (i - 16 > 0)
                 {
@@ -1466,18 +1476,17 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                     if (type == 2 || type == 4 || type == 6 || type == 7)
                         return 1;
                 }
+                uint8_t type = map[i];
+                if (type == 2 || type == 4 || type == 6 || type == 7)
+                    return 1;
             }
-            uint8_t type = map[end];
-            if (type == 2 || type == 4 || type == 6 || type == 7)
-                return 1;
         }
     }
     else if ((car_to_to % 16) == (car_to % 16))
     {
         if (car_to < car_to_to)
         {
-            uint8_t end = ((car_to_to + 16) / 16 == car_to_to / 16) ? car_to_to + 16 : car_to_to;
-            for (uint8_t i = car_to; i <= end; i += 16)
+            for (uint8_t i = car_to; i <= car_to_to + 16; i += 16)
             {
                 if (i - 1 > 0)
                 {
@@ -1491,15 +1500,14 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                     if (type == 2 || type == 4 || type == 6 || type == 7)
                         return 1;
                 }
+                uint8_t type = map[i];
+                if (type == 2 || type == 4 || type == 6 || type == 7)
+                    return 1;
             }
-            uint8_t type = map[end];
-            if (type == 2 || type == 4 || type == 6 || type == 7)
-                return 1;
         }
         else
         {
-            uint8_t end = ((car_to_to - 1) / 16 == car_to_to / 16) ? car_to_to - 1 : car_to_to;
-            for (uint8_t i = car_to; i >= end; i -= 16)
+            for (uint8_t i = car_to; i >= car_to_to - 16; i -= 16)
             {
                 if (i - 1 > 0)
                 {
@@ -1513,13 +1521,12 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                     if (type == 2 || type == 4 || type == 6 || type == 7)
                         return 1;
                 }
+                uint8_t type = map[i];
+                if (type == 2 || type == 4 || type == 6 || type == 7)
+                    return 1;
             }
-            uint8_t type = map[end];
-            if (type == 2 || type == 4 || type == 6 || type == 7)
-                return 1;
         }
     }
-
     return 0;
 }
 
