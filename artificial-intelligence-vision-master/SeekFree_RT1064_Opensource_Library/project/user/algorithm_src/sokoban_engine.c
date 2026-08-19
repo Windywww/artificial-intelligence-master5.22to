@@ -21,6 +21,17 @@ static void get_smooth_path(const WaypointPath *grid_path, const uint8_t *obstac
                             WaypointPath *out_smooth_path);
 void goal_box_giveRelation(SokobanContext *ctx);
 
+typedef struct
+{
+    uint8_t box_count;
+    uint8_t boxes[MAX_BOXES];
+    uint8_t bomb_count;
+    uint8_t bombs[MAX_BOMBS];
+} PathDynamicState;
+
+static PathDynamicState path_dynamic_state[MAP_SIZE];
+static uint16_t path_raw_length = 0U;
+
 static inline int neighbor_index(int idx, int direction)
 {
     int x = idx % WIDTH;
@@ -827,22 +838,174 @@ static void get_smooth_path(const WaypointPath *grid_path, const uint8_t *obstac
     }
 }
 
+static bool path_dynamic_state_copy(PathDynamicState *out, const State *state)
+{
+    if (out == NULL || state == NULL || state->box_count > MAX_BOXES ||
+        state->bomb_count > MAX_BOMBS)
+        return false;
+
+    out->box_count = state->box_count;
+    out->bomb_count = state->bomb_count;
+    for (uint8_t i = 0U; i < state->box_count; i++)
+    {
+        if (state->boxes[i].pos >= MAP_SIZE)
+            return false;
+        out->boxes[i] = state->boxes[i].pos;
+    }
+    for (uint8_t i = 0U; i < state->bomb_count; i++)
+    {
+        if (state->bombs[i] >= MAP_SIZE)
+            return false;
+        out->bombs[i] = state->bombs[i];
+    }
+    return true;
+}
+
+static void build_dynamic_vision_map(const PathDynamicState *state, uint8_t *dynamic_map)
+{
+    memset(dynamic_map, 0, MAP_SIZE);
+    for (uint8_t i = 0U; i < state->box_count; i++)
+    {
+        if (state->boxes[i] < MAP_SIZE)
+            dynamic_map[state->boxes[i]] = 2U;
+    }
+    for (uint8_t i = 0U; i < state->bomb_count; i++)
+    {
+        if (state->bombs[i] < MAP_SIZE)
+            dynamic_map[state->bombs[i]] = 4U;
+    }
+}
+
+static bool dynamic_vision_object_at(const uint8_t *dynamic_map, int x, int y)
+{
+    return valid_map_xy(x, y) && is_dynamic_map_object(dynamic_map[y * WIDTH + x]);
+}
+
+static bool straight_segment_has_visual_trigger(uint8_t start, uint8_t end,
+                                                const PathDynamicState *state)
+{
+    if (start >= MAP_SIZE || end >= MAP_SIZE || state == NULL)
+        return false;
+
+    int start_x = start % WIDTH;
+    int start_y = start / WIDTH;
+    int end_x = end % WIDTH;
+    int end_y = end / WIDTH;
+    int dx = end_x - start_x;
+    int dy = end_y - start_y;
+    bool horizontal = (dy == 0 && dx != 0);
+    bool vertical = (dx == 0 && dy != 0);
+    if (!horizontal && !vertical)
+        return false;
+
+    uint8_t dynamic_map[MAP_SIZE];
+    build_dynamic_vision_map(state, dynamic_map);
+    int distance = horizontal ? (dx > 0 ? dx : -dx) : (dy > 0 ? dy : -dy);
+    int step_x = horizontal ? (dx > 0 ? 1 : -1) : 0;
+    int step_y = vertical ? (dy > 0 ? 1 : -1) : 0;
+    for (int offset = 0; offset <= distance; offset++)
+    {
+        int x = start_x + step_x * offset;
+        int y = start_y + step_y * offset;
+        if (horizontal)
+        {
+            if (dynamic_vision_object_at(dynamic_map, x, y - 1) ||
+                dynamic_vision_object_at(dynamic_map, x, y + 1))
+                return true;
+        }
+        else if (dynamic_vision_object_at(dynamic_map, x - 1, y) ||
+                 dynamic_vision_object_at(dynamic_map, x + 1, y))
+        {
+            return true;
+        }
+    }
+
+    return dynamic_vision_object_at(dynamic_map, end_x + step_x, end_y + step_y);
+}
+
+static bool path_range_has_visual_trigger(const WaypointPath *raw_path,
+                                          uint16_t raw_start, uint16_t raw_end)
+{
+    if (raw_path == NULL || raw_start >= raw_end || raw_end > path_raw_length)
+        return false;
+
+    for (uint16_t i = raw_start; i < raw_end; i++)
+    {
+        if (i + 1U >= path_raw_length)
+            break;
+        if (straight_segment_has_visual_trigger(raw_path->points[i], raw_path->points[i + 1U],
+                                                &path_dynamic_state[i]))
+            return true;
+    }
+    return false;
+}
+
+static bool append_path_trace_point(WaypointPath *path, uint8_t point,
+                                    const State *state)
+{
+    if (path == NULL || state == NULL)
+        return false;
+
+    if (path->length > MAP_SIZE)
+        return false;
+
+    if (point != 255U && path->length > 0U && path->points[path->length - 1U] == point)
+    {
+        return path_dynamic_state_copy(&path_dynamic_state[path->length - 1U], state);
+    }
+
+    if (path->length >= MAP_SIZE)
+        return false;
+
+    path->points[path->length] = point;
+    if (!path_dynamic_state_copy(&path_dynamic_state[path->length], state))
+        return false;
+    path->length++;
+    return true;
+}
+
+static bool path_points_are_collinear(uint8_t first, uint8_t middle, uint8_t last)
+{
+    if (first >= MAP_SIZE || middle >= MAP_SIZE || last >= MAP_SIZE)
+        return false;
+
+    int first_x = first % WIDTH;
+    int first_y = first / WIDTH;
+    int middle_x = middle % WIDTH;
+    int middle_y = middle / WIDTH;
+    int last_x = last % WIDTH;
+    int last_y = last / WIDTH;
+    return (first_y == middle_y && middle_y == last_y &&
+            (middle_x - first_x) * (last_x - middle_x) > 0) ||
+           (first_x == middle_x && middle_x == last_x &&
+            (middle_y - first_y) * (last_y - middle_y) > 0);
+}
+
 static bool get_final_path(WaypointPath *path)
 {
+    if (path == NULL || path->length > MAP_SIZE)
+        return false;
     if (path->length == 0U)
     {
         return true;
     }
 
     uint8_t unique_points[MAP_SIZE];
+    uint16_t unique_sources[MAP_SIZE];
     int unique_len = 0;
     unique_points[unique_len++] = path->points[0];
+    unique_sources[0] = 0U;
     for (int i = 1; i < path->length; i++)
     {
 
-        if (path->points[i] != unique_points[unique_len - 1])
+        if (path->points[i] != unique_points[unique_len - 1] || path->points[i] == 255U)
         {
             unique_points[unique_len++] = path->points[i];
+            unique_sources[unique_len - 1] = (uint16_t)i;
+        }
+        else
+        {
+            unique_sources[unique_len - 1] = (uint16_t)i;
         }
     }
     if (unique_len == 1)
@@ -853,8 +1016,10 @@ static bool get_final_path(WaypointPath *path)
     }
 
     uint8_t new_points[MAP_SIZE];
+    uint16_t new_sources[MAP_SIZE];
     int new_len = 0;
     new_points[new_len++] = unique_points[0];
+    new_sources[0] = unique_sources[0];
 
     for (int i = 1; i < unique_len - 1; i++)
     {
@@ -862,35 +1027,25 @@ static bool get_final_path(WaypointPath *path)
         int c = unique_points[i];
         int n = unique_points[i + 1];
 
-        int px = p % WIDTH;
-        int py = p / WIDTH;
-        int cx = c % WIDTH;
-        int cy = c / WIDTH;
-        int nx = n % WIDTH;
-        int ny = n / WIDTH;
-        int dx1 = cx - px;
-        int dy1 = cy - py;
-        int dx2 = nx - cx;
-        int dy2 = ny - cy;
-
-        bool is_horizontal = (dy1 == 0 && dy2 == 0 && (dx1 * dx2 > 0));
-        bool is_vertical = (dx1 == 0 && dx2 == 0 && (dy1 * dy2 > 0));
-        if (!is_horizontal && !is_vertical)
+        if (!path_points_are_collinear((uint8_t)p, (uint8_t)c, (uint8_t)n))
         {
             new_points[new_len++] = c;
+            new_sources[new_len - 1] = unique_sources[i];
         }
     }
     new_points[new_len++] = unique_points[unique_len - 1];
+    new_sources[new_len - 1] = unique_sources[unique_len - 1];
 
-    // 长直线按阈值均分；斜线和延时标记保持原样。
+    // 仅在视觉触发条件成立时拆分长直线；此阶段之后不再做路径优化。
+    uint8_t final_points[MAP_SIZE];
     int final_len = 0;
-    unique_points[final_len++] = new_points[0];
+    final_points[final_len++] = new_points[0];
     for (int i = 1; i < new_len; i++)
     {
         int start = new_points[i - 1];
         int end = new_points[i];
 
-        if (start != 255 && end != 255)
+        if (start < MAP_SIZE && end < MAP_SIZE)
         {
             int start_x = start % WIDTH;
             int start_y = start / WIDTH;
@@ -899,14 +1054,14 @@ static bool get_final_path(WaypointPath *path)
             int dx = end_x - start_x;
             int dy = end_y - start_y;
             bool is_straight = (dx == 0) != (dy == 0);
+            int distance = dx != 0 ? (dx > 0 ? dx : -dx) : (dy > 0 ? dy : -dy);
 
-            if (is_straight)
+            if (is_straight && distance > MAX_L &&
+                path_range_has_visual_trigger(path, new_sources[i - 1], new_sources[i]))
             {
-                int distance = dx != 0 ? (dx > 0 ? dx : -dx) : (dy > 0 ? dy : -dy);
-                int split_count = distance / MAX_L;
-                int segment_count = split_count + 1;
+                int segment_count = (distance + MAX_L - 1) / MAX_L;
 
-                for (int split = 1; split <= split_count; split++)
+                for (int split = 1; split < segment_count; split++)
                 {
                     if (final_len >= MAP_SIZE)
                     {
@@ -917,7 +1072,7 @@ static bool get_final_path(WaypointPath *path)
                     int offset = (split * distance + segment_count / 2) / segment_count;
                     int x = start_x + (dx == 0 ? 0 : (dx > 0 ? offset : -offset));
                     int y = start_y + (dy == 0 ? 0 : (dy > 0 ? offset : -offset));
-                    unique_points[final_len++] = (uint8_t)(y * WIDTH + x);
+                    final_points[final_len++] = (uint8_t)(y * WIDTH + x);
                 }
             }
         }
@@ -926,32 +1081,95 @@ static bool get_final_path(WaypointPath *path)
         {
             return false;
         }
-        unique_points[final_len++] = (uint8_t)end;
+        final_points[final_len++] = (uint8_t)end;
     }
 
     path->length = (uint16_t)final_len;
     for (int i = 0; i < final_len; i++)
     {
-        path->points[i] = unique_points[i];
+        path->points[i] = final_points[i];
     }
     return true;
 }
+
+#ifdef SOKOBAN_ENGINE_TEST
+bool sokoban_test_straight_segment_needs_visual_split(uint8_t start, uint8_t end,
+                                                      const State *state)
+{
+    if (state == NULL)
+        return false;
+
+    PathDynamicState dynamic_state;
+    if (!path_dynamic_state_copy(&dynamic_state, state))
+        return false;
+    return straight_segment_has_visual_trigger(start, end, &dynamic_state);
+}
+
+bool sokoban_test_append_smooth_path(WaypointPath *out_path,
+                                     const WaypointPath *smooth_path,
+                                     const State *state)
+{
+    if (out_path == NULL || smooth_path == NULL || state == NULL || smooth_path->length > MAP_SIZE)
+        return false;
+
+    *out_path = *smooth_path;
+    for (uint16_t i = 0U; i < out_path->length; i++)
+        if (!path_dynamic_state_copy(&path_dynamic_state[i], state))
+            return false;
+    path_raw_length = out_path->length;
+    return get_final_path(out_path);
+}
+
+bool sokoban_test_finalize_path(WaypointPath *path, const State *states,
+                                uint16_t state_count)
+{
+    if (path == NULL || states == NULL || path->length == 0U ||
+        path->length > MAP_SIZE || state_count != path->length)
+        return false;
+
+    for (uint16_t i = 0U; i < state_count; i++)
+    {
+        if (!path_dynamic_state_copy(&path_dynamic_state[i], &states[i]))
+            return false;
+    }
+    path_raw_length = path->length;
+    return get_final_path(path);
+}
+#endif
 
 bool generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
 {
     if (ctx == NULL || out_full_path == NULL)
         return false;
 
+    out_full_path->length = 0U;
     State sim_state = ctx->initial_state;
+    PathDynamicState initial_dynamic_state;
+    if (!path_dynamic_state_copy(&initial_dynamic_state, &sim_state) ||
+        sim_state.car_pos >= MAP_SIZE)
+        return false;
     uint8_t sim_walls[MAP_SIZE];
     memcpy(sim_walls, ctx->initial_walls, MAP_SIZE);
-    out_full_path->length = 0;
     uint8_t obstacles[MAP_SIZE];
     WaypointPath micro_path;
     WaypointPath smooth_path;
     for (int i = 0; i < ctx->solution_actions_len; i++)
     {
         MacroAction act = ctx->solution_actions[i];
+
+        if (act.move_to >= MAP_SIZE || act.push_to >= MAP_SIZE)
+        {
+            out_full_path->length = 0U;
+            return false;
+        }
+        int push_dx = (int)act.push_to % WIDTH - ((int)act.move_to % WIDTH);
+        int push_dy = (int)act.push_to / WIDTH - ((int)act.move_to / WIDTH);
+        if (!((push_dx == 0 && (push_dy == 1 || push_dy == -1)) ||
+              (push_dy == 0 && (push_dx == 1 || push_dx == -1))))
+        {
+            out_full_path->length = 0U;
+            return false;
+        }
 
         memset(obstacles, 0, sizeof(obstacles));
 
@@ -977,21 +1195,26 @@ bool generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
             return false;
         }
         get_smooth_path(&micro_path, obstacles, &smooth_path);
-        uint16_t required_points = smooth_path.length + 1U + (act.is_explode ? 1U : 0U);
-        if (required_points > MAP_SIZE - out_full_path->length)
-        {
-            out_full_path->length = 0;
-            return false;
-        }
-        out_full_path->length += smooth_path.length;
         for (int p = 0; p < smooth_path.length; p++)
         {
-            out_full_path->points[out_full_path->length - smooth_path.length + p] = smooth_path.points[p];
+            if (!append_path_trace_point(out_full_path, smooth_path.points[p], &sim_state))
+            {
+                out_full_path->length = 0U;
+                return false;
+            }
         }
-        out_full_path->points[out_full_path->length++] = act.push_to;
+        if (!append_path_trace_point(out_full_path, act.push_to, &sim_state))
+        {
+            out_full_path->length = 0U;
+            return false;
+        }
         if (act.is_explode)
         {
-            out_full_path->points[out_full_path->length++] = 255; // 延时特殊标记符号
+            if (!append_path_trace_point(out_full_path, 255U, &sim_state))
+            {
+                out_full_path->length = 0U;
+                return false;
+            }
         }
         // ===========================================
 
@@ -1004,6 +1227,12 @@ bool generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
             return false;
         }
         uint8_t next_pos = (uint8_t)next_pos_index;
+        if ((push_dy == 0 && (int)next_pos / WIDTH != (int)act.push_to / WIDTH) ||
+            (push_dx == 0 && (int)next_pos % WIDTH != (int)act.push_to % WIDTH))
+        {
+            out_full_path->length = 0U;
+            return false;
+        }
 
         int entity_idx = -1;
         bool is_bomb_entity = false;
@@ -1061,7 +1290,16 @@ bool generate_path(SokobanContext *ctx, WaypointPath *out_full_path)
             }
         }
         sim_state.car_pos = act.push_to;
+        if (out_full_path->length > 0U)
+        {
+            if (!path_dynamic_state_copy(&path_dynamic_state[out_full_path->length - 1U], &sim_state))
+            {
+                out_full_path->length = 0U;
+                return false;
+            }
+        }
     }
+    path_raw_length = out_full_path->length;
     if (!get_final_path(out_full_path)) // 对整条路径进行最终的优化处理
     {
         out_full_path->length = 0;
@@ -1140,12 +1378,15 @@ typedef struct
 static uint8_t map_sync_candidate[MAP_SIZE];
 static MapRelationState map_relation_candidate;
 
-static void map_relation_load(MapRelationState *state)
+static bool map_relation_load(MapRelationState *state)
 {
+    if (state == NULL || length_mapin_goals > MAX_GOALS || length_mapin_boxes > MAX_BOXES)
+        return false;
     memcpy(state->goals, mapin_goals, sizeof(mapin_goals));
     memcpy(state->boxes, mapin_boxes, sizeof(mapin_boxes));
     state->goal_count = length_mapin_goals;
     state->box_count = length_mapin_boxes;
+    return true;
 }
 
 static void map_relation_store(const MapRelationState *state)
@@ -1191,6 +1432,7 @@ static bool map_inmove_step(uint8_t *map, MapRelationState *relations,
                             uint8_t direction, uint8_t car_loc)
 {
     if (map == NULL || relations == NULL || car_loc >= MAP_SIZE ||
+        direction > 3U || relations->goal_count > MAX_GOALS || relations->box_count > MAX_BOXES ||
         (map[car_loc] != 5U && map[car_loc] != 8U))
         return false;
 
@@ -1299,7 +1541,8 @@ static bool map_sync_car_position(uint8_t *map, uint8_t car_from, uint8_t car_to
         return true;
 
     memcpy(map_sync_candidate, map, MAP_SIZE);
-    map_relation_load(&map_relation_candidate);
+    if (!map_relation_load(&map_relation_candidate))
+        return false;
 
     if ((car_from / WIDTH) == (car_to / WIDTH))
     {
@@ -1376,7 +1619,10 @@ static uint8_t map_scan_vision_segment(const uint8_t *map, uint8_t car_from,
                 (start_row + 1U < HEIGHT && map_has_vision_object(map, start_row + 1U, col)))
                 return 1U;
         }
-        if( map_has_vision_object(map, start_row, last_col+1)){
+        int forward_col = (int)end_col + col_step;
+        if (valid_map_xy(forward_col, start_row) &&
+            map_has_vision_object(map, start_row, (uint8_t)forward_col))
+        {
             return 1U;
         }
     }
@@ -1391,7 +1637,10 @@ static uint8_t map_scan_vision_segment(const uint8_t *map, uint8_t car_from,
                 (start_col + 1U < WIDTH && map_has_vision_object(map, row, start_col + 1U)))
                 return 1U;
         }
-        if( map_has_vision_object(map, last_row+1, start_col)){
+        int forward_row = (int)end_row + row_step;
+        if (valid_map_xy(start_col, forward_row) &&
+            map_has_vision_object(map, (uint8_t)forward_row, start_col))
+        {
             return 1U;
         }
     }
