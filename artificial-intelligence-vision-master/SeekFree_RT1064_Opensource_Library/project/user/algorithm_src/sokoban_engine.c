@@ -903,7 +903,9 @@ static bool straight_segment_has_visual_trigger(uint8_t start, uint8_t end,
     int distance = horizontal ? (dx > 0 ? dx : -dx) : (dy > 0 ? dy : -dy);
     int step_x = horizontal ? (dx > 0 ? 1 : -1) : 0;
     int step_y = vertical ? (dy > 0 ? 1 : -1) : 0;
-    for (int offset = 0; offset <= distance; offset++)
+    // The correction decision belongs to the segment being entered: do not
+    // rescan the two side cells of the segment's starting point.
+    for (int offset = 1; offset <= distance; offset++)
     {
         int x = start_x + step_x * offset;
         int y = start_y + step_y * offset;
