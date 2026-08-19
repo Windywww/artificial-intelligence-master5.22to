@@ -15,6 +15,16 @@
 #ifndef SOKOBAN_MIN_WEIGHT
 #define SOKOBAN_MIN_WEIGHT 3.5f
 #endif
+// 各关卡 Weighted IDA* 初始/最低权重，可按实测速度和路径质量手动调整。
+#ifndef SOKOBAN_LEVEL1_WEIGHT
+#define SOKOBAN_LEVEL1_WEIGHT 3.0f
+#endif
+#ifndef SOKOBAN_LEVEL2_WEIGHT
+#define SOKOBAN_LEVEL2_WEIGHT 3.5f
+#endif
+#ifndef SOKOBAN_LEVEL3_WEIGHT
+#define SOKOBAN_LEVEL3_WEIGHT 3.5f
+#endif
 #ifndef MOVE_PENALTY
 #define MOVE_PENALTY 10
 #endif
@@ -1889,6 +1899,16 @@ static bool solve_recon_ida(SokobanContext *ctx, State *start_state, const bool 
 {
     ctx->total_explored_nodes = 0;
     ctx->solution_actions_len = 0;
+
+    {
+        float level_weight = SOKOBAN_LEVEL1_WEIGHT;
+        if (ctx->level_index == 1U)
+            level_weight = SOKOBAN_LEVEL2_WEIGHT;
+        else if (ctx->level_index >= 2U)
+            level_weight = SOKOBAN_LEVEL3_WEIGHT;
+        ctx->current_weight = level_weight;
+        ctx->min_weight = level_weight;
+    }
 
     ctx->initial_state.base_hash = compute_initial_base_hash(&ctx->initial_state, ctx->initial_walls);
 

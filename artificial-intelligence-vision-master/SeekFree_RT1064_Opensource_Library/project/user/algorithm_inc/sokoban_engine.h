@@ -96,6 +96,8 @@ typedef struct
     // build_map_info() 写入默认值，可在 solve() 前覆盖以平衡速度与路径质量。
     float current_weight;
     float min_weight;
+    // 当前关卡编号：0=第1关，1=第2关，2=第3关。
+    uint8_t level_index;
 
     MacroAction solution_actions[MAX_STEPS];
     uint8_t solution_actions_len;
