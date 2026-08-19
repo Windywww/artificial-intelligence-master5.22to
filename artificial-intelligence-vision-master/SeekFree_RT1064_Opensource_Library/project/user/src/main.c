@@ -356,10 +356,12 @@ static uint8_t run_round(uint8_t round_index)
         return 0;
     }
     goal_box_giveRelation(&engine_ctx);
+    engine_ctx.level_index = round_index;
     lost = 1;
     if (!solve(&engine_ctx))
     {
         build_map_info(&engine_ctx, final_map_data, 0);
+        engine_ctx.level_index = round_index;
         if (!solve(&engine_ctx))
         {
             return 0;
