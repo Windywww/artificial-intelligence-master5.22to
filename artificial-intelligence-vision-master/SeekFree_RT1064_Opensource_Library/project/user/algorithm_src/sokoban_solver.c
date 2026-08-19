@@ -100,6 +100,25 @@ static inline bool can_consume_goal(uint8_t box_type, uint8_t goal_type)
     return box_type != UNKNOWN && goal_type != UNKNOWN && box_type == goal_type;
 }
 
+// 判断箱子从 next_pos 是否仍能到达一个兼容的未完成目标。
+// UNKNOWN 目标可作为分类尚未完成时的后续归宿；NO_CLS 箱子沿用无分类规则，
+// 可匹配任意未完成目标。距离表必须已按当前墙布局和剩余炸弹数更新。
+static bool can_reach_compatible_goal(const SokobanContext *ctx, const State *state,
+                                      uint8_t box_type, uint8_t next_pos)
+{
+    for (int g = 0; g < ctx->goal_count; g++)
+    {
+        if (!(state->active_goals_mask & (1U << g)))
+            continue;
+
+        uint8_t goal_type = ctx->goals[g].id;
+        bool compatible = (goal_type == UNKNOWN || goal_type == box_type);
+        if (compatible && ctx->cached_dist_table[g][next_pos] < INF_DIST)
+            return true;
+    }
+    return false;
+}
+
 static void precalc_explosion_masks(SokobanContext *ctx)
 {
 
@@ -967,6 +986,7 @@ static SearchRes dfs_ida(SokobanContext *ctx, State *current_state, const uint8_
             {
 
                 int8_t goal_i = ctx->goal_mask_map[next_item_idx];
+                bool temporary_goal = false;
                 if (goal_i != -1 && (current_state->active_goals_mask & (1U << goal_i)) &&
                     can_consume_goal(current_box_type, ctx->goal_type_map[next_item_idx]))
                 {
@@ -974,25 +994,17 @@ static SearchRes dfs_ida(SokobanContext *ctx, State *current_state, const uint8_
                 }
                 else
                 {
-
-                    bool is_safe = false;
-                    for (int g = 0; g < ctx->goal_count; g++)
+                    if (goal_i != -1 && (current_state->active_goals_mask & (1U << goal_i)) &&
+                        current_box_type != UNKNOWN && ctx->goal_type_map[next_item_idx] != UNKNOWN &&
+                        current_box_type != ctx->goal_type_map[next_item_idx])
                     {
-                        if (current_state->active_goals_mask & (1U << g))
-                        {
-
-                            if (ctx->goals[g].id == current_box_type || current_box_type == NO_CLS)
-                            {
-
-                                if (ctx->cached_dist_table[g][next_item_idx] < INF_DIST)
-                                {
-                                    is_safe = true;
-                                    break;
-                                }
-                            }
-                        }
+                        temporary_goal = true;
                     }
-                    if (!is_safe)
+
+                    // 有炸弹时仅允许已知异类目标临时占位；无炸弹时，或
+                    // 推进到普通地面/未知目标，必须保留兼容目标可达性证明。
+                    if (!temporary_goal || (current_state->bomb_count == 0 &&
+                        !can_reach_compatible_goal(ctx, current_state, current_box_type, (uint8_t)next_item_idx)))
                         continue;
                 }
             }
@@ -1599,38 +1611,25 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
             else if (!is_bomb)
             {
                 int8_t goal_i = ctx->goal_mask_map[next_item_idx];
+                bool temporary_goal = false;
                 if (goal_i != -1 && (current_state->active_goals_mask & (1U << goal_i)))
                 {
                     uint8_t goal_type = ctx->goal_type_map[next_item_idx];
-                    if (current_box_type == UNKNOWN || goal_type == UNKNOWN)
-                    {
-                        continue;
-                    }
                     if (can_consume_goal(current_box_type, goal_type))
                     {
                         consumed = true;
                     }
+                    else if (current_box_type != UNKNOWN && goal_type != UNKNOWN && current_box_type != goal_type)
+                    {
+                        temporary_goal = true;
+                    }
                 }
                 if (!consumed)
                 {
-                    bool is_safe = false;
-                    for (int g = 0; g < ctx->goal_count; g++)
-                    {
-                        if (current_state->active_goals_mask & (1U << g))
-                        {
-
-                            if (ctx->goals[g].id == current_box_type || current_box_type == NO_CLS)
-                            {
-
-                                if (ctx->cached_dist_table[g][next_item_idx] < INF_DIST)
-                                {
-                                    is_safe = true;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if (!is_safe)
+                    // 炸弹存在时仅放宽已知异类目标；普通地面、未知目标和
+                    // 炸弹耗尽后的所有推进仍需兼容目标可达性证明。
+                    if ((!temporary_goal || current_state->bomb_count == 0) &&
+                        !can_reach_compatible_goal(ctx, current_state, current_box_type, (uint8_t)next_item_idx))
                     {
                         continue;
                     }
