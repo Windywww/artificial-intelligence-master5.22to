@@ -238,12 +238,93 @@ static void test_invalid_inputs_leave_map_intact(void)
     assert(map_check_ifgetVisionLoc(NULL, 0U, 0U) == 0U);
 }
 
+static void test_selective_visual_splitting(void)
+{
+    State state;
+    memset(&state, 0, sizeof(state));
+
+    assert(!sokoban_test_straight_segment_needs_visual_split(0U, 5U, &state));
+    assert(!sokoban_test_straight_segment_needs_visual_split(0U, 6U, &state));
+
+    state.box_count = 1U;
+    state.boxes[0].pos = 19U;
+    assert(sokoban_test_straight_segment_needs_visual_split(0U, 6U, &state));
+
+    memset(&state, 0, sizeof(state));
+    state.bomb_count = 1U;
+    state.bombs[0] = 7U;
+    assert(sokoban_test_straight_segment_needs_visual_split(0U, 6U, &state));
+
+    state.bombs[0] = 28U;
+    assert(sokoban_test_straight_segment_needs_visual_split(15U, 9U, &state));
+
+    state.bombs[0] = 49U;
+    assert(sokoban_test_straight_segment_needs_visual_split(0U, 96U, &state));
+
+    state.bombs[0] = 129U;
+    assert(sokoban_test_straight_segment_needs_visual_split(176U, 80U, &state));
+
+    memset(&state, 0, sizeof(state));
+    assert(!sokoban_test_straight_segment_needs_visual_split(9U, 15U, &state));
+    state.box_count = 1U;
+    state.boxes[0].pos = 28U;
+    assert(sokoban_test_straight_segment_needs_visual_split(9U, 15U, &state));
+    state.box_count = 0U;
+    assert(!sokoban_test_straight_segment_needs_visual_split(9U, 15U, &state));
+}
+
+static void test_split_point_distribution(void)
+{
+    State state;
+    WaypointPath smooth_path;
+    WaypointPath output;
+
+    memset(&state, 0, sizeof(state));
+    memset(&smooth_path, 0, sizeof(smooth_path));
+    memset(&output, 0, sizeof(output));
+    smooth_path.length = 2U;
+    smooth_path.points[0] = 0U;
+    smooth_path.points[1] = 11U;
+    assert(sokoban_test_append_smooth_path(&output, &smooth_path, &state));
+    assert(output.length == 2U && output.points[0] == 0U && output.points[1] == 11U);
+
+    memset(&output, 0, sizeof(output));
+    state.box_count = 1U;
+    state.boxes[0].pos = 21U;
+    assert(sokoban_test_append_smooth_path(&output, &smooth_path, &state));
+    assert(output.length == 4U);
+    assert(output.points[0] == 0U && output.points[1] == 4U);
+    assert(output.points[2] == 7U && output.points[3] == 11U);
+}
+
+static void test_generate_path_preserves_explosion_marker(void)
+{
+    SokobanContext ctx;
+    WaypointPath path;
+    memset(&ctx, 0, sizeof(ctx));
+    memset(&path, 0, sizeof(path));
+
+    ctx.initial_state.car_pos = 0U;
+    ctx.initial_state.bomb_count = 1U;
+    ctx.initial_state.bombs[0] = 2U;
+    ctx.solution_actions_len = 1U;
+    ctx.solution_actions[0] = (MacroAction){1U, 2U, true, false};
+
+    assert(generate_path(&ctx, &path));
+    assert(path.length == 4U);
+    assert(path.points[0] == 0U && path.points[1] == 1U);
+    assert(path.points[2] == 2U && path.points[3] == 255U);
+    assert(ctx.initial_state.car_pos == 2U && ctx.initial_state.bomb_count == 0U);
+}
+
 int main(void)
 {
     test_edge_paths();
     test_normal_map_updates();
     test_classified_box_updates();
     test_invalid_inputs_leave_map_intact();
+    test_selective_visual_splitting();
+    test_split_point_distribution();
+    test_generate_path_preserves_explosion_marker();
     return 0;
 }
-

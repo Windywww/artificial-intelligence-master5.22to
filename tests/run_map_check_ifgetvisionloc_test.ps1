@@ -6,7 +6,7 @@ $userRoot = Join-Path $workspaceRoot 'artificial-intelligence-vision-master\Seek
 $output = Join-Path $env:TEMP 'map_check_ifgetvisionloc_test.exe'
 
 $gccArgs = @(
-    '-std=c11', '-Wall', '-Wextra', '-fno-omit-frame-pointer',
+    '-std=c11', '-Wall', '-Wextra', '-DSOKOBAN_ENGINE_TEST', '-fno-omit-frame-pointer',
     '-ffunction-sections', '-fdata-sections', '-Wl,--gc-sections',
     '-I', (Join-Path $testRoot 'mocks'),
     '-I', (Join-Path $userRoot 'algorithm_inc'),
@@ -35,4 +35,3 @@ if ($LASTEXITCODE -ne 0)
 
 & $output
 exit $LASTEXITCODE
-
