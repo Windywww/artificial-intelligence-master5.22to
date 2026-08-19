@@ -440,11 +440,6 @@
               <FilePath>..\user\src\WIFI2SPI.c</FilePath>
             </File>
             <File>
-              <FileName>algorithm_main.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\user\algorithm_src\algorithm_main.c</FilePath>
-            </File>
-            <File>
               <FileName>sokoban_lut.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\user\algorithm_src\sokoban_lut.c</FilePath>
