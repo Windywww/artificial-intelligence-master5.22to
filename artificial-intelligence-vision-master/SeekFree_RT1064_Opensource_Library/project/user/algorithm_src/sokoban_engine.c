@@ -1175,16 +1175,21 @@ static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
             map[push_target] = 2;
             if (run_type_state == 1)
             {
+                bool found_box = false;
                 for (int j = 0; j < length_mapin_boxes; j++)
                 {
-                    if (mapin_boxes[j].pos == next_step && mapin_boxes[j].id != UNKNOWN)
+                    // 普通推动只按位置关联；未分类箱子也必须跟随更新位置。
+                    if (mapin_boxes[j].pos == next_step)
                     {
                         mapin_boxes[j].pos = push_target;
+                        found_box = true;
                         break;
                     }
-                    if(j == length_mapin_boxes-1){
-                        return_to_start_zone();
-                    }
+                }
+                if (!found_box)
+                {
+                    return_to_start_zone();
+                    return;
                 }
             }
         }
@@ -1196,37 +1201,54 @@ static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
             }
             else if (run_type_state == 1)
             {
-                // 更新箱子全局位置，直接拿到对应箱子索引
-                uint8_t box_index = 0;
+                // 目标落点必须同时找到对应箱子和目标点；两者均须已分类。
+                int box_index = -1;
                 for (int j = 0; j < length_mapin_boxes; j++)
                 {
-                    if (mapin_boxes[j].pos == next_step && mapin_boxes[j].id != UNKNOWN)
+                    if (mapin_boxes[j].pos == next_step)
                     {
-                        mapin_boxes[j].pos = push_target;
                         box_index = j;
                         break;
                     }
-                    if(j == length_mapin_boxes-1){
-                        return_to_start_zone();
+                }
+
+                int goal_index = -1;
+                for (int j = 0; j < length_mapin_goals; j++)
+                {
+                    if (mapin_goals[j].pos == push_target)
+                    {
+                        goal_index = j;
+                        break;
                     }
                 }
 
-                for (int j = 0; j < length_mapin_goals; j++)
+                if (box_index < 0 || goal_index < 0 ||
+                    mapin_boxes[box_index].id == UNKNOWN ||
+                    mapin_goals[goal_index].id == UNKNOWN)
                 {
-                    if (mapin_goals[j].pos == push_target && mapin_goals[j].id != UNKNOWN)
+                    return_to_start_zone();
+                    return;
+                }
+
+                mapin_boxes[box_index].pos = push_target;
+                if (mapin_boxes[box_index].id == mapin_goals[goal_index].id)
+                {
+                    // 消除后物理删除两条关系，避免留下 UNKNOWN 箱子占位。
+                    for (int j = box_index; j + 1 < length_mapin_boxes; j++)
                     {
-                        if (mapin_boxes[box_index].id == mapin_goals[j].id)
-                        {
-                            mapin_goals[j].id = UNKNOWN;
-                            mapin_boxes[box_index].id = UNKNOWN;
-                            map[push_target] = 0;
-                        }
-                        else
-                        {
-                            map[push_target] = 6;
-                        }
-                        break;
+                        mapin_boxes[j] = mapin_boxes[j + 1];
                     }
+                    length_mapin_boxes--;
+                    for (int j = goal_index; j + 1 < length_mapin_goals; j++)
+                    {
+                        mapin_goals[j] = mapin_goals[j + 1];
+                    }
+                    length_mapin_goals--;
+                    map[push_target] = 0;
+                }
+                else
+                {
+                    map[push_target] = 6;
                 }
             }
         }
