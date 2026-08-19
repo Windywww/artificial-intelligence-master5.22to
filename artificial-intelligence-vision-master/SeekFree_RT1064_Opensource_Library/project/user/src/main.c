@@ -52,6 +52,7 @@ extern void imu_calibrate(void);
 
 volatile float time_line = 0.0f;
 SokobanContext engine_ctx;
+static uint8_t round_returned_to_start = 0;
 static void sync_car_position();
 
 static void reset_round_runtime(void)
@@ -71,7 +72,11 @@ static void reset_round_runtime(void)
     vision_y = -1.0f;
 }
 
-void return_to_start_zone(void)
+/*
+ * 回到发车区并刷新全局地图，同时返回当前关卡是否完成。
+ * 地图中仍有箱子或未占用目的地时，需要等待视觉地图刷新后再次尝试。
+ */
+static uint8_t return_to_start_zone(void)
 {
     first_time_fix = 2;
     vision_angle_switch = 0;
@@ -136,6 +141,8 @@ void return_to_start_zone(void)
             wifi_task();
         }
     }
+    round_returned_to_start = 1;
+    return if_whitemap;
 }
 
 // 等 navigate_flag 变 0
@@ -290,6 +297,7 @@ uint8_t goal_loac[MAX_BOXES];
 
 static uint8_t run_round(uint8_t round_index)
 {
+    round_returned_to_start = 0;
     ban_map_check_ifgetVisionLoc = 1;
     WaypointPath path = {0};
     vision_run_correct_switch = 0;
@@ -374,17 +382,21 @@ static uint8_t run_round(uint8_t round_index)
     lost = 66;
     car_move(&path, angle, 0);
     wait_navigation();
+
+    /* 完成一次搬运后先回到发车区，再根据刷新后的地图判断是否重试。
+     * 成功完成关卡时不会进入地图刷新延时。
+     */
+    resurgence_time++;
+    if (return_to_start_zone())
+    {
+        return 1;
+    }
     if (resurgence_time < CHECK_TIME_MAX)
     {
-        resurgence_time++;
-        if (run_round(round_index))
-        {
-            return 1;
-        }
+        return run_round(round_index);
     }
 
-    return_to_start_zone();
-    return 1;
+    return 0;
 }
 // 停车
 static void fault_stop(void)
@@ -436,7 +448,7 @@ int main(void)
     for (uint8_t round_index = 0; round_index < ROUND_COUNT; round_index++)
     {
         resurgence_time = 0;
-        if (!run_round(round_index))
+        if (!run_round(round_index) && !round_returned_to_start)
         {
             return_to_start_zone();
         }

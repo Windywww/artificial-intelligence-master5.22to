@@ -935,6 +935,8 @@ static bool path_range_has_visual_trigger(const WaypointPath *raw_path,
     {
         if (i + 1U >= path_raw_length)
             break;
+        // path_dynamic_state[i] is the map snapshot at raw_path->points[i],
+        // so the trigger check must use this individual raw edge.
         if (straight_segment_has_visual_trigger(raw_path->points[i], raw_path->points[i + 1U],
                                                 &path_dynamic_state[i]))
             return true;
