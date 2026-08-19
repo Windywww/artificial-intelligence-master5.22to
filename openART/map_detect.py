@@ -215,6 +215,8 @@ def get_color_class(a, b):
         label=0
     elif label == 7:
         label=1
+    elif label == 8:
+        label=3
     return label
 def build_map_from_colors(colors):
     """
@@ -779,6 +781,7 @@ COLOR_CENTERS = {
     4: (71, 55),
     6: (40,-83),    #==0
     7: (22,-45),    #==1
+    8: (77,-82),    #==3
     #容易和box混，舍弃吧
     #5: (-45,13) #里中外三点取样
 }
