@@ -108,6 +108,16 @@ bool solve(SokobanContext *ctx);
 bool generate_path(SokobanContext *ctx, WaypointPath *out_full_path);
 void goal_box_giveRelation(SokobanContext *ctx);
 
+#ifdef SOKOBAN_ENGINE_TEST
+bool sokoban_test_straight_segment_needs_visual_split(uint8_t start, uint8_t end,
+                                                       const State *state);
+bool sokoban_test_append_smooth_path(WaypointPath *out_path,
+                                     const WaypointPath *smooth_path,
+                                     const State *state);
+bool sokoban_test_finalize_path(WaypointPath *path, const State *states,
+                                uint16_t state_count);
+#endif
+
 // cls：0=无分类，1=已分类，2=未知类别。
 bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls);
 uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to);
