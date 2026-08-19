@@ -986,25 +986,25 @@ static SearchRes dfs_ida(SokobanContext *ctx, State *current_state, const uint8_
             {
 
                 int8_t goal_i = ctx->goal_mask_map[next_item_idx];
+                bool active_goal = goal_i != -1 && (current_state->active_goals_mask & (1U << goal_i));
                 bool temporary_goal = false;
-                if (goal_i != -1 && (current_state->active_goals_mask & (1U << goal_i)) &&
+                if (active_goal &&
                     can_consume_goal(current_box_type, ctx->goal_type_map[next_item_idx]))
                 {
                     consumed = true; // ��������
                 }
                 else
                 {
-                    if (goal_i != -1 && (current_state->active_goals_mask & (1U << goal_i)) &&
+                    if (active_goal &&
                         current_box_type != UNKNOWN && ctx->goal_type_map[next_item_idx] != UNKNOWN &&
                         current_box_type != ctx->goal_type_map[next_item_idx])
                     {
                         temporary_goal = true;
                     }
 
-                    // 有炸弹时仅允许已知异类目标临时占位；无炸弹时，或
-                    // 推进到普通地面/未知目标，必须保留兼容目标可达性证明。
-                    if (!temporary_goal || (current_state->bomb_count == 0 &&
-                        !can_reach_compatible_goal(ctx, current_state, current_box_type, (uint8_t)next_item_idx)))
+                    // 空地不受类别约束；未完成目标只能被已知异类箱子临时占位。
+                    if (active_goal && (!temporary_goal || (current_state->bomb_count == 0 &&
+                        !can_reach_compatible_goal(ctx, current_state, current_box_type, (uint8_t)next_item_idx))))
                         continue;
                 }
             }
@@ -1611,8 +1611,9 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
             else if (!is_bomb)
             {
                 int8_t goal_i = ctx->goal_mask_map[next_item_idx];
+                bool active_goal = goal_i != -1 && (current_state->active_goals_mask & (1U << goal_i));
                 bool temporary_goal = false;
-                if (goal_i != -1 && (current_state->active_goals_mask & (1U << goal_i)))
+                if (active_goal)
                 {
                     uint8_t goal_type = ctx->goal_type_map[next_item_idx];
                     if (can_consume_goal(current_box_type, goal_type))
@@ -1626,10 +1627,11 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
                 }
                 if (!consumed)
                 {
-                    // 炸弹存在时仅放宽已知异类目标；普通地面、未知目标和
-                    // 炸弹耗尽后的所有推进仍需兼容目标可达性证明。
-                    if ((!temporary_goal || current_state->bomb_count == 0) &&
-                        !can_reach_compatible_goal(ctx, current_state, current_box_type, (uint8_t)next_item_idx))
+                    // 空地不受类别约束；未完成目标只能被已知异类箱子临时占位，
+                    // 且炸弹耗尽后还必须保留到兼容目标的反向推动可达性证明。
+                    if (active_goal && (!temporary_goal || (current_state->bomb_count == 0 &&
+                                            !can_reach_compatible_goal(ctx, current_state, current_box_type,
+                                                                       (uint8_t)next_item_idx))))
                     {
                         continue;
                     }
