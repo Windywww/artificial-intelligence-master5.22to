@@ -1211,6 +1211,8 @@ static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
                     {
                         if (mapin_boxes[box_index].id == mapin_goals[j].id)
                         {
+                            mapin_goals[j].id = UNKNOWN;
+                            mapin_boxes[box_index].id = UNKNOWN;
                             map[push_target] = 0;
                         }
                         else

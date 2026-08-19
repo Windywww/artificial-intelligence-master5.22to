@@ -106,6 +106,7 @@ bool solve(SokobanContext *ctx);
 
 // 将宏动作展开为底盘可执行的路径点。
 bool generate_path(SokobanContext *ctx, WaypointPath *out_full_path);
+void goal_box_giveRelation(SokobanContext *ctx);
 
 // cls：0=无分类，1=已分类，2=未知类别。
 bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls);

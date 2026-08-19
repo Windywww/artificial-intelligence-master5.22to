@@ -75,14 +75,23 @@ void wifi_task(void)
     // 解析上位机发送过来的参数，解析后数据会存放在seekfree_assistant_parameter数组中，可以通过在线调试的方式查看数据
     // 例程为了方便因此写在了主循环，实际使用中推荐放到周期中断等位置，需要确保函数能够及时的被调用，调用周期不超过20ms
     ReceiveData();
-    seekfree_assistant_oscilloscope_data.data[0] = global_x;
-    seekfree_assistant_oscilloscope_data.data[1] = global_y;
-    seekfree_assistant_oscilloscope_data.data[2] = target_x;
-    seekfree_assistant_oscilloscope_data.data[3] = target_y;
-    seekfree_assistant_oscilloscope_data.data[4] = actual_yaw;
-    seekfree_assistant_oscilloscope_data.data[5] = global_infor_type; // 0: 无效 1: 只要坐标 2: 只要角度 3: 坐标+角度 4: 坐标+角度+地图 5: 坐标+角度+地图+小车状态
-    seekfree_assistant_oscilloscope_data.data[6] = final_image_index; // 最终目标航向角 单位度
-    seekfree_assistant_oscilloscope_data.data[7] = (float)(imu660rb_gyro_z) / imu660rb_transition_factor[1]; 
+    // seekfree_assistant_oscilloscope_data.data[0] = global_x;
+    // seekfree_assistant_oscilloscope_data.data[1] = global_y;
+    // seekfree_assistant_oscilloscope_data.data[2] = target_x;
+    // seekfree_assistant_oscilloscope_data.data[3] = target_y;
+    // seekfree_assistant_oscilloscope_data.data[4] = actual_yaw;
+    // seekfree_assistant_oscilloscope_data.data[5] = global_infor_type; // 0: 无效 1: 只要坐标 2: 只要角度 3: 坐标+角度 4: 坐标+角度+地图 5: 坐标+角度+地图+小车状态
+    // seekfree_assistant_oscilloscope_data.data[6] = final_image_index; // 最终目标航向角 单位度
+    // seekfree_assistant_oscilloscope_data.data[7] = (float)(imu660rb_gyro_z) / imu660rb_transition_factor[1]; 
+
+    seekfree_assistant_oscilloscope_data.data[0] = target_x;
+    seekfree_assistant_oscilloscope_data.data[1] = target_y;
+    seekfree_assistant_oscilloscope_data.data[2] = global_infor_type;
+    seekfree_assistant_oscilloscope_data.data[3] = final_map_data[7*16+5];
+    seekfree_assistant_oscilloscope_data.data[4] = final_map_data[7*16+6];
+    seekfree_assistant_oscilloscope_data.data[5] = final_map_data[7*16+7]; // 0: 无效 1: 只要坐标 2: 只要角度 3: 坐标+角度 4: 坐标+角度+地图 5: 坐标+角度+地图+小车状态
+    seekfree_assistant_oscilloscope_data.data[6] = final_map_data[7*16+8]; // 最终目标航向角 单位度
+    seekfree_assistant_oscilloscope_data.data[7] = final_map_data[7*16+9]; 
     SendDataToAssistant(&seekfree_assistant_oscilloscope_data, 8);
     // system_delay_ms(13);
 }
