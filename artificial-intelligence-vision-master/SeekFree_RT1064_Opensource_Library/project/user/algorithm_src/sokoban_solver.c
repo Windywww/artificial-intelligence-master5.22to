@@ -34,7 +34,6 @@
 
 #define MAX_RECON_CANDIDATES ((MAX_BOXES + MAX_GOALS) * 4)
 
-
 typedef struct
 {
     State next_state;
@@ -49,7 +48,6 @@ typedef struct
     uint16_t g;
     uint16_t h;
 } SearchRes;
-
 
 // 哈希表结构与全局内存分配
 static uint8_t current_hash_version = 0;
@@ -984,14 +982,13 @@ static SearchRes dfs_ida(SokobanContext *ctx, State *current_state, const uint8_
             }
             else if (!is_bomb)
             {
-
                 int8_t goal_i = ctx->goal_mask_map[next_item_idx];
                 bool active_goal = goal_i != -1 && (current_state->active_goals_mask & (1U << goal_i));
                 bool temporary_goal = false;
                 if (active_goal &&
                     can_consume_goal(current_box_type, ctx->goal_type_map[next_item_idx]))
                 {
-                    consumed = true; // ��������
+                    consumed = true;
                 }
                 else
                 {
@@ -1004,7 +1001,7 @@ static SearchRes dfs_ida(SokobanContext *ctx, State *current_state, const uint8_
 
                     // 空地不受类别约束；未完成目标只能被已知异类箱子临时占位。
                     if (active_goal && (!temporary_goal || (current_state->bomb_count == 0 &&
-                        !can_reach_compatible_goal(ctx, current_state, current_box_type, (uint8_t)next_item_idx))))
+                                                            !can_reach_compatible_goal(ctx, current_state, current_box_type, (uint8_t)next_item_idx))))
                         continue;
                 }
             }
@@ -1630,8 +1627,8 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
                     // 空地不受类别约束；未完成目标只能被已知异类箱子临时占位，
                     // 且炸弹耗尽后还必须保留到兼容目标的反向推动可达性证明。
                     if (active_goal && (!temporary_goal || (current_state->bomb_count == 0 &&
-                                            !can_reach_compatible_goal(ctx, current_state, current_box_type,
-                                                                       (uint8_t)next_item_idx))))
+                                                            !can_reach_compatible_goal(ctx, current_state, current_box_type,
+                                                                                       (uint8_t)next_item_idx))))
                     {
                         continue;
                     }
