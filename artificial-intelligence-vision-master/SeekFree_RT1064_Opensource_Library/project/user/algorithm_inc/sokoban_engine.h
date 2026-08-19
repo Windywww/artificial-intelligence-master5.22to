@@ -117,5 +117,6 @@ void clear_relation_in();
 // uint8_t check_obstacle(SokobanContext *ctx, uint8_t grid_index);
 extern int angle;
 extern uint8_t run_type_state;
+void return_to_start_zone(void);
 
 #endif // SOKOBAN_ENGINE_H

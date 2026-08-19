@@ -71,7 +71,7 @@ static void reset_round_runtime(void)
     vision_y = -1.0f;
 }
 
-static void return_to_start_zone(void)
+void return_to_start_zone(void)
 {
     first_time_fix = 2;
     vision_angle_switch = 0;
@@ -259,6 +259,8 @@ uint8_t resurgence_time = 0;
  * @param round_index 0第一关 1第二关 2第三关
  * @return 1 成功 0失败
  */
+uint8_t goal_loac[MAX_BOXES];
+
 static uint8_t run_round(uint8_t round_index)
 {
     ban_map_check_ifgetVisionLoc = 1;
@@ -297,6 +299,7 @@ static uint8_t run_round(uint8_t round_index)
             }
             else if (final_map_data[i] == 3)
             {
+                goal_loac[goal_num] = i;
                 goal_num++;
             }
         }
@@ -316,7 +319,7 @@ static uint8_t run_round(uint8_t round_index)
     }
     ban_map_check_ifgetVisionLoc = 0;
     vision_run_correct_switch = 0;
-    if (!build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 1U : 1U))
+    if (!build_map_info(&engine_ctx, final_map_data, round_index == 0U ? 0U : 0U))
     {
         return 0;
     }

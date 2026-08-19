@@ -16,6 +16,8 @@ extern uint8_t same_time;
 uint8_t lost = 0;
 extern int16_t imu_gyro_z_max;
 extern int16_t imu_gyro_z_min;
+extern uint8_t goal_loac[MAX_BOXES];
+extern SokobanContext engine_ctx;
 /**
  * @brief 连wifi，连一次之后上位机软件不要断联，否则需要小车重新上电
  *
@@ -87,11 +89,12 @@ void wifi_task(void)
     seekfree_assistant_oscilloscope_data.data[0] = target_x;
     seekfree_assistant_oscilloscope_data.data[1] = target_y;
     seekfree_assistant_oscilloscope_data.data[2] = global_infor_type;
-    seekfree_assistant_oscilloscope_data.data[3] = final_map_data[7*16+5];
-    seekfree_assistant_oscilloscope_data.data[4] = final_map_data[7*16+6];
-    seekfree_assistant_oscilloscope_data.data[5] = final_map_data[7*16+7]; // 0: 无效 1: 只要坐标 2: 只要角度 3: 坐标+角度 4: 坐标+角度+地图 5: 坐标+角度+地图+小车状态
-    seekfree_assistant_oscilloscope_data.data[6] = final_map_data[7*16+8]; // 最终目标航向角 单位度
-    seekfree_assistant_oscilloscope_data.data[7] = final_map_data[7*16+9]; 
+    seekfree_assistant_oscilloscope_data.data[3] = final_map_data[goal_loac[0]];
+    seekfree_assistant_oscilloscope_data.data[4] = final_map_data[goal_loac[1]];
+    seekfree_assistant_oscilloscope_data.data[5] = final_map_data[goal_loac[2]]; // 0: 无效 1: 只要坐标 2: 只要角度 3: 坐标+角度 4: 坐标+角度+地图 5: 坐标+角度+地图+小车状态
+    seekfree_assistant_oscilloscope_data.data[6] = final_map_data[goal_loac[3]]; // 最终目标航向角 单位度
+    //seekfree_assistant_oscilloscope_data.data[7] = final_map_data[goal_loac[4]]; 
+    seekfree_assistant_oscilloscope_data.data[7] = engine_ctx.total_explored_nodes;
     SendDataToAssistant(&seekfree_assistant_oscilloscope_data, 8);
     // system_delay_ms(13);
 }
