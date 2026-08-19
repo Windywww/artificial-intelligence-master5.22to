@@ -1351,7 +1351,6 @@ static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
 uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to)
 {
     uint8_t car_from = 0;
-    uint8_t curr_car_loc;
     // 扫描获取小车当前位置，兼容5和8两种状态
     for (uint8_t i = 0; i < MAP_SIZE; i++)
     {
@@ -1361,8 +1360,7 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
             break;
         }
     }
-    curr_car_loc = car_from;
-
+    uint8_t curr_car_loc = car_from;
     // -------------------------- 水平方向同一路径直接逐格走到底 --------------------------
     if ((car_from / 16) == (car_to / 16) && car_from != car_to)
     {
@@ -1431,7 +1429,8 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
     {
         if (car_to < car_to_to)
         {
-            for (uint8_t i = car_to; i <= car_to_to + 1; i++)
+            uint8_t end = ((car_to_to + 1) / 16 == car_to_to / 16) ? car_to_to + 1 : car_to_to;
+            for (uint8_t i = car_to; i <= end; i++)
             {
                 if (i - 16 > 0)
                 {
@@ -1445,14 +1444,15 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                     if (type == 2 || type == 4 || type == 6 || type == 7)
                         return 1;
                 }
-                uint8_t type = map[i];
-                if (type == 2 || type == 4 || type == 6 || type == 7)
-                    return 1;
             }
+            uint8_t type = map[end];
+            if (type == 2 || type == 4 || type == 6 || type == 7)
+                return 1;
         }
         else
         {
-            for (uint8_t i = car_to; i >= car_to_to - 1; i--)
+            uint8_t end = ((car_to_to - 1) / 16 == car_to_to / 16) ? car_to_to - 1 : car_to_to;
+            for (uint8_t i = car_to; i >= end; i--)
             {
                 if (i - 16 > 0)
                 {
@@ -1466,17 +1466,18 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                     if (type == 2 || type == 4 || type == 6 || type == 7)
                         return 1;
                 }
-                uint8_t type = map[i];
-                if (type == 2 || type == 4 || type == 6 || type == 7)
-                    return 1;
             }
+            uint8_t type = map[end];
+            if (type == 2 || type == 4 || type == 6 || type == 7)
+                return 1;
         }
     }
     else if ((car_to_to % 16) == (car_to % 16))
     {
         if (car_to < car_to_to)
         {
-            for (uint8_t i = car_to; i <= car_to_to + 16; i += 16)
+            uint8_t end = ((car_to_to + 16) / 16 == car_to_to / 16) ? car_to_to + 16 : car_to_to;
+            for (uint8_t i = car_to; i <= end; i += 16)
             {
                 if (i - 1 > 0)
                 {
@@ -1490,14 +1491,15 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                     if (type == 2 || type == 4 || type == 6 || type == 7)
                         return 1;
                 }
-                uint8_t type = map[i];
-                if (type == 2 || type == 4 || type == 6 || type == 7)
-                    return 1;
             }
+            uint8_t type = map[end];
+            if (type == 2 || type == 4 || type == 6 || type == 7)
+                return 1;
         }
         else
         {
-            for (uint8_t i = car_to; i >= car_to_to - 16; i -= 16)
+            uint8_t end = ((car_to_to - 1) / 16 == car_to_to / 16) ? car_to_to - 1 : car_to_to;
+            for (uint8_t i = car_to; i >= end; i -= 16)
             {
                 if (i - 1 > 0)
                 {
@@ -1511,10 +1513,10 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                     if (type == 2 || type == 4 || type == 6 || type == 7)
                         return 1;
                 }
-                uint8_t type = map[i];
-                if (type == 2 || type == 4 || type == 6 || type == 7)
-                    return 1;
             }
+            uint8_t type = map[end];
+            if (type == 2 || type == 4 || type == 6 || type == 7)
+                return 1;
         }
     }
 
