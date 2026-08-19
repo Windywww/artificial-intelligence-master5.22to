@@ -401,11 +401,10 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
         {
             if (sokoban_solver_solve_recon(ctx, current_state, observation_points, virtual_obs_points))
             {
+                goal_box_giveRelation(ctx);
                 if (!generate_path(ctx, &smooth_path))
                     return false;
                 current_state = &ctx->initial_state;
-
-                goal_box_giveRelation(ctx);
 
                 if (!car_move(&smooth_path, angle, 0))
                     return false;
@@ -1101,7 +1100,6 @@ void goal_box_giveRelation(SokobanContext *ctx)
     {
         mapin_boxes[i] = ctx->initial_state.boxes[i];
     }
-    length_mapin_goals = ctx->goal_count;
     length_mapin_boxes = ctx->initial_state.box_count;
 }
 // 任务状态定义：0=无分类关卡，1=有分类侦查阶段，2=有分类推送阶段

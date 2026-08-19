@@ -323,7 +323,7 @@ static uint8_t run_round(uint8_t round_index)
     {
         return 0;
     }
-
+    goal_box_giveRelation(&engine_ctx);
     lost = 1;
     if (!solve(&engine_ctx))
     {
@@ -333,7 +333,7 @@ static uint8_t run_round(uint8_t round_index)
             return 0;
         }
     }
-
+    goal_box_giveRelation(&engine_ctx);
     generate_path(&engine_ctx, &path);
     if (path.length == 0)
     {
