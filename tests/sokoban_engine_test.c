@@ -140,6 +140,22 @@ static void test_selective_path_split(void)
     assert(sokoban_test_finalize_path(&path, states, 2U));
     assert(path.length == 2U);
 
+    // Vertical (3,1)->(3,8): an entity on the path is not a side/forward trigger.
+    memset(states, 0, sizeof(states));
+    states[0].box_count = 1U; states[0].boxes[0].pos = 83U; /* (3,5) */
+    assert(!sokoban_test_straight_segment_needs_visual_split(19U, 131U, &states[0]));
+    states[0].boxes[0].pos = 82U; /* (2,5) */
+    assert(sokoban_test_straight_segment_needs_visual_split(19U, 131U, &states[0]));
+
+    path.points[0] = 19U; path.points[1] = 131U; path.length = 2U;
+    states[1] = states[0];
+    assert(sokoban_test_finalize_path(&path, states, 2U));
+    assert(path.length == 3U);
+    path.points[0] = 19U; path.points[1] = 131U; path.length = 2U;
+    states[0].boxes[0].pos = 83U; states[1] = states[0];
+    assert(sokoban_test_finalize_path(&path, states, 2U));
+    assert(path.length == 2U);
+
     // For (1,1)->(2,1), the start-side cells (1,0)/(1,2) are not part of
     // this segment's correction decision.
     path.points[0] = 17U; path.points[1] = 18U; path.length = 2U;
@@ -229,6 +245,17 @@ static void test_dynamic_state_is_scoped_to_raw_range(void)
     assert(sokoban_test_finalize_path(&path, states, path.length));
     assert(path.length == 3U);
     assert(path.points[0] == 0U && path.points[1] == 2U && path.points[2] == 98U);
+
+    // The entity existed in the state at raw point 0, but is gone before the
+    // later edge. A check of the whole merged edge with state[0] would
+    // incorrectly trigger on the stale position near raw point 2.
+    path.points[0] = 80U; path.points[1] = 83U; path.points[2] = 86U; path.points[3] = 91U;
+    path.length = 4U;
+    memset(states, 0, sizeof(states));
+    states[0].box_count = 1U;
+    states[0].boxes[0].pos = 70U;
+    assert(sokoban_test_finalize_path(&path, states, 4U));
+    assert(path.length == 2U && path.points[0] == 80U && path.points[1] == 91U);
 }
 
 static void test_generate_path_replay_and_capacity(void)
