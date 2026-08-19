@@ -1,7 +1,8 @@
 $ErrorActionPreference = 'Stop'
 
 $testRoot = Split-Path -Parent $PSCommandPath
-$userRoot = Split-Path -Parent $testRoot
+$workspaceRoot = Split-Path -Parent $testRoot
+$userRoot = Join-Path $workspaceRoot 'artificial-intelligence-vision-master\SeekFree_RT1064_Opensource_Library\project\user'
 $output = Join-Path $env:TEMP 'map_check_ifgetvisionloc_test.exe'
 
 $gccArgs = @(
@@ -34,3 +35,4 @@ if ($LASTEXITCODE -ne 0)
 
 & $output
 exit $LASTEXITCODE
+

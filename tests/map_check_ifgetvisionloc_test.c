@@ -246,3 +246,4 @@ int main(void)
     test_invalid_inputs_leave_map_intact();
     return 0;
 }
+
