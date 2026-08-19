@@ -1101,7 +1101,8 @@ void goal_box_giveRelation(SokobanContext *ctx)
     }
 }
 
-void clear_relation_in(){
+void clear_relation_in()
+{
     for (int i = 0; i < MAX_GOALS; i++)
     {
         mapin_boxes->id = 0;
@@ -1111,7 +1112,6 @@ void clear_relation_in(){
     }
     length_mapin_boxes = 0;
     length_mapin_goals = 0;
-    
 }
 // 任务状态定义：0=无分类关卡，1=有分类侦查阶段
 uint8_t run_type_state = 0;
@@ -1182,6 +1182,9 @@ static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
                         mapin_boxes[j].pos = push_target;
                         break;
                     }
+                    if(j == length_mapin_boxes-1){
+                        return_to_start_zone();
+                    }
                 }
             }
         }
@@ -1202,6 +1205,9 @@ static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
                         mapin_boxes[j].pos = push_target;
                         box_index = j;
                         break;
+                    }
+                    if(j == length_mapin_boxes-1){
+                        return_to_start_zone();
                     }
                 }
 
@@ -1281,7 +1287,7 @@ static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
         }
 
         // 小车停在刚才碰到炸弹的点位next_step
-       if (map[next_step] == 0)
+        if (map[next_step] == 0)
         {
             map[next_step] = 5;
         }
@@ -1462,6 +1468,9 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                     if (type == 2 || type == 4 || type == 6 || type == 7)
                         return 1;
                 }
+                uint8_t type = map[i];
+                if (type == 2 || type == 4 || type == 6 || type == 7)
+                    return 1;
             }
         }
         else
@@ -1480,6 +1489,9 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                     if (type == 2 || type == 4 || type == 6 || type == 7)
                         return 1;
                 }
+                uint8_t type = map[i];
+                if (type == 2 || type == 4 || type == 6 || type == 7)
+                    return 1;
             }
         }
     }
