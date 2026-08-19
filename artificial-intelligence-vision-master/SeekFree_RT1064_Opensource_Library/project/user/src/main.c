@@ -265,6 +265,7 @@ static uint8_t run_round(uint8_t round_index)
     WaypointPath path = {0};
     vision_run_correct_switch = 0;
     reset_round_runtime();
+    clear_relation_in();
 
     vision_angle_switch = 0;
     if (if_in_carStart())

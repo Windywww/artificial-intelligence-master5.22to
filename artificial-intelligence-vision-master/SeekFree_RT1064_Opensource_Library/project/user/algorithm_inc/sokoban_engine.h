@@ -110,6 +110,7 @@ bool generate_path(SokobanContext *ctx, WaypointPath *out_full_path);
 // cls：0=无分类，1=已分类，2=未知类别。
 bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls);
 uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to);
+void clear_relation_in();
 
 // RT1064 运动控制使用的实时状态接口。
 // uint8_t check_obstacle(SokobanContext *ctx, uint8_t grid_index);
