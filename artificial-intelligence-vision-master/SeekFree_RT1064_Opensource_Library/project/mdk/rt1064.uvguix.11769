@@ -3741,9 +3741,9 @@
       </Doc>
       <Doc>
         <Name>..\user\src\main.c</Name>
-        <ColumnNumber>11</ColumnNumber>
+        <ColumnNumber>4</ColumnNumber>
         <TopLine>298</TopLine>
-        <CurrentLine>302</CurrentLine>
+        <CurrentLine>303</CurrentLine>
         <Folding>1</Folding>
         <ContractedFolders></ContractedFolders>
         <PaneID>0</PaneID>
@@ -3786,9 +3786,9 @@
       </Doc>
       <Doc>
         <Name>..\user\algorithm_src\sokoban_solver.c</Name>
-        <ColumnNumber>6</ColumnNumber>
+        <ColumnNumber>44</ColumnNumber>
         <TopLine>1</TopLine>
-        <CurrentLine>23</CurrentLine>
+        <CurrentLine>32</CurrentLine>
         <Folding>1</Folding>
         <ContractedFolders></ContractedFolders>
         <PaneID>0</PaneID>

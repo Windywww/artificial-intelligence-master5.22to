@@ -72,7 +72,7 @@ static void reset_round_runtime(void)
 }
 
 /* 回到发车区获取地图；仍有箱子或未占用目的地时等待视觉地图刷新。 */
-static void return_to_start_zone(void)
+void return_to_start_zone(void)
 {
     first_time_fix = 2;
     vision_angle_switch = 0;
