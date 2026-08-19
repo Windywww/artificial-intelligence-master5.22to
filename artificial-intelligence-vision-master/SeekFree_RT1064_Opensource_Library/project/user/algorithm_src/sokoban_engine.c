@@ -1100,7 +1100,6 @@ void goal_box_giveRelation(SokobanContext *ctx)
     {
         mapin_boxes[i] = ctx->initial_state.boxes[i];
     }
-    length_mapin_boxes = ctx->initial_state.box_count;
 }
 // 任务状态定义：0=无分类关卡，1=有分类侦查阶段，2=有分类推送阶段
 uint8_t run_type_state = 0;
