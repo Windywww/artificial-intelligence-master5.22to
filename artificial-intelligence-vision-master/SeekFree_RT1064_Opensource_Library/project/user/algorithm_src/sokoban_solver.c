@@ -29,6 +29,7 @@
 #define HASH_WAYS 4
 #define HASH_SET_COUNT (HASH_TABLE_SIZE / HASH_WAYS)
 #define HASH_SET_MASK (HASH_SET_COUNT - 1)
+#define OCCUPANCY_BYTES ((MAP_SIZE + 3) / 4)
 // 识别选点允许比最近可达视点最多多走的网格数。
 #define RECON_PATH_SLACK 2
 
@@ -62,7 +63,8 @@ __attribute__((section(".bss.sdram"))) static uint8_t transposition_versions[HAS
 __attribute__((section(".bss.sdram"))) static ChildNode all_children_pool[MAX_STEPS][MAX_BRANCHES];
 
 // 关键内部接口。
-static uint8_t is_deadlock(SokobanContext *ctx, uint8_t idx, State *state, bool is_bomb, const uint8_t *walls);
+static uint8_t is_deadlock(SokobanContext *ctx, uint8_t idx, bool is_bomb, const uint8_t *walls, const uint8_t *occupancy);
+static void build_occupancy(const State *state, uint8_t *occupancy);
 // 按当前墙布局和剩余炸弹数，构建各目标点的反向推动距离表。
 static void get_maze_distances(SokobanContext *ctx, const uint8_t *current_walls, uint8_t bomb_count);
 
@@ -453,10 +455,12 @@ static void engine_init(SokobanContext *ctx, const uint8_t *raw_map)
             }
         }
 
+        uint8_t occupancy[OCCUPANCY_BYTES];
+        build_occupancy(init_state, occupancy);
         for (uint8_t i = 0; i < init_state->box_count; i++)
         {
             uint8_t box_idx = init_state->boxes[i].pos;
-            if (is_deadlock(ctx, box_idx, init_state, false, ctx->initial_walls))
+            if (is_deadlock(ctx, box_idx, false, ctx->initial_walls, occupancy))
             {
                 for (uint8_t j = 0; j < ctx->explosion_area_count[box_idx]; j++)
                 {
@@ -605,6 +609,11 @@ static void get_maze_distances(SokobanContext *ctx, const uint8_t *current_walls
     ctx->cache_valid = true;
 }
 
+static inline void ensure_maze_distances(SokobanContext *ctx, const uint8_t *walls, uint8_t bomb_count)
+{
+    get_maze_distances(ctx, walls, bomb_count);
+}
+
 static void build_car_dist_map(uint8_t start_pos, const uint8_t *obstacles, uint8_t *dist_map)
 {
 
@@ -711,13 +720,11 @@ static void solve_assignment_km(int cost_matrix[MAX_BOXES][MAX_GOALS], int num_i
 }
 
 // 用 KM 最小权匹配汇总所有箱子到兼容目标的距离下界。
-static int calc_heuristic(SokobanContext *ctx, State *state, const uint8_t *walls)
+static int calc_heuristic_ready(SokobanContext *ctx, State *state)
 {
     // �Ѿ�ʤ��������Ϊ 0
     if (state->box_count == 0)
         return 0;
-
-    get_maze_distances(ctx, walls, state->bomb_count);
 
     // 2. �������۾��� (Cost Matrix)
     int cost_matrix[MAX_BOXES][MAX_GOALS];
@@ -800,7 +807,27 @@ static int calc_heuristic(SokobanContext *ctx, State *state, const uint8_t *wall
     return base_h + conflict_penalty;
 }
 
-static inline uint8_t get_cell_state(SokobanContext *ctx, State *state, const uint8_t *walls, int idx)
+static int calc_heuristic(SokobanContext *ctx, State *state, const uint8_t *walls)
+{
+    ensure_maze_distances(ctx, walls, state->bomb_count);
+    return calc_heuristic_ready(ctx, state);
+}
+
+static inline uint8_t occupancy_get(const uint8_t *occupancy, uint8_t idx)
+{
+    uint8_t shift = (uint8_t)((idx & 3U) * 2U);
+    return (uint8_t)((occupancy[idx >> 2] >> shift) & 3U);
+}
+
+static inline void occupancy_set(uint8_t *occupancy, uint8_t idx, uint8_t value)
+{
+    uint8_t shift = (uint8_t)((idx & 3U) * 2U);
+    uint8_t mask = (uint8_t)(3U << shift);
+    occupancy[idx >> 2] = (uint8_t)((occupancy[idx >> 2] & (uint8_t)~mask) |
+                                     ((value & 3U) << shift));
+}
+
+static inline uint8_t get_cell_state(SokobanContext *ctx, const uint8_t *walls, const uint8_t *occupancy, int idx)
 {
     if (idx < 0 || idx >= MAP_SIZE)
         return 2;
@@ -808,44 +835,43 @@ static inline uint8_t get_cell_state(SokobanContext *ctx, State *state, const ui
         return 2;
     if (walls[idx])
         return 1;
-    for (int i = 0; i < state->box_count; i++)
-    {
-        if (state->boxes[i].pos == idx)
-            return 2;
-    }
-    for (int i = 0; i < state->bomb_count; i++)
-    {
-        if (state->bombs[i] == idx)
-            return 3;
-    }
-    return 0;
+    return occupancy_get(occupancy, (uint8_t)idx);
 }
 
-static inline uint8_t get_relative_cell_state(SokobanContext *ctx, State *state,
-                                              const uint8_t *walls, uint8_t center,
+static inline uint8_t get_relative_cell_state(SokobanContext *ctx, const uint8_t *walls,
+                                              const uint8_t *occupancy, uint8_t center,
                                               int dx, int dy)
 {
     int x = center % WIDTH + dx;
     int y = center / WIDTH + dy;
     if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT)
         return 2;
-    return get_cell_state(ctx, state, walls, y * WIDTH + x);
+    return get_cell_state(ctx, walls, occupancy, y * WIDTH + x);
 }
 // O(1) 死锁判定函数
-static uint8_t is_deadlock(SokobanContext *ctx, uint8_t idx, State *state, bool is_bomb, const uint8_t *walls)
+static uint8_t is_deadlock(SokobanContext *ctx, uint8_t idx, bool is_bomb, const uint8_t *walls, const uint8_t *occupancy)
 {
     uint16_t env = 0;
-    env |= (get_relative_cell_state(ctx, state, walls, idx, -1, -1) << 0);
-    env |= (get_relative_cell_state(ctx, state, walls, idx, 0, -1) << 2);
-    env |= (get_relative_cell_state(ctx, state, walls, idx, 1, -1) << 4);
-    env |= (get_relative_cell_state(ctx, state, walls, idx, -1, 0) << 6);
-    env |= (get_relative_cell_state(ctx, state, walls, idx, 1, 0) << 8);
-    env |= (get_relative_cell_state(ctx, state, walls, idx, -1, 1) << 10);
-    env |= (get_relative_cell_state(ctx, state, walls, idx, 0, 1) << 12);
-    env |= (get_relative_cell_state(ctx, state, walls, idx, 1, 1) << 14);
+    env |= (get_relative_cell_state(ctx, walls, occupancy, idx, -1, -1) << 0);
+    env |= (get_relative_cell_state(ctx, walls, occupancy, idx, 0, -1) << 2);
+    env |= (get_relative_cell_state(ctx, walls, occupancy, idx, 1, -1) << 4);
+    env |= (get_relative_cell_state(ctx, walls, occupancy, idx, -1, 0) << 6);
+    env |= (get_relative_cell_state(ctx, walls, occupancy, idx, 1, 0) << 8);
+    env |= (get_relative_cell_state(ctx, walls, occupancy, idx, -1, 1) << 10);
+    env |= (get_relative_cell_state(ctx, walls, occupancy, idx, 0, 1) << 12);
+    env |= (get_relative_cell_state(ctx, walls, occupancy, idx, 1, 1) << 14);
 
     uint8_t required_tnt = is_bomb ? DEADLOCK_LUT_BOMB[env] : DEADLOCK_LUT_BOX[env];
     return required_tnt;
+}
+
+static void build_occupancy(const State *state, uint8_t *occupancy)
+{
+    memset(occupancy, 0, OCCUPANCY_BYTES);
+    for (uint8_t i = 0; i < state->box_count; i++)
+        occupancy_set(occupancy, state->boxes[i].pos, 2);
+    for (uint8_t i = 0; i < state->bomb_count; i++)
+        occupancy_set(occupancy, state->bombs[i], 3);
 }
 
 static inline float child_f_score(const ChildNode *child, float weight)
@@ -919,7 +945,10 @@ static SearchRes dfs_ida(SokobanContext *ctx, State *current_state, const uint8_
     ChildNode *children = all_children_pool[act_len];
     uint8_t child_count = 0;
 
-    get_maze_distances(ctx, current_walls, current_state->bomb_count);
+    ensure_maze_distances(ctx, current_walls, current_state->bomb_count);
+    uint8_t occupancy[OCCUPANCY_BYTES];
+    build_occupancy(current_state, occupancy);
+    bool parent_distances_ready = true;
 
     uint8_t obstacles[MAP_SIZE];
     memcpy(obstacles, current_walls, MAP_SIZE);
@@ -955,6 +984,11 @@ static SearchRes dfs_ida(SokobanContext *ctx, State *current_state, const uint8_
         }
         for (int d = 0; d < 4; d++)
         {
+            if (!parent_distances_ready)
+            {
+                ensure_maze_distances(ctx, current_walls, current_state->bomb_count);
+                parent_distances_ready = true;
+            }
             int next_item_idx = sokoban_neighbor_index(item_idx, d);
             int push_stand_idx = sokoban_neighbor_index(item_idx, d ^ 1);
             if (next_item_idx < 0 || push_stand_idx < 0)
@@ -1098,10 +1132,17 @@ static SearchRes dfs_ida(SokobanContext *ctx, State *current_state, const uint8_
                         }
                     }
                 }
-                if (is_deadlock(ctx, next_item_idx, &next_state, is_bomb, current_walls) > next_state.bomb_count)
+                uint8_t old_src = occupancy_get(occupancy, item_idx);
+                occupancy_set(occupancy, item_idx, 0);
+                occupancy_set(occupancy, (uint8_t)next_item_idx, is_bomb ? 3 : 2);
+                if (is_deadlock(ctx, next_item_idx, is_bomb, current_walls, occupancy) > next_state.bomb_count)
                 {
+                    occupancy_set(occupancy, item_idx, old_src);
+                    occupancy_set(occupancy, (uint8_t)next_item_idx, 0);
                     continue;
                 }
+                occupancy_set(occupancy, item_idx, old_src);
+                occupancy_set(occupancy, (uint8_t)next_item_idx, 0);
             }
 
             if (hash_table_insert_or_check(&next_state, next_g, 0))
@@ -1109,7 +1150,12 @@ static SearchRes dfs_ida(SokobanContext *ctx, State *current_state, const uint8_
                 continue;
             }
 
-            int next_h = calc_heuristic(ctx, &next_state, walls_for_eval);
+            if (exploded)
+            {
+                ensure_maze_distances(ctx, walls_for_eval, next_state.bomb_count);
+                parent_distances_ready = false;
+            }
+            int next_h = calc_heuristic_ready(ctx, &next_state);
             if (next_h >= INF_DIST)
                 continue;
             if (child_count >= MAX_BRANCHES)
@@ -1544,9 +1590,12 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
     if (f_score > threshold)
         return (SearchRes){f_score, current_g, current_h};
 
-    get_maze_distances(ctx, current_walls, current_state->bomb_count);
+    ensure_maze_distances(ctx, current_walls, current_state->bomb_count);
     uint8_t obstacles[MAP_SIZE];
     memcpy(obstacles, current_walls, MAP_SIZE);
+    uint8_t occupancy[OCCUPANCY_BYTES];
+    build_occupancy(current_state, occupancy);
+    bool parent_distances_ready = true;
     for (int i = 0; i < current_state->box_count; i++)
         obstacles[current_state->boxes[i].pos] = 1;
     for (int i = 0; i < current_state->bomb_count; i++)
@@ -1580,6 +1629,11 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
 
         for (int d = 0; d < 4; d++)
         {
+            if (!parent_distances_ready)
+            {
+                ensure_maze_distances(ctx, current_walls, current_state->bomb_count);
+                parent_distances_ready = true;
+            }
             int next_item_idx = sokoban_neighbor_index(item_idx, d);
             int push_stand_idx = sokoban_neighbor_index(item_idx, d ^ 1);
             if (next_item_idx < 0 || push_stand_idx < 0)
@@ -1694,6 +1748,8 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
                     }
                 }
                 walls_for_eval = temp_walls;
+                ensure_maze_distances(ctx, walls_for_eval, next_state.bomb_count);
+                parent_distances_ready = false;
             }
             else if (consumed)
             {
@@ -1740,10 +1796,17 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
                         }
                     }
                 }
-                if (is_deadlock(ctx, next_item_idx, &next_state, is_bomb, walls_for_eval) > next_state.bomb_count)
+                uint8_t old_src = occupancy_get(occupancy, item_idx);
+                occupancy_set(occupancy, item_idx, 0);
+                occupancy_set(occupancy, (uint8_t)next_item_idx, is_bomb ? 3 : 2);
+                if (is_deadlock(ctx, next_item_idx, is_bomb, walls_for_eval, occupancy) > next_state.bomb_count)
                 {
+                    occupancy_set(occupancy, item_idx, old_src);
+                    occupancy_set(occupancy, (uint8_t)next_item_idx, 0);
                     continue;
                 }
+                occupancy_set(occupancy, item_idx, old_src);
+                occupancy_set(occupancy, (uint8_t)next_item_idx, 0);
             }
 
             if (virtual_obs_points[item_idx] && !obs_points[item_idx])
