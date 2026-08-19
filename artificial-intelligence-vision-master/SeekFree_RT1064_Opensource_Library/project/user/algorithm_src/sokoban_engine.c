@@ -55,6 +55,7 @@ static inline bool can_consume_goal(uint8_t box_type, uint8_t goal_type)
 
 bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
 {
+    run_type_state = cls;
     if (ctx == NULL || raw_map == NULL)
         return false;
 
@@ -64,7 +65,6 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
     State *current_state = &ctx->initial_state;
     if (cls == 0)
     {
-        run_type_state = 0;
         for (uint8_t j = 0; j < current_state->box_count; j++)
         {
             current_state->boxes[j].id = NO_CLS;
@@ -76,16 +76,14 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
         }
         return true;
     }
-    run_type_state = 1;
     // 只有一对儿的情况
-    if(ctx->goal_count==1 && ctx->initial_state.box_count==1)
+    if (ctx->goal_count == 1 && ctx->initial_state.box_count == 1)
     {
         ctx->goals[0].id = 1;
         current_state->boxes[0].id = 1;
         return true;
     }
 
-    
     uint8_t unid_boxes = current_state->box_count;
     uint8_t unid_goals = ctx->goal_count;
     // Each bit records a failed target direction from this viewpoint.
@@ -336,6 +334,7 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
                         ctx->goals[j].id = NO_CLS;
                         ctx->goal_type_map[ctx->goals[j].pos] = NO_CLS;
                     }
+                    run_type_state = 0;
                     return true;
                 }
             }
@@ -1101,7 +1100,20 @@ void goal_box_giveRelation(SokobanContext *ctx)
         mapin_boxes[i] = ctx->initial_state.boxes[i];
     }
 }
-// 任务状态定义：0=无分类关卡，1=有分类侦查阶段，2=有分类推送阶段
+
+void clear_relation_in(){
+    for (int i = 0; i < MAX_GOALS; i++)
+    {
+        mapin_boxes->id = 0;
+        mapin_goals->id = 0;
+        mapin_boxes->pos = 0;
+        mapin_goals->pos = 0;
+    }
+    length_mapin_boxes = 0;
+    length_mapin_goals = 0;
+    
+}
+// 任务状态定义：0=无分类关卡，1=有分类侦查阶段
 uint8_t run_type_state = 0;
 // 上下左右，0123
 static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
@@ -1192,6 +1204,7 @@ static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
                         break;
                     }
                 }
+
                 for (int j = 0; j < length_mapin_goals; j++)
                 {
                     if (mapin_goals[j].pos == push_target && mapin_goals[j].id != UNKNOWN)
@@ -1211,8 +1224,11 @@ static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
         }
 
         // 小车停在刚才碰到箱子的点位next_step
-        map[next_step] = 5;
-        if (map[next_step] == 3) // 如果刚才恢复的是3号目的地，这里转成车+目的地混合体
+        if (map[next_step] == 0)
+        {
+            map[next_step] = 5;
+        }
+        else if (map[next_step] == 3)
         {
             map[next_step] = 8;
         }
@@ -1263,8 +1279,11 @@ static void map_inmove_step(uint8_t *map, uint8_t direction, uint8_t car_loc)
         }
 
         // 小车停在刚才碰到炸弹的点位next_step
-        map[next_step] = 5;
-        if (map[next_step] == 3)
+       if (map[next_step] == 0)
+        {
+            map[next_step] = 5;
+        }
+        else if (map[next_step] == 3)
         {
             map[next_step] = 8;
         }
@@ -1396,6 +1415,9 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                     if (type == 2 || type == 4 || type == 6 || type == 7)
                         return 1;
                 }
+                uint8_t type = map[i];
+                if (type == 2 || type == 4 || type == 6 || type == 7)
+                    return 1;
             }
         }
         else
@@ -1414,6 +1436,9 @@ uint8_t map_check_ifgetVisionLoc(uint8_t *map, uint8_t car_to, uint8_t car_to_to
                     if (type == 2 || type == 4 || type == 6 || type == 7)
                         return 1;
                 }
+                uint8_t type = map[i];
+                if (type == 2 || type == 4 || type == 6 || type == 7)
+                    return 1;
             }
         }
     }
