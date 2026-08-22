@@ -29,8 +29,11 @@
 #define HASH_WAYS 4
 #define HASH_SET_COUNT (HASH_TABLE_SIZE / HASH_WAYS)
 #define HASH_SET_MASK (HASH_SET_COUNT - 1)
-// 识别选点只保留当前最短可达视点。
-#define RECON_PATH_SLACK 0
+#ifndef RECON_PATH_SLACK
+#define RECON_PATH_SLACK 2U
+#endif
+#define RECON_ROUTE_LIMIT 18U
+#define RECON_MAX_ROUTE_LENGTH (RECON_ROUTE_LIMIT - RECON_PATH_SLACK)
 
 #define MAX_RECON_CANDIDATES ((MAX_BOXES + MAX_GOALS) * 4)
 
@@ -460,7 +463,7 @@ static void engine_init(SokobanContext *ctx, const uint8_t *raw_map)
 
     }
 
-    uint32_t required_tnt_total = 0;
+    uint16_t required_tnt_total = 0;
     for (uint8_t i = 0; i < init_state->box_count; i++)
     {
         uint8_t box_idx = init_state->boxes[i].pos;
@@ -479,7 +482,7 @@ static void engine_init(SokobanContext *ctx, const uint8_t *raw_map)
             }
         }
     }
-    ctx->deadlock_required_tnt = (required_tnt_total > UINT16_MAX) ? UINT16_MAX : (uint16_t)required_tnt_total;
+    ctx->deadlock_required_tnt = (required_tnt_total > UINT8_MAX) ? UINT8_MAX : (uint8_t)required_tnt_total;
     if (!ctx->has_absolute_deadlock && ctx->initial_tnt_count > ctx->deadlock_required_tnt)
         ctx->redundant_tnt = (uint8_t)(ctx->initial_tnt_count - ctx->deadlock_required_tnt);
     get_maze_distances(ctx, ctx->initial_walls, init_state->bomb_count);
@@ -1573,7 +1576,8 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
         obstacles[current_state->bombs[i]] = 1;
 
     WaypointPath temp_path;
-    if (get_nearest_path(current_state->car_pos, obs_points, obstacles, &temp_path))
+    if (get_nearest_path(current_state->car_pos, obs_points, obstacles, &temp_path) &&
+        temp_path.length <= RECON_MAX_ROUTE_LENGTH)
     {
         ctx->solution_actions_len = act_len;
         for (int i = 0; i < act_len; i++)

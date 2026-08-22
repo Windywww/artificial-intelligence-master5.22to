@@ -150,7 +150,7 @@ int main(void) {
     printf("Map Size: %d x %d (Total: %d cells)\n\n", WIDTH, HEIGHT, MAP_SIZE);
 
     clock_t start_time = clock();
-    build_map_info(&engine_ctx, a3, 0);
+    build_map_info(&engine_ctx, a3, 1);
     printf("TNT budget: initial=%u required=%u redundant=%u absolute=%u\n",
            engine_ctx.initial_tnt_count, engine_ctx.deadlock_required_tnt,
            engine_ctx.redundant_tnt, engine_ctx.has_absolute_deadlock ? 1U : 0U);

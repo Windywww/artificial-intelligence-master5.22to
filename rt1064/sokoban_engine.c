@@ -32,9 +32,11 @@
 #define HASH_WAYS 4
 #define HASH_SET_COUNT (HASH_TABLE_SIZE / HASH_WAYS)
 #define HASH_SET_MASK (HASH_SET_COUNT - 1)
-// 识别选点只保留当前最短可达视点。
-#define RECON_PATH_SLACK 0
+#ifndef RECON_PATH_SLACK
+#define RECON_PATH_SLACK 2U
+#endif
 #define RECON_ROUTE_LIMIT 18U
+#define RECON_MAX_ROUTE_LENGTH (RECON_ROUTE_LIMIT - RECON_PATH_SLACK)
 #define MAX_RECON_CANDIDATES ((MAX_BOXES + MAX_GOALS) * 4)
 
 typedef struct
@@ -1561,7 +1563,8 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
         obstacles[current_state->bombs[i]] = 1;
 
     WaypointPath temp_path;
-    if (get_nearest_path(current_state->car_pos, obs_points, obstacles, &temp_path))
+    if (get_nearest_path(current_state->car_pos, obs_points, obstacles, &temp_path) &&
+        temp_path.length <= RECON_MAX_ROUTE_LENGTH)
     {
         ctx->solution_actions_len = act_len;
         for (int i = 0; i < act_len; i++)
@@ -2007,7 +2010,7 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
         if (select_recon_candidate(current_state->car_pos, recon_angle_to_direction(recon_angle),
                                    candidates, candidate_count, obstacles, &selected_candidate) &&
             get_micro_path(current_state->car_pos, selected_candidate.pos, obstacles, &path) &&
-            !(ctx->redundant_tnt > 0U && path.length >= RECON_ROUTE_LIMIT))
+            !(ctx->redundant_tnt > 0U && path.length > RECON_MAX_ROUTE_LENGTH))
         {
             uint8_t final_pos = selected_candidate.pos;
             uint8_t target_info = selected_candidate.target_info;
@@ -2058,7 +2061,7 @@ void build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
 
             static uint8_t mock_ids[] = {3, 3, 9, 8, 4, 4};
             static int mock_idx = 0;
-            uint8_t recognized_id = mock_ids[mock_idx++];
+            uint8_t recognized_id = NO_CLS;
 
             // uint8_t recognized_id = NO_CLS;
             // recognized_id = final_image_index;
