@@ -386,7 +386,7 @@ void uart4_rx_interrupt_handler(void)
         if (get_data == test_rx_local)
         {
             test_rx_local_same_time++;
-            if (test_rx_local_same_time >= 2)
+            if (test_rx_local_same_time >= 5)
             {
                 test_rx_local_same_time = 0;
                 image_rx_state = 0;

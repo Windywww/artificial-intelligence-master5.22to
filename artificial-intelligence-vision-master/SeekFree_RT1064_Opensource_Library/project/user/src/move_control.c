@@ -323,7 +323,7 @@ void navigation_update(void)
             if (path_x >= 0 && path_x < WIDTH && path_y >= 0 && path_y < HEIGHT)
             {
                 uint8_t path_index = (uint8_t)(path_y * WIDTH + path_x);
-                map_check_ifgetVisionLoc(final_map_data, path_index, path_index);
+                // map_check_ifgetVisionLoc(final_map_data, path_index, path_index);
             }
         }
 
@@ -467,10 +467,15 @@ void navigation_update(void)
                         car_to_to = car_to;
                     }
                 }
+                // if (car_to >= 0 && car_to < MAP_SIZE && car_to_to >= 0 && car_to_to < MAP_SIZE &&
+                //     map_check_ifgetVisionLoc(final_map_data, (uint8_t)car_to, (uint8_t)car_to_to) &&
+                //     vision_distance_num_plus >= VISION_CORRECT_DISTANCE && CORRECT_MODE == 2)
+                // {
                 if (car_to >= 0 && car_to < MAP_SIZE && car_to_to >= 0 && car_to_to < MAP_SIZE &&
-                    map_check_ifgetVisionLoc(final_map_data, (uint8_t)car_to, (uint8_t)car_to_to) &&
                     vision_distance_num_plus >= VISION_CORRECT_DISTANCE && CORRECT_MODE == 2)
                 {
+
+
                     // 节点是否视觉矫正判定的相关参数归零
                     vision_point_num = 0;
                     vision_distance_num = 0;

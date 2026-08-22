@@ -53,6 +53,7 @@ extern void imu_calibrate(void);
 volatile float time_line = 0.0f;
 SokobanContext engine_ctx;
 static void sync_car_position();
+void turn_360();
 
 static void reset_round_runtime(void)
 {
@@ -95,6 +96,7 @@ void return_to_start_zone(void)
         }
     }
     want_global_infor(1);
+    system_delay_ms(50);
     while (global_infor_type != 5)
     {
         switch (global_infor_type)
@@ -127,15 +129,15 @@ void return_to_start_zone(void)
         system_delay_ms(3000);
     }
     system_delay_ms(40);
-    sync_car_position();
-    car_move_point(0.3, 1.2, angle, 0);
-    while (navigate_flag)
-    {
-        if (IF_WIFI)
-        {
-            wifi_task();
-        }
-    }
+    // sync_car_position();
+    // car_move_point(0.3, 1.2, angle, 0);
+    // while (navigate_flag)
+    // {
+    //     if (IF_WIFI)
+    //     {
+    //         wifi_task();
+    //     }
+    // }
 }
 
 // 等 navigate_flag 变 0
@@ -307,6 +309,9 @@ static uint8_t run_round(uint8_t round_index)
         sync_car_angle();
     }
 
+    // if(round_index == 2){
+    //     return 0;
+    // }
     // 获取地图
     while (1)
     {
@@ -425,9 +430,7 @@ int main(void)
     interrupt_set_priority(PIT_IRQn, 1); // 设置 PIT 中断优先级为 1
 
     interrupt_global_enable(0);
-
     system_delay_ms(600);
-
     if (CORRECT_MODE != 0)
     {
         sync_car_position();
@@ -436,13 +439,15 @@ int main(void)
     for (uint8_t round_index = 0; round_index < ROUND_COUNT; round_index++)
     {
         resurgence_time = 0;
+
         if (!run_round(round_index))
         {
             return_to_start_zone();
         }
     }
+    system_delay_ms(250);
+    turn_360();
     // 第三关完成后保持停车，同时继续处理通信。
-    car_stop();
     while (1)
     {
         if (IF_WIFI)
@@ -450,7 +455,7 @@ int main(void)
             wifi_task();
         }
     }
-    // NVIC_SystemReset(); // 复位
+    NVIC_SystemReset(); // 复位
     return 0;
 }
 
@@ -537,6 +542,22 @@ void pit_ch1_handler(void)
         actual_yaw -= 360.0f;
     while (actual_yaw < -180.0f)
         actual_yaw += 360.0f;
+}
+void turn_360()
+{
+    while (navigate_flag)
+    {
+    }
+    while (!yaw_arrived_flag)
+    {
+    }
+    for (uint8_t i = 0; i < 4; i++)
+    {
+        car_turn(actual_yaw + 90);
+        while (!yaw_arrived_flag)
+        {
+        }
+    }
 }
 
 float time_for_vision_loac = 0;
