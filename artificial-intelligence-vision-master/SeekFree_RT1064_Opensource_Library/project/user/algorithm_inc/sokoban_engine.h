@@ -74,6 +74,10 @@ typedef struct
     uint8_t boundary_walls[MAP_SIZE];
     bool map_valid;
     State initial_state;
+    uint8_t initial_tnt_count;
+    uint16_t deadlock_required_tnt;
+    uint8_t redundant_tnt;
+    bool has_absolute_deadlock;
     int8_t dir_offsets[4];
 
     // 每个爆炸中心最多影响其 3x3 邻域内的九个格子。

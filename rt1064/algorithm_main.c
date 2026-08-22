@@ -34,7 +34,7 @@ const uint8_t a3[192] = {
     1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, // R3
     1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, // R4
     1, 0, 0, 0, 1, 0, 2, 1, 0, 1, 0, 4, 0, 0, 0, 1, // R5
-    1, 0, 0, 0, 1, 0, 0, 3, 0, 0, 0, 0, 1, 2, 0, 1, // R6
+    1, 5, 0, 0, 1, 0, 0, 3, 0, 0, 0, 0, 1, 2, 0, 1, // R6
     1, 0, 0, 0, 1, 3, 0, 0, 1, 0, 2, 0, 0, 0, 0, 1, // R7
     1, 0, 4, 1, 0, 2, 1, 0, 0, 2, 0, 0, 0, 0, 0, 1, // R8
     1, 0, 0, 1, 0, 3, 0, 0, 3, 0, 0, 0, 1, 0, 0, 1, // R9
@@ -151,6 +151,9 @@ int main(void) {
 
     clock_t start_time = clock();
     build_map_info(&engine_ctx, a3, 0);
+    printf("TNT budget: initial=%u required=%u redundant=%u absolute=%u\n",
+           engine_ctx.initial_tnt_count, engine_ctx.deadlock_required_tnt,
+           engine_ctx.redundant_tnt, engine_ctx.has_absolute_deadlock ? 1U : 0U);
     bool success = solve(&engine_ctx);
     clock_t end_time = clock();
 
@@ -158,6 +161,14 @@ int main(void) {
     printf("\n========================================\n");
     if (success) {
         printf("成功获取了 %d 组微观行驶点集。\n", engine_ctx.solution_actions_len);
+        unsigned explode_count = 0;
+        for (uint8_t i = 0; i < engine_ctx.solution_actions_len; i++)
+            explode_count += engine_ctx.solution_actions[i].is_explode ? 1U : 0U;
+        printf("TNT explosions in solution: %u; redundant consumed=%u; remaining=%u\n",
+               explode_count,
+               explode_count > engine_ctx.deadlock_required_tnt
+                   ? (unsigned)(explode_count - engine_ctx.deadlock_required_tnt) : 0U,
+               engine_ctx.initial_tnt_count - explode_count);
         // 生成完整轨迹
         WaypointPath path;
         path.length = 0;

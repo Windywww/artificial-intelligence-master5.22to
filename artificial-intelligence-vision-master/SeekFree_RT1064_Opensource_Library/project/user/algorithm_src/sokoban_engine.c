@@ -12,6 +12,7 @@
 #define UNKNOWN 11
 #define ERROR 99.0f
 #define MAX_RECON_CANDIDATES ((MAX_BOXES + MAX_GOALS) * 4)
+#define RECON_ROUTE_LIMIT 18U
 
 int angle = 0;
 
@@ -185,7 +186,8 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
         // 在线选点负责降低识别阶段原地旋转；实际移动仍由 get_micro_path() 生成严格最短单段路径。
         if (sokoban_solver_select_recon_candidate(current_state->car_pos, sokoban_recon_angle_to_direction(angle),
                                                   candidates, candidate_count, obstacles, &selected_candidate) &&
-            get_micro_path(current_state->car_pos, selected_candidate.pos, obstacles, &path))
+            get_micro_path(current_state->car_pos, selected_candidate.pos, obstacles, &path) &&
+            !(ctx->redundant_tnt > 0U && path.length >= RECON_ROUTE_LIMIT))
         {
             uint8_t final_pos = selected_candidate.pos;
             uint8_t target_info = selected_candidate.target_info;

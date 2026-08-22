@@ -29,8 +29,8 @@
 #define HASH_WAYS 4
 #define HASH_SET_COUNT (HASH_TABLE_SIZE / HASH_WAYS)
 #define HASH_SET_MASK (HASH_SET_COUNT - 1)
-// 识别选点允许比最近可达视点最多多走的网格数。
-#define RECON_PATH_SLACK 2
+// 识别选点只保留当前最短可达视点。
+#define RECON_PATH_SLACK 0
 
 #define MAX_RECON_CANDIDATES ((MAX_BOXES + MAX_GOALS) * 4)
 
@@ -288,6 +288,10 @@ static void engine_init(SokobanContext *ctx, const uint8_t *raw_map)
     init_state->car_pos = 0;
     init_state->box_count = 0;
     init_state->bomb_count = 0;
+    ctx->initial_tnt_count = 0;
+    ctx->deadlock_required_tnt = 0;
+    ctx->redundant_tnt = 0;
+    ctx->has_absolute_deadlock = false;
     memset(ctx->initial_walls, 0, sizeof(ctx->initial_walls));
     ctx->cache_valid = false;
     ctx->current_weight = SOKOBAN_CURRENT_WEIGHT;
@@ -377,6 +381,7 @@ static void engine_init(SokobanContext *ctx, const uint8_t *raw_map)
         init_state->active_goals_mask = 0;
     }
     precalc_explosion_masks(ctx);
+    ctx->initial_tnt_count = init_state->bomb_count;
 
     if (init_state->bomb_count > 0)
     {
@@ -453,23 +458,30 @@ static void engine_init(SokobanContext *ctx, const uint8_t *raw_map)
             }
         }
 
-        for (uint8_t i = 0; i < init_state->box_count; i++)
-        {
-            uint8_t box_idx = init_state->boxes[i].pos;
-            if (is_deadlock(ctx, box_idx, init_state, false, ctx->initial_walls))
-            {
-                for (uint8_t j = 0; j < ctx->explosion_area_count[box_idx]; j++)
-                {
-                    uint8_t n_idx = ctx->explosion_areas[box_idx][j];
+    }
 
-                    if (ctx->initial_walls[n_idx] != WALL_NONE && !ctx->boundary_walls[n_idx])
-                    {
-                        ctx->initial_walls[n_idx] = WALL_DEADLOCK;
-                    }
-                }
+    uint32_t required_tnt_total = 0;
+    for (uint8_t i = 0; i < init_state->box_count; i++)
+    {
+        uint8_t box_idx = init_state->boxes[i].pos;
+        uint8_t required_tnt = is_deadlock(ctx, box_idx, init_state, false, ctx->initial_walls);
+        if (required_tnt == UINT8_MAX)
+            ctx->has_absolute_deadlock = true;
+        else
+            required_tnt_total += required_tnt;
+        if (required_tnt > 0)
+        {
+            for (uint8_t j = 0; j < ctx->explosion_area_count[box_idx]; j++)
+            {
+                uint8_t n_idx = ctx->explosion_areas[box_idx][j];
+                if (ctx->initial_walls[n_idx] != WALL_NONE && !ctx->boundary_walls[n_idx])
+                    ctx->initial_walls[n_idx] = WALL_DEADLOCK;
             }
         }
     }
+    ctx->deadlock_required_tnt = (required_tnt_total > UINT16_MAX) ? UINT16_MAX : (uint16_t)required_tnt_total;
+    if (!ctx->has_absolute_deadlock && ctx->initial_tnt_count > ctx->deadlock_required_tnt)
+        ctx->redundant_tnt = (uint8_t)(ctx->initial_tnt_count - ctx->deadlock_required_tnt);
     get_maze_distances(ctx, ctx->initial_walls, init_state->bomb_count);
 }
 
@@ -1469,6 +1481,14 @@ static bool select_recon_candidate(uint8_t start_pos, uint8_t current_direction,
     return true;
 }
 
+static inline bool recon_can_use_bomb(const SokobanContext *ctx, const State *state)
+{
+    if (ctx->redundant_tnt == 0 || state->bomb_count > ctx->initial_tnt_count)
+        return false;
+    uint8_t used_tnt = (uint8_t)(ctx->initial_tnt_count - state->bomb_count);
+    return used_tnt < ctx->redundant_tnt;
+}
+
 // 估计小车到最近可用识别视点的破障/绕行代价。
 static int calc_recon_heuristic(SokobanContext *ctx, State *state, const bool *obs_points, const uint8_t *walls)
 {
@@ -1510,7 +1530,7 @@ static int calc_recon_heuristic(SokobanContext *ctx, State *state, const bool *o
             uint16_t step_cost = 1;
             if (walls[n_idx])
             {
-                if (state->bomb_count == 0)
+                if (!recon_can_use_bomb(ctx, state))
                     continue;
                 step_cost += wall_action_penalty(walls[n_idx]);
             }
@@ -1577,6 +1597,8 @@ static SearchRes dfs_ida_recon(SokobanContext *ctx, State *current_state, const 
         uint8_t item_idx = all_items[i];
         bool is_bomb = (i >= current_state->box_count);
         uint8_t current_box_type = is_bomb ? 0 : current_state->boxes[i].id;
+        if (is_bomb && !recon_can_use_bomb(ctx, current_state))
+            continue;
 
         for (int d = 0; d < 4; d++)
         {
