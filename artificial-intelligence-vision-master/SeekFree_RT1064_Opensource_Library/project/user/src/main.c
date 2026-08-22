@@ -45,8 +45,6 @@
 #include "sokoban_engine.h"
 
 #define ROUND_COUNT 3U
-#define ROUND_CLEAR_WAIT_MS 600U
-#define ROUND_MAP_SETTLE_MS 1200U
 #define START_ZONE_GRID_INDEX (0U + 6U * WIDTH)
 extern void imu_calibrate(void);
 
@@ -128,16 +126,9 @@ void return_to_start_zone(void)
     {
         system_delay_ms(3000);
     }
+
+
     system_delay_ms(40);
-    // sync_car_position();
-    // car_move_point(0.3, 1.2, angle, 0);
-    // while (navigate_flag)
-    // {
-    //     if (IF_WIFI)
-    //     {
-    //         wifi_task();
-    //     }
-    // }
 }
 
 // 等 navigate_flag 变 0
@@ -296,7 +287,6 @@ static uint8_t run_round(uint8_t round_index)
     WaypointPath path = {0};
     vision_run_correct_switch = 0;
     reset_round_runtime();
-    clear_relation_in();
 
     vision_angle_switch = 0;
     if (if_in_carStart())
@@ -359,7 +349,6 @@ static uint8_t run_round(uint8_t round_index)
     {
         return 0;
     }
-    goal_box_giveRelation(&engine_ctx);
     lost = 1;
     if (!solve(&engine_ctx))
     {
@@ -369,7 +358,6 @@ static uint8_t run_round(uint8_t round_index)
             return 0;
         }
     }
-    goal_box_giveRelation(&engine_ctx);
     generate_path(&engine_ctx, &path);
     if (path.length == 0)
     {

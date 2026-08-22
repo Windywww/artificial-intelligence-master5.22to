@@ -162,8 +162,7 @@ void wheel_speed_calculate(float vx, float vy, float vz)
 float local_encoder_vx = 0.0f;
 float local_encoder_vy = 0.0f;
 
-// 比赛版本0.925,0.97
-float vx_encoder_index = 0.925f;
+float vx_encoder_index = 0.962f;
 float vy_encoder_index = 0.96f;
 /**
  * @brief 里程计更新
@@ -213,7 +212,7 @@ float last_error_x = 0.0f;
 float last_error_y = 0.0f;
 float last_global_target_vx = 0.0f; // 全局坐标系下的目标速度
 float last_global_target_vy = 0.0f; // 全局坐标系下
-float amax = 1.6f;                  // 最大加速度 m/s^2
+float amax = 3.2f;                  // 最大加速度 m/s^2
 float max_speed = 1.2f;             // 最大速度 m/s
 // 分别在最后一个点与其它节点起到延时作用
 uint8_t count_A = 0;
@@ -315,18 +314,6 @@ void navigation_update(void)
     {
         target_vx = 0.0f;
         target_vy = 0.0f;
-
-        if (!ban_map_check_ifgetVisionLoc)
-        {
-            int path_x = round_int((target_x - 0.1f) / 0.2f);
-            int path_y = round_int((2.3f - target_y) / 0.2f);
-            if (path_x >= 0 && path_x < WIDTH && path_y >= 0 && path_y < HEIGHT)
-            {
-                uint8_t path_index = (uint8_t)(path_y * WIDTH + path_x);
-                // map_check_ifgetVisionLoc(final_map_data, path_index, path_index);
-            }
-        }
-
         if (walk_mode == 4)
         {
             if (count_A <= 100)
@@ -467,10 +454,6 @@ void navigation_update(void)
                         car_to_to = car_to;
                     }
                 }
-                // if (car_to >= 0 && car_to < MAP_SIZE && car_to_to >= 0 && car_to_to < MAP_SIZE &&
-                //     map_check_ifgetVisionLoc(final_map_data, (uint8_t)car_to, (uint8_t)car_to_to) &&
-                //     vision_distance_num_plus >= VISION_CORRECT_DISTANCE && CORRECT_MODE == 2)
-                // {
                 if (car_to >= 0 && car_to < MAP_SIZE && car_to_to >= 0 && car_to_to < MAP_SIZE &&
                     vision_distance_num_plus >= VISION_CORRECT_DISTANCE && CORRECT_MODE == 2)
                 {

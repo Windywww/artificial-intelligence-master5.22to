@@ -417,7 +417,6 @@ bool build_map_info(SokobanContext *ctx, const uint8_t *raw_map, uint8_t cls)
         {
             if (sokoban_solver_solve_recon(ctx, current_state, observation_points, virtual_obs_points))
             {
-                goal_box_giveRelation(ctx);
                 if (!generate_path(ctx, &smooth_path))
                     return false;
                 current_state = &ctx->initial_state;
