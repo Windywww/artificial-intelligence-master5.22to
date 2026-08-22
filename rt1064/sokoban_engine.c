@@ -7,7 +7,7 @@
 #define DEBUG_RECON 0
 #define MAX_ID 12
 #ifndef MAX_ALLOWABLE_NODES
-#define MAX_ALLOWABLE_NODES 200000 // 限制搜索节点总数
+#define MAX_ALLOWABLE_NODES 700000 // 限制搜索节点总数
 #endif
 #ifndef SOKOBAN_CURRENT_WEIGHT
 #define SOKOBAN_CURRENT_WEIGHT 3.0f
@@ -17,6 +17,9 @@
 #endif
 #ifndef MOVE_PENALTY
 #define MOVE_PENALTY 10
+#endif
+#ifndef IDA_THRESHOLD_STEP
+#define IDA_THRESHOLD_STEP 2.0f
 #endif
 #define UNKNOWN 11
 #ifndef ENTER_GOAL
@@ -2282,7 +2285,15 @@ bool solve(SokobanContext *ctx)
             continue;
         }
 
-        threshold = min_f;
+        if (IDA_THRESHOLD_STEP > 0.0f)
+        {
+            float stepped_threshold = threshold + IDA_THRESHOLD_STEP;
+            threshold = stepped_threshold > min_f ? stepped_threshold : min_f;
+        }
+        else
+        {
+            threshold = min_f;
+        }
     }
     return false;
 }

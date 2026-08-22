@@ -13,13 +13,16 @@
 #define MAX_ALLOWABLE_NODES 200000 // 限制搜索节点总数
 #endif
 #ifndef SOKOBAN_CURRENT_WEIGHT
-#define SOKOBAN_CURRENT_WEIGHT 3.5f
+#define SOKOBAN_CURRENT_WEIGHT 3.0f
 #endif
 #ifndef SOKOBAN_MIN_WEIGHT
-#define SOKOBAN_MIN_WEIGHT 3.5f
+#define SOKOBAN_MIN_WEIGHT 3.0f
 #endif
 #ifndef MOVE_PENALTY
 #define MOVE_PENALTY 10
+#endif
+#ifndef IDA_THRESHOLD_STEP
+#define IDA_THRESHOLD_STEP 2.0f
 #endif
 #define UNKNOWN 11
 #define ERROR 99.0f
@@ -1917,7 +1920,15 @@ bool solve(SokobanContext *ctx)
         }
 
         // 标准 IDA* 使用本轮所有越界节点的最小 f 作为下一阈值。
-        threshold = min_f;
+        if (IDA_THRESHOLD_STEP > 0.0f)
+        {
+            float stepped_threshold = threshold + IDA_THRESHOLD_STEP;
+            threshold = stepped_threshold > min_f ? stepped_threshold : min_f;
+        }
+        else
+        {
+            threshold = min_f;
+        }
     }
     return false;
 }
