@@ -3,7 +3,7 @@ from machine import UART
 
 sensor.reset()
 sensor.set_pixformat(sensor.RGB565)
-sensor.set_framesize(sensor.QVGA)
+sensor.set_framesize(sensor.QQVGA)
 sensor.skip_frames(times=200)
 sensor.set_auto_whitebal(False)
 sensor.skip_frames(times=200)
@@ -83,8 +83,11 @@ def send_int_packet(cls):
 
 black = (0, 31, -62, 43, -64, 44)
 purple = (35, 88, 71, 127, -95, -45)
-center_roi = (40, 0, 240, 240)
+center_roi = (20, 0, 120, 120)
+num_roi = (25,8,97,109)
+
 uart = UART(2 , baudrate=115200)
+
 uart_buffer = bytearray()
 TARGET_DIGIT_SIZE = 20.0
 num_path = '/sd/num_cls.tflite'
@@ -99,7 +102,7 @@ while(True):
     if flag != -1:
         print(flag)
     img = sensor.snapshot()
-    flag = 0xBB
+    #flag = 0xBB
     if flag == 0xFE:    #识别goal
         print("goal...")
         purples = img.find_blobs([purple],roi=center_roi, area_threshold=800)
@@ -108,19 +111,37 @@ while(True):
             send_int_packet(0)
         else:
             #找边框矩形面积在1500,9500之间的blob (QQVGA)
-            img.draw_rectangle((24,228,272,5),fill=True)
-            img.draw_rectangle((38,22,236,12),fill=True)
+            img.draw_rectangle((12,113,41,7),fill=True) #左下
+            img.draw_rectangle((96,113,70,7),fill=True)   #右下
+            img.draw_rectangle((20,0,130,13),fill=True) #上
+            img.draw_rectangle((19,10,45,9),fill=True)  #左上
+            img.draw_rectangle((90,10,55,6),fill=True)  #右上
             #img.draw_rectangle((25,12,110,105), thickness=3)
 
-            img.draw_rectangle((40,24,6,210), fill=True, color=(0,0,0))
-            img.draw_rectangle((276,24,6,210), fill=True, color=(0,0,0))
-            blobs = img.find_blobs([black], area_threshold=8000, threshold_cb=lambda b: b.area() < 38000)
+            #img.draw_rectangle((20,12,3,105), fill=True, color=(0,0,0))
+            #img.draw_rectangle((138,12,3,105), fill=True, color=(0,0,0))
+            img.draw_rectangle((0,0,25,120), fill=True) #左
+            img.draw_rectangle((122,0,38,120), fill=True)   #右
+            blobs = img.find_blobs([black],roi=num_roi, area_threshold=2000)
+            img.draw_rectangle(num_roi,color=(255,0,0))
             if not blobs:
                 #send_int_packet(11)
                 continue
+            img_cx = img.width() // 2
+            img_cy = img.height() // 2
+            best_blob = None
+            best_dist = None
+            for b in blobs:
+                dx = b.cx() - img_cx
+                dy = b.cy() - img_cy
+                dist = dx * dx + dy * dy
+                if best_dist is None or dist < best_dist:
+                    best_dist = dist
+                    best_blob = b
             best_label = -1
             best_prob = 0.0
-            for b in blobs:
+            if best_blob is not None:
+                b = best_blob
                 x, y, w, h = b.rect()
                 max_side = max(w, h)
                 scale_factor = TARGET_DIGIT_SIZE / max_side
@@ -144,17 +165,13 @@ while(True):
                 result = tf.classify(num_net, canvas)
                 predictions = result[0].output()
                 max_prob = max(predictions)
-                if max_prob > 0.70:
-                    current_label = predictions.index(max_prob)
-                    if max_prob > best_prob:
-                        best_prob = max_prob
-                        best_label = current_label
-                else:
-                    continue
+                if max_prob > 0.55:
+                    best_prob = max_prob
+                    best_label = predictions.index(max_prob)
             if best_label != -1:
                 send_int_packet(best_label+1)
-                # 用红色显示最终的数字
-                img.draw_string(40, 10, f"{best_label}={best_prob:.2f}", color=(255, 0, 0), scale=4)   ##
+                # 用红色显示最终的数字A
+                img.draw_string(40, 10, f"{best_label}={best_prob:.2f}", color=(255, 0, 0), scale=1)   ##
             #else:
                 #send_int_packet(11)
             print(best_label)
@@ -165,10 +182,10 @@ while(True):
         probs = result[0].output()
         max_prob = max(probs)
         label = probs.index(max_prob)
-        img.draw_string(20, 10, f"{label}|{max_prob:.2f}", color=(255, 0, 0), scale=4)    ##
-        if max_prob < 0.50:
+        img.draw_string(20, 10, f"{label}|{max_prob:.2f}", color=(255, 0, 0), scale=2)    ##
+        #if max_prob < 0.50:
             #send_int_packet(11)
-            print('unknown')
-        else:
-            send_int_packet(label+1)
-            print(label+1)
+            #print('unknown')
+        #else:
+        send_int_packet(label+1)
+        print(label+1)
