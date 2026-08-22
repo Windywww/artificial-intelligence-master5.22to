@@ -15,7 +15,8 @@
 extern uint8_t vision_run_correct_switch;
 
 //视觉几米矫正
-#define VISION_CORRECT_DISTANCE -0.1f
+#define VISION_CORRECT_DISTANCE -0.1
+
 //旋转延时时间
 #define TURN_DELAY_TIME_MS 400
 //是否斜线
