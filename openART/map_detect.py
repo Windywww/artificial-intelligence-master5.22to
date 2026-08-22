@@ -702,7 +702,7 @@ COLS = 16
 LENS = ROWS*COLS
 pixels_threshold =  60    #QQVGA 30
 black0 = (0, 16, -55, 76, -62, 58)   #由空地获取角点
-black1 = (0, 3, -128, 127, -128, 127)   #由边界墙获取角点
+black1 = (0, 12, -128, 127, -128, 127)   #由边界墙获取角点
 count = 5  #角度求均值帧数
 
 
@@ -938,7 +938,7 @@ while True:
     if uart.any():
         alls = uart.read(uart.any())
         flag = alls[-1]
-        print(flag)
+        #print(flag)
     img = sensor.snapshot()
 
     #img.draw_rectangle(0,236,320,4,(0,0,0),fill=True)
@@ -997,7 +997,8 @@ while True:
         space_maps = [1] * LENS
         last_spacemap = [1] * LENS
         wrong = 1
-        send_2f_packet(car_info[2])
+        if car_is_stopped:
+            send_2f_packet(car_info[2])
         if flag == 0xBB and car_is_stopped:
             blob_count, recovered_count = recover_boxes_from_blobs(img, maps)
             #print("BOX search blobs=%d recovered=%d" % (blob_count, recovered_count))
@@ -1014,7 +1015,7 @@ while True:
     if first == True and tmp_bomb_count+tmp_goal_count > 0:   #初始化数据记忆，更新space_maps
         if delay == False:
             time.sleep_ms(150)
-            print("等待地图刷新")
+            #print("等待地图刷新")
             delay = True
             continue
         first = False
@@ -1037,7 +1038,7 @@ while True:
         continue
     last_spacemap = space_maps[:]'''
 
-    draw_elem(maps, map_points)                             ##
+    #draw_elem(maps, map_points)                             ##
 
     # flag=0xFE 表示小车静止不动等待校正角度
     if flag == 0xFE and car_is_stopped:
@@ -1050,4 +1051,5 @@ while True:
         #if maps.count(2) == maps.count(3):
         send_map_packet(maps)
             #print("send map")           ##
-    send_2f_packet(car_info[2])
+    if car_is_stopped:
+        send_2f_packet(car_info[2])

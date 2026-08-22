@@ -90,10 +90,46 @@ uart = UART(2 , baudrate=115200)
 
 uart_buffer = bytearray()
 TARGET_DIGIT_SIZE = 20.0
+LOW_CONFIDENCE_THRESHOLD = 0.7
+LOW_CONFIDENCE_DIR = '/sd/low_confidence_digits'
+low_confidence_index = 0
+
+def init_low_confidence_dir():
+    try:
+        uos.stat(LOW_CONFIDENCE_DIR)
+    except OSError:
+        try:
+            uos.mkdir(LOW_CONFIDENCE_DIR)
+        except Exception as exc:
+            print('low confidence dir init error:', exc)
+
+def save_low_confidence_digit(canvas, label, confidence):
+    global low_confidence_index
+    try:
+        class_dir = '%s/%d' % (LOW_CONFIDENCE_DIR, label)
+        try:
+            uos.stat(class_dir)
+        except OSError:
+            uos.mkdir(class_dir)
+
+        filename = '%s/num_%d_%d_%02d.pgm' % (
+            class_dir,
+            time.ticks_ms(),
+            low_confidence_index,
+            int(confidence * 100)
+        )
+        canvas.save(filename)
+        time.sleep_ms(500)
+        low_confidence_index += 1
+        print('saved low confidence digit:', filename)
+    except Exception as exc:
+        print('low confidence image save error:', exc)
+
 num_path = '/sd/num_cls.tflite'
 num_net = tf.load(num_path, load_to_fb=uos.stat(num_path)[6] > (gc.mem_free() - (64*1024)))
 box_path = '/sd/box_cls.tflite'
 box_net = tf.load(box_path, load_to_fb=uos.stat(box_path)[6] > (gc.mem_free() - (64*1024)))
+init_low_confidence_dir()
 #init_classification_log()
 
 while(True):
@@ -102,10 +138,10 @@ while(True):
     if flag != -1:
         print(flag)
     img = sensor.snapshot()
-    #flag = 0xBB
+    flag = 0xFE
     if flag == 0xFE:    #识别goal
         print("goal...")
-        purples = img.find_blobs([purple],roi=center_roi, area_threshold=800)
+        purples = img.find_blobs([purple],roi=center_roi, area_threshold=4000)
         if purples:   #无分类
             print(0)
             send_int_packet(0)
@@ -114,7 +150,7 @@ while(True):
             img.draw_rectangle((12,113,41,7),fill=True) #左下
             img.draw_rectangle((96,113,70,7),fill=True)   #右下
             img.draw_rectangle((20,0,130,13),fill=True) #上
-            img.draw_rectangle((19,10,45,9),fill=True)  #左上
+            img.draw_rectangle((19,10,45,6),fill=True)  #左上
             img.draw_rectangle((90,10,55,6),fill=True)  #右上
             #img.draw_rectangle((25,12,110,105), thickness=3)
 
@@ -122,7 +158,7 @@ while(True):
             #img.draw_rectangle((138,12,3,105), fill=True, color=(0,0,0))
             img.draw_rectangle((0,0,25,120), fill=True) #左
             img.draw_rectangle((122,0,38,120), fill=True)   #右
-            blobs = img.find_blobs([black],roi=num_roi, area_threshold=2000)
+            blobs = img.find_blobs([black],roi=num_roi, area_threshold=3500)
             img.draw_rectangle(num_roi,color=(255,0,0))
             if not blobs:
                 #send_int_packet(11)
@@ -150,11 +186,15 @@ while(True):
                 # 绘制所有候选框(绿色)
                 img.draw_rectangle(b.rect(), color=(0, 255, 0))         ##
                 # 推理
-                result = tf.classify(num_net, canvas)
+                model_input = canvas.copy()
+                result = tf.classify(num_net, model_input)
                 predictions = result[0].output()
                 max_prob = max(predictions)
+                predicted_label = predictions.index(max_prob)
+                if max_prob < LOW_CONFIDENCE_THRESHOLD:
+                    save_low_confidence_digit(model_input, predicted_label, max_prob)
                 if max_prob > 0.55:
-                    current_label = predictions.index(max_prob)
+                    current_label = predicted_label
                     if max_prob > best_prob:
                         best_prob = max_prob
                         best_label = current_label
@@ -162,7 +202,7 @@ while(True):
                     continue
             if best_label != -1:
                 send_int_packet(best_label+1)
-                # 用红色显示最终的数字A
+                # 用红色显示最终的数字
                 img.draw_string(40, 10, f"{best_label}={best_prob:.2f}", color=(255, 0, 0), scale=1)   ##
             #else:
                 #send_int_packet(11)
